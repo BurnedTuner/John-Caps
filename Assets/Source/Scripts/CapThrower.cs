@@ -311,6 +311,13 @@ public class CapThrower : MonoBehaviour
 
     void UpdateThrowing()
     {
+        if (_throwingCap == null)
+        {
+            CurrentState = State.Resolving;
+            _settleElapsed = 0f;
+            return;
+        }
+
         _throwingCap.StepSimulation(Time.deltaTime, OnCapLanded);
 
         if (_throwingCap.CurrentState == Cap.CapState.Idle)
@@ -334,6 +341,12 @@ public class CapThrower : MonoBehaviour
         for (int i = 0; i < _pendingLandings.Count;)
         {
             var pending = _pendingLandings[i];
+            if (pending.LandedCap == null)
+            {
+                _pendingLandings.RemoveAt(i);
+                continue;
+            }
+
             pending.RemainingDelay -= dt;
             if (pending.RemainingDelay > 0f)
             {
@@ -390,6 +403,8 @@ public class CapThrower : MonoBehaviour
 
     void ResolveLanding(Cap landedCap, Vector2 landingPosition, float landingForce)
     {
+        if (landedCap == null) return;
+
         float slammerRadius = landedCap.Parameters.Radius;
 
         var hits = new List<CapPrediction>();

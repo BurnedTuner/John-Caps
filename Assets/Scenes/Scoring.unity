@@ -1960,6 +1960,7 @@ GameObject:
   - component: {fileID: 1924152410}
   - component: {fileID: 1924152409}
   - component: {fileID: 1924152408}
+  - component: {fileID: 1924152412}
   m_Layer: 0
   m_Name: Field
   m_TagString: Untagged
@@ -2056,6 +2057,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1924152412
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1924152407}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1b53d52f6b947f8827e0a5037c3fbe1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _fieldCollider: {fileID: 1924152408}
 --- !u!1 &1955335072
 GameObject:
   m_ObjectHideFlags: 0
@@ -2216,7 +2230,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _scoringZone: {fileID: 190726863}
   _turnSources: []
-  _maximumAdvantage: 3
+  _maximumAdvantage: 4
   _lockTurnsWhenMatchFinished: 1
   _advantageSlider: {fileID: 2070416866}
   _playerCountText: {fileID: 2045176917}
@@ -2461,8 +2475,8 @@ MonoBehaviour:
   m_FillRect: {fileID: 0}
   m_HandleRect: {fileID: 369595454}
   m_Direction: 0
-  m_MinValue: -3
-  m_MaxValue: 3
+  m_MinValue: -4
+  m_MaxValue: 4
   m_WholeNumbers: 1
   m_Value: 0
   m_OnValueChanged:
