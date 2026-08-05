@@ -150,7 +150,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HeadsMaterial: {fileID: 2100000, guid: 3c9b5658bbefd3a47a59f88f59f67277, type: 2}
   TailsMaterial: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
-  CapRadius: 0.5
   CapThickness: 0.1
   SpawnPoint: {fileID: 730576649}
   MinimumDragDistance: 0.5
@@ -160,12 +159,9 @@ MonoBehaviour:
   ForceToTravelDistance: 1
   CapMoveSpeed: 5
   MinimumFlightForce: 0.5
-  PushRadius: 1.5
-  PushDistance: 0.5
-  PushDuration: 0.25
   ChainDeflection: 0.65
   ChainContactDelay: 0.08
-  MaximumChainLength: 24
+  MaximumChainLength: 50
   CapFlipDuration: 0.52
   CapFlipApexHeight: 0.65
   SettleDelay: 0.22
@@ -276,7 +272,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 22.04, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1955335073}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!114 &330585547
@@ -735,12 +732,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Field: {fileID: 1924152411}
   CapPrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-  InitialCapCount: 5
+  InitialCapCount: 30
   ScatterRadius: 4.5
   FieldMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  CapTag: Cap
 --- !u!4 &930590274
 Transform:
   m_ObjectHideFlags: 0
@@ -766,6 +762,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1351139397}
   - component: {fileID: 1351139396}
+  - component: {fileID: 1351139398}
   m_Layer: 0
   m_Name: CapThrower
   m_TagString: Untagged
@@ -806,6 +803,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1351139398
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1351139395}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6c16410fc3a3ca43b5610fffa872346, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CapThrower: {fileID: 1351139396}
+  TableImpactSound: {fileID: 8300000, guid: ee1193c0411723840a4b45f88681e983, type: 3}
+  CapImpactSound: {fileID: 8300000, guid: 4d6641076dcf3d945b9518042ddefe7d, type: 3}
+  BasePitch: 1
+  PitchStepPerDepth: 0.1
+  PitchRandom: 0.05
+  MaxPitch: 2
+  AudioPoolSize: 8
+  SoundMaxDistance: 1000
+  TableImpactVFX: {fileID: 1665320002680328946, guid: 81f722c6dab8a524aaaeb6e227989306, type: 3}
+  CapImpactVFX: {fileID: 1651180019113697609, guid: f5f44277cf002e24e827f7d37c1a587e, type: 3}
+  VFXLifetime: 1
+  CameraTransform: {fileID: 330585546}
+  ShakeBaseAmount: 0.02
+  ShakePerDepth: 0.03
+  ShakeDuration: 0.25
+  HitStopBaseDuration: 0.04
+  HitStopPerDepth: 0.02
+  HitStopMaxDuration: 0.15
 --- !u!1 &1924152407
 GameObject:
   m_ObjectHideFlags: 0
@@ -914,6 +942,135 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1955335072
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1955335073}
+  - component: {fileID: 1955335074}
+  m_Layer: 0
+  m_Name: Audio Source
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1955335073
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955335072}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 330585546}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!82 &1955335074
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955335072}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

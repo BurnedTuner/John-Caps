@@ -19,6 +19,9 @@ public class CapThrower : MonoBehaviour
 
     public State CurrentState { get; private set; } = State.Idle;
 
+    public event System.Action<Vector3, float> OnTableImpact;
+    public event System.Action<Vector3, float, int> OnCapImpact;
+
     private CapTuning _tuning;
     private Vector2 _aimPoint;
     private float _throwForce;
@@ -27,6 +30,7 @@ public class CapThrower : MonoBehaviour
 
     private int _throwId;
     private int _chainCount;
+    private int _impactDepth;
     private readonly List<CapPrediction> _directHitSeeds = new();
     private readonly List<CapPrediction> _predictionResults = new();
     private readonly List<PendingLanding> _pendingLandings = new();
@@ -175,6 +179,7 @@ public class CapThrower : MonoBehaviour
 
         _throwId++;
         _chainCount = 0;
+        _impactDepth = 0;
         _pendingLandings.Clear();
 
         Vector3 spawn = _tuning.SpawnPosition;
@@ -311,6 +316,17 @@ public class CapThrower : MonoBehaviour
         foreach (var hit in hits)
         {
             TryActivateCap(hit.Cap, hit.Direction, hit.Force, -1, 0);
+        }
+
+        Vector3 landingPos3D = CapMath.FromXZ(landingPosition, 0f);
+        if (hits.Count > 0)
+        {
+            _impactDepth++;
+            OnCapImpact?.Invoke(landingPos3D, landingForce, _impactDepth);
+        }
+        else 
+        {
+            OnTableImpact?.Invoke(landingPos3D, landingForce);
         }
 
         foreach (var cap in CapRegistry.AllCaps)
