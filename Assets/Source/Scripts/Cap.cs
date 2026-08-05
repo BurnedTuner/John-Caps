@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// States:
 ///   Idle      — sitting still on the field, can be hit.
@@ -16,6 +17,12 @@ public class Cap : MonoBehaviour
     [SerializeField] private CapOwner _owner = CapOwner.Neutral;
     public int StableId => _stableId;
     public CapOwner Owner => _owner;
+
+    [Header("Team outline")]
+    [SerializeField] private MeshRenderer _outlineRenderer;
+    [SerializeField, Min(0f)] private float _outlineWidth = 0.035f;
+    [SerializeField] private Color _playerOutlineColor = new Color(0.05f, 0.9f, 0.85f, 1f);
+    [SerializeField] private Color _opponentOutlineColor = new Color(1f, 0.2f, 0.05f, 1f);
 
     [Header("Cap parameters")]
     [SerializeField] private CapParameters _parameters = new CapParameters();
@@ -35,6 +42,10 @@ public class Cap : MonoBehaviour
     private MeshRenderer _meshRenderer;
     private Material _resolvedHeadsMat;
     private Material _resolvedTailsMat;
+    private MaterialPropertyBlock _outlineProperties;
+
+    private static readonly int OutlineColorId = Shader.PropertyToID("_OutlineColor");
+    private static readonly int OutlineWidthId = Shader.PropertyToID("_OutlineWidth");
 
     private CapState _state = CapState.Idle;
 
@@ -70,6 +81,7 @@ public class Cap : MonoBehaviour
         _state = CapState.Idle;
         ResolveMaterials();
         ApplyVisuals();
+        ApplyOutline();
     }
 
     void ResolveMaterials()
@@ -89,7 +101,11 @@ public class Cap : MonoBehaviour
 
     public void SetImmutable(bool value) => _isImmutable = value;
 
-    public void SetOwner(CapOwner owner) => _owner = owner;
+    public void SetOwner(CapOwner owner)
+    {
+        _owner = owner;
+        ApplyOutline();
+    }
 
     public void BeginThrow(Vector3 start, Vector3 end, float force, float duration, float arcHeight)
     {
@@ -191,7 +207,7 @@ public class Cap : MonoBehaviour
 
     void ApplyVisuals()
     {
-        if (_meshRenderer == null) _meshRenderer = GetComponentInChildren<MeshRenderer>();
+        if (_meshRenderer == null) _meshRenderer = GetComponent<MeshRenderer>();
         if (_tuning == null) _tuning = CapTuning.Instance;
 
         Vector3 pos;
@@ -234,9 +250,44 @@ public class Cap : MonoBehaviour
         }
     }
 
+    void ApplyOutline()
+    {
+        if (_outlineRenderer == null) return;
+
+        bool hasOutline = _owner != CapOwner.Neutral
+            && _outlineWidth > 0f
+            && _outlineRenderer.sharedMaterial != null;
+
+        _outlineRenderer.enabled = hasOutline;
+        if (!hasOutline) return;
+
+        _outlineProperties ??= new MaterialPropertyBlock();
+        _outlineRenderer.GetPropertyBlock(_outlineProperties);
+        _outlineProperties.SetColor(
+            OutlineColorId,
+            _owner == CapOwner.Player ? _playerOutlineColor : _opponentOutlineColor);
+        _outlineProperties.SetFloat(OutlineWidthId, _outlineWidth);
+        _outlineRenderer.SetPropertyBlock(_outlineProperties);
+    }
+
     void Awake()
     {
-        _meshRenderer = GetComponentInChildren<MeshRenderer>();
+        _meshRenderer = GetComponent<MeshRenderer>();
+        if (_outlineRenderer == null)
+        {
+            Transform outlineTransform = transform.Find("OutlineRenderer");
+            if (outlineTransform != null)
+                _outlineRenderer = outlineTransform.GetComponent<MeshRenderer>();
+        }
+
+        if (_outlineRenderer != null)
+        {
+            _outlineRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            _outlineRenderer.receiveShadows = false;
+            _outlineRenderer.lightProbeUsage = LightProbeUsage.Off;
+            _outlineRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        }
+
         _tuning = CapTuning.Instance;
 
         var rb = GetComponent<Rigidbody>();
@@ -245,7 +296,11 @@ public class Cap : MonoBehaviour
             rb.isKinematic = true;
             rb.useGravity = false;
         }
+
+        ApplyOutline();
     }
+
+    void OnValidate() => ApplyOutline();
 
     void OnDestroy()
     {
