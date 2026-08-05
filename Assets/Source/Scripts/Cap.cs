@@ -13,7 +13,9 @@ public class Cap : MonoBehaviour
 
     [Header("Identity")]
     [SerializeField] private int _stableId;
+    [SerializeField] private CapOwner _owner = CapOwner.Neutral;
     public int StableId => _stableId;
+    public CapOwner Owner => _owner;
 
     [Header("Cap parameters")]
     [SerializeField] private CapParameters _parameters = new CapParameters();
@@ -59,9 +61,10 @@ public class Cap : MonoBehaviour
     private float _pushElapsed;
     private float _pushTotalDuration;
 
-    public void Configure(int id, bool isHeads)
+    public void Configure(int id, bool isHeads, CapOwner owner = CapOwner.Neutral)
     {
         _stableId = id;
+        _owner = owner;
         IsHeads = isHeads;
         GroundPosition = CapMath.ToXZ(transform.position);
         _state = CapState.Idle;
@@ -85,6 +88,8 @@ public class Cap : MonoBehaviour
     }
 
     public void SetImmutable(bool value) => _isImmutable = value;
+
+    public void SetOwner(CapOwner owner) => _owner = owner;
 
     public void BeginThrow(Vector3 start, Vector3 end, float force, float duration, float arcHeight)
     {
@@ -240,6 +245,11 @@ public class Cap : MonoBehaviour
             rb.isKinematic = true;
             rb.useGravity = false;
         }
+    }
+
+    void OnDestroy()
+    {
+        CapRegistry.Unregister(this);
     }
 }
 
