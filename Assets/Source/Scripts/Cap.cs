@@ -48,7 +48,8 @@ public class Cap : MonoBehaviour
     private Vector2 _flyStart;
     private Vector2 _flyDirection;
     private float _flyTotalDistance;
-    private float _flyTravelled;
+    private float _flyElapsed;
+    private float _flyDuration;
     private int _activationDepth;
     private bool _fromHeads;
 
@@ -99,18 +100,20 @@ public class Cap : MonoBehaviour
         ApplyVisuals();
     }
 
-    public bool BeginLaunch(int throwId, int depth, Vector2 direction, float force, int ignoredSourceId)
+    public bool BeginLaunch(int throwId, int depth, Vector2 direction, float force, float travelDistance, float duration, int ignoredSourceId)
     {
         if (_isImmutable) return false;
         if (_state != CapState.Idle) return false;
-        if (force < _tuning.MinimumFlightForce) return false;
+        if (float.IsNaN(direction.x) || float.IsNaN(direction.y)) return false;
+        if (float.IsNaN(travelDistance) || float.IsNaN(force)) return false;
 
         _activationDepth = depth;
         _fromHeads = IsHeads;
         _flyStart = GroundPosition;
         _flyDirection = direction.sqrMagnitude > 0.000001f ? direction.normalized : Vector2.right;
-        _flyTotalDistance = force * _tuning.ForceToTravelDistance;
-        _flyTravelled = 0f;
+        _flyTotalDistance = travelDistance;
+        _flyElapsed = 0f;
+        _flyDuration = duration;
         _landingForce = force;
         _state = CapState.Flying;
         ApplyVisuals();
@@ -161,11 +164,17 @@ public class Cap : MonoBehaviour
 
     void StepFly(float dt, System.Action<Cap, Vector2, float> onLanded)
     {
-        float requested = Mathf.Min(_tuning.CapMoveSpeed * dt, _flyTotalDistance - _flyTravelled);
-        _flyTravelled += requested;
-        GroundPosition = _flyStart + _flyDirection * _flyTravelled;
+        _flyElapsed += dt;
+        float t = _flyDuration > 0f ? Mathf.Clamp01(_flyElapsed / _flyDuration) : 1f;
+        Vector2 next = _flyStart + _flyDirection * (_flyTotalDistance * t);
+        if (float.IsNaN(next.x) || float.IsNaN(next.y))
+        {
+            _state = CapState.Idle;
+            return;
+        }
+        GroundPosition = next;
 
-        if (_flyTravelled >= _flyTotalDistance - 0.0001f)
+        if (_flyElapsed >= _flyDuration)
         {
             GroundPosition = _flyStart + _flyDirection * _flyTotalDistance;
             IsHeads = !IsHeads;
@@ -201,7 +210,7 @@ public class Cap : MonoBehaviour
                 break;
 
             case CapState.Flying:
-                float flyProgress = _flyTotalDistance > 0f ? Mathf.Clamp01(_flyTravelled / _flyTotalDistance) : 1f;
+                float flyProgress = _flyDuration > 0f ? Mathf.Clamp01(_flyElapsed / _flyDuration) : 1f;
                 float hop = Mathf.Sin(flyProgress * Mathf.PI) * _tuning.CapFlipApexHeight;
                 pos = CapMath.FromXZ(GroundPosition, hop);
                 Vector3 motion3D = new Vector3(_flyDirection.x, 0f, _flyDirection.y);
@@ -219,6 +228,7 @@ public class Cap : MonoBehaviour
                 break;
         }
 
+        if (IsNaN(pos)) return;
         transform.position = pos;
         transform.rotation = rot;
 
@@ -228,6 +238,8 @@ public class Cap : MonoBehaviour
             _meshRenderer.sharedMaterial = showHeads ? _resolvedHeadsMat : _resolvedTailsMat;
         }
     }
+
+    static bool IsNaN(Vector3 v) => float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z);
 
     void Awake()
     {

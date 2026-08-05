@@ -9,7 +9,9 @@ public static class CapMath
     {
         Vector2 away = capCentre - impactCentre;
         if (away.sqrMagnitude > 0.000001f) return away.normalized;
-        return centredFallback.sqrMagnitude > 0.000001f ? centredFallback.normalized : Vector2.up;
+        if (centredFallback.sqrMagnitude > 0.000001f) return centredFallback.normalized;
+        float angle = Random.value * Mathf.PI * 2f;
+        return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
     }
 
     public static bool TrySweepCircle(

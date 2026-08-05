@@ -31,6 +31,7 @@ public class CapThrower : MonoBehaviour
     private int _throwId;
     private int _chainCount;
     private int _impactDepth;
+    private float _chainFlightDistance;
     private readonly List<CapPrediction> _directHitSeeds = new();
     private readonly List<CapPrediction> _predictionResults = new();
     private readonly List<PendingLanding> _pendingLandings = new();
@@ -180,6 +181,7 @@ public class CapThrower : MonoBehaviour
         _throwId++;
         _chainCount = 0;
         _impactDepth = 0;
+        _chainFlightDistance = -1f;
         _pendingLandings.Clear();
 
         Vector3 spawn = _tuning.SpawnPosition;
@@ -306,16 +308,25 @@ public class CapThrower : MonoBehaviour
             float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
             float contactFactor = cap.GetContactFactor(normalizedOffset);
             float force = landingForce * cap.Parameters.PowerConversion * contactFactor;
-            if (force < _tuning.MinimumFlightForce) continue;
+
+            float travel;
+            if (_chainFlightDistance < 0f)
+                travel = force * _tuning.ForceToTravelDistance;
+            else
+                travel = _chainFlightDistance;
+
+            if (travel < _tuning.MinimumFlightLength) continue;
 
             Vector2 direction = CapMath.VerticalImpactDirection(landingPosition, cap.GroundPosition, Vector2.up);
-            float travel = force * _tuning.ForceToTravelDistance;
             hits.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, force, travel));
         }
 
+        if (_chainFlightDistance < 0f && hits.Count > 0)
+            _chainFlightDistance = hits[0].TravelDistance;
+
         foreach (var hit in hits)
         {
-            TryActivateCap(hit.Cap, hit.Direction, hit.Force, -1, 0);
+            TryActivateCap(hit.Cap, hit.Direction, hit.Force, hit.TravelDistance, -1, 0);
         }
 
         Vector3 landingPos3D = CapMath.FromXZ(landingPosition, 0f);
@@ -324,7 +335,7 @@ public class CapThrower : MonoBehaviour
             _impactDepth++;
             OnCapImpact?.Invoke(landingPos3D, landingForce, _impactDepth);
         }
-        else 
+        else
         {
             OnTableImpact?.Invoke(landingPos3D, landingForce);
         }
@@ -350,10 +361,10 @@ public class CapThrower : MonoBehaviour
         }
     }
 
-    bool TryActivateCap(Cap target, Vector2 direction, float force, int ignoredSourceId, int depth)
+    bool TryActivateCap(Cap target, Vector2 direction, float force, float travelDistance, int ignoredSourceId, int depth)
     {
         if (target == null || _chainCount >= _tuning.MaximumChainLength) return false;
-        if (target.BeginLaunch(_throwId, depth, direction, force, ignoredSourceId))
+        if (target.BeginLaunch(_throwId, depth, direction, force, travelDistance, _tuning.ChainFlightDuration, ignoredSourceId))
         {
             _chainCount++;
             return true;
@@ -375,10 +386,11 @@ public class CapThrower : MonoBehaviour
             float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
             float contactFactor = cap.GetContactFactor(normalizedOffset);
             float force = throwForce * cap.Parameters.PowerConversion * contactFactor;
-            if (force < _tuning.MinimumFlightForce) continue;
 
             Vector2 direction = CapMath.VerticalImpactDirection(landingPoint, cap.GroundPosition, Vector2.up);
             float travel = force * _tuning.ForceToTravelDistance;
+            if (travel < _tuning.MinimumFlightLength) continue;
+
             results.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, force, travel));
         }
     }
@@ -401,6 +413,8 @@ public class CapThrower : MonoBehaviour
         _waitingCap = null;
         _pendingLandings.Clear();
         _chainCount = 0;
+        _impactDepth = 0;
+        _chainFlightDistance = -1f;
         _settleElapsed = 0f;
 
         SpawnWaitingCap();

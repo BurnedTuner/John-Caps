@@ -25,7 +25,8 @@ public class CapTuning : MonoBehaviour
     [Header("Force → motion")]
     [Min(0.01f)] public float ForceToTravelDistance = 1f;
     [Min(0.01f)] public float CapMoveSpeed = 5f;
-    [Min(0f)] public float MinimumFlightForce = 0.5f;
+    [Min(0f)] public float MinimumFlightLength = 0.3f;
+    [Min(0.05f)] public float ChainFlightDuration = 0.4f;
 
     [Header("Chain reaction")]
     [Range(0f, 1f)] public float ChainDeflection = 0.65f;
