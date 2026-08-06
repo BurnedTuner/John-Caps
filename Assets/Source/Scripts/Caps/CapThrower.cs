@@ -351,7 +351,7 @@ public class CapThrower : MonoBehaviour
 
         for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
         {
-            CapRegistry.AllCaps[i].StepSimulation(dt, OnCapLanded);
+            CapRegistry.AllCaps[i].StepSimulation(dt, OnCapLanded, OnCapFlipped);
         }
 
         for (int i = 0; i < _pendingLandings.Count;)
@@ -415,6 +415,38 @@ public class CapThrower : MonoBehaviour
         }
 
         ResolveLanding(landedCap, landingPosition, landingForce);
+    }
+
+    void OnCapFlipped(Cap flippedCap, Vector2 position, float incomingForce)
+    {
+        if (flippedCap == null) return;
+
+        var context = new CapFlipEffectContext(
+            flippedCap,
+            position,
+            incomingForce,
+            CapRegistry.AllCaps,
+            (target, direction, force) => TryLaunchFromEffect(flippedCap, target, direction, force));
+
+        flippedCap.ActivateFlipEffects(context);
+    }
+
+    bool TryLaunchFromEffect(Cap source, Cap target, Vector2 direction, float rawForce)
+    {
+        if (source == null || target == null || _tuning == null) return false;
+
+        float force = rawForce * target.Parameters.PowerConversion;
+        float travelDistance = force * _tuning.ForceToTravelDistance;
+        if (!float.IsFinite(force) || !float.IsFinite(travelDistance)) return false;
+        if (travelDistance < _tuning.MinimumFlightLength) return false;
+
+        return TryActivateCap(
+            target,
+            direction,
+            force,
+            travelDistance,
+            source.StableId,
+            source.ActivationDepthPlusOne);
     }
 
     void ResolveLanding(Cap landedCap, Vector2 landingPosition, float landingForce)

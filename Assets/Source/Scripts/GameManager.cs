@@ -7,6 +7,9 @@ public class GameManager : MonoBehaviour
     public Transform Field;
     public Cap CapPrefab;
 
+    [Tooltip("Optional mixed pool for ambient caps. Non-null entries override CapPrefab and are picked uniformly.")]
+    public Cap[] AmbientCapPrefabs;
+
     [Header("Initial scatter")]
     public int InitialCapCount = 25;
     [Min(0)] public int InitialPlayerCapCount;
@@ -47,8 +50,33 @@ public class GameManager : MonoBehaviour
                     ? CapOwner.Opponent
                     : CapOwner.Neutral;
 
-            CapFactory.Create(CapPrefab, groundPos, heads, owner);
+            CapFactory.Create(GetAmbientCapPrefab(), groundPos, heads, owner);
         }
+    }
+
+    Cap GetAmbientCapPrefab()
+    {
+        int validCount = 0;
+        if (AmbientCapPrefabs != null)
+        {
+            for (int i = 0; i < AmbientCapPrefabs.Length; i++)
+            {
+                if (AmbientCapPrefabs[i] != null)
+                    validCount++;
+            }
+        }
+
+        if (validCount == 0) return CapPrefab;
+
+        int selected = Random.Range(0, validCount);
+        for (int i = 0; i < AmbientCapPrefabs.Length; i++)
+        {
+            Cap prefab = AmbientCapPrefabs[i];
+            if (prefab == null) continue;
+            if (selected-- == 0) return prefab;
+        }
+
+        return CapPrefab;
     }
 
 }
