@@ -1,10 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Side-effect-free chain reaction predictor for the hop-by-hop model.
 /// Each cap uses its own Radius for overlap checks (supports caps of different sizes).
-/// Mirrors runtime: MinimumFlightLength filter, fixed chain flight distance after first hop.
+/// Travel distance is computed per-hop from force × ForceToTravelDistance (dependent on hit position).
 /// </summary>
 public static class ChainPredictor
 {
@@ -22,8 +22,6 @@ public static class ChainPredictor
         for (int i = 0; i < caps.Count; i++)
             positions[caps[i]] = caps[i].GroundPosition;
 
-        float chainFlightDistance = -1f;
-
         for (int i = 0; i < directHits.Count; i++)
         {
             if (results.Count >= tuning.MaximumChainLength) return;
@@ -31,14 +29,11 @@ public static class ChainPredictor
             var hit = directHits[i];
             results.Add(hit);
 
-            if (chainFlightDistance < 0f)
-                chainFlightDistance = hit.TravelDistance;
-
             Vector2 landingPos = hit.StartPosition + hit.Direction * hit.TravelDistance;
             positions[hit.Cap] = landingPos;
 
             ProcessLandingRecursive(
-                hit.Cap, landingPos, hit.Force, chainFlightDistance, 1,
+                hit.Cap, landingPos, hit.Force, 1,
                 caps, positions, tuning, maximumDepth, results);
         }
     }
@@ -47,7 +42,6 @@ public static class ChainPredictor
         Cap landedCap,
         Vector2 landingPos,
         float force,
-        float chainFlightDistance,
         int depth,
         IReadOnlyList<Cap> caps,
         Dictionary<Cap, Vector2> positions,
@@ -76,7 +70,7 @@ public static class ChainPredictor
             float contactFactor = cap.GetContactFactor(normalizedOffset);
             float transferForce = force * cap.Parameters.PowerConversion * contactFactor;
 
-            float travel = chainFlightDistance;
+            float travel = transferForce * tuning.ForceToTravelDistance;
             if (travel < tuning.MinimumFlightLength) continue;
 
             Vector2 direction = CapMath.VerticalImpactDirection(landingPos, capPos, Vector2.up);
@@ -87,7 +81,7 @@ public static class ChainPredictor
             positions[cap] = capLandingPos;
 
             ProcessLandingRecursive(
-                cap, capLandingPos, transferForce, chainFlightDistance, depth + 1,
+                cap, capLandingPos, transferForce, depth + 1,
                 caps, positions, tuning, maximumDepth, results);
         }
     }

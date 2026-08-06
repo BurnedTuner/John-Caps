@@ -42,7 +42,6 @@ public class CapThrower : MonoBehaviour
     private int _throwId;
     private int _chainCount;
     private int _impactDepth;
-    private float _chainFlightDistance;
     private readonly List<CapPrediction> _directHitSeeds = new();
     private readonly List<CapPrediction> _predictionResults = new();
     private readonly List<PendingLanding> _pendingLandings = new();
@@ -186,8 +185,6 @@ public class CapThrower : MonoBehaviour
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
         if (!IsCursorOverWaitingCap()) return;
 
-        // Enter aiming without drawing a preview yet — the first UpdateAiming frame
-        // will compute the real aim point from the cursor's field position.
         _aimPoint = CapMath.ToXZ(_tuning.SpawnPosition);
         _isDirectAimAllowed = false;
         if (TrajectoryPreview != null) TrajectoryPreview.Hide();
@@ -297,7 +294,6 @@ public class CapThrower : MonoBehaviour
         _throwId++;
         _chainCount = 0;
         _impactDepth = 0;
-        _chainFlightDistance = -1f;
         _pendingLandings.Clear();
 
         Vector3 spawn = _tuning.SpawnPosition;
@@ -441,20 +437,12 @@ public class CapThrower : MonoBehaviour
             float contactFactor = cap.GetContactFactor(normalizedOffset);
             float force = landingForce * cap.Parameters.PowerConversion * contactFactor;
 
-            float travel;
-            if (_chainFlightDistance < 0f)
-                travel = force * _tuning.ForceToTravelDistance;
-            else
-                travel = _chainFlightDistance;
-
+            float travel = force * _tuning.ForceToTravelDistance;
             if (travel < _tuning.MinimumFlightLength) continue;
 
             Vector2 direction = CapMath.VerticalImpactDirection(landingPosition, cap.GroundPosition, Vector2.up);
             hits.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, force, travel));
         }
-
-        if (_chainFlightDistance < 0f && hits.Count > 0)
-            _chainFlightDistance = hits[0].TravelDistance;
 
         foreach (var hit in hits)
         {
@@ -546,7 +534,6 @@ public class CapThrower : MonoBehaviour
         _pendingLandings.Clear();
         _chainCount = 0;
         _impactDepth = 0;
-        _chainFlightDistance = -1f;
         _isDirectAimAllowed = false;
         _settleElapsed = 0f;
 
