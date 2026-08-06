@@ -301,6 +301,9 @@ MonoBehaviour:
   CapThickness: 0.1
   SpawnPoint: {fileID: 730576649}
   MinimumDragDistance: 0.5
+  CapGrabRadiusPixels: 80
+  GrabLiftHeight: 1
+  GrabLiftSpeed: 5
   ArcHeight: 3
   FlightDuration: 0.8
   FlightSpinDegrees: 540
