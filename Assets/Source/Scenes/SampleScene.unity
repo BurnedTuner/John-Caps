@@ -160,7 +160,7 @@ MonoBehaviour:
   FlightSpinDegrees: 540
   ForceToTravelDistance: 1
   CapMoveSpeed: 5
-  MinimumFlightLength: 0.3
+  MinimumFlightLength: 0.1
   ChainFlightDuration: 0.4
   ChainDeflection: 0.65
   ChainContactDelay: 0.08

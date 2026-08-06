@@ -83,7 +83,8 @@ public class Cap : MonoBehaviour
         _stableId = id;
         _owner = owner;
         IsHeads = isHeads;
-        GroundPosition = CapMath.ToXZ(transform.position);
+        Vector3 pos = transform.position;
+        GroundPosition = IsFinite(pos) ? CapMath.ToXZ(pos) : Vector2.zero;
         _state = CapState.Idle;
         ResolveMaterials();
         ApplyVisuals();
@@ -113,16 +114,14 @@ public class Cap : MonoBehaviour
         ApplyOutline();
     }
 
-    /// <summary>Called when the player grabs the waiting cap. Smoothly lifts it to GrabLiftHeight.</summary>
     public void BeginHeld(Vector3 basePos)
     {
-        _heldBasePos = basePos;
-        _heldCurrentHeight = transform.position.y - basePos.y;
+        _heldBasePos = IsFinite(basePos) ? basePos : _tuning.SpawnPosition;
+        _heldCurrentHeight = 0f;
         _state = CapState.Held;
         ApplyVisuals();
     }
 
-    /// <summary>Called when the drag is cancelled. Smoothly lowers back to spawn.</summary>
     public void EndHeldToIdle()
     {
         _state = CapState.Idle;
@@ -131,6 +130,7 @@ public class Cap : MonoBehaviour
 
     public void BeginThrow(Vector3 start, Vector3 end, float force, float duration, float arcHeight)
     {
+        if (!IsFinite(start) || !IsFinite(end) || float.IsNaN(force)) return;
         GroundPosition = CapMath.ToXZ(end);
         _throwStart = start;
         _throwEnd = end;
@@ -148,6 +148,7 @@ public class Cap : MonoBehaviour
         if (_state != CapState.Idle) return false;
         if (float.IsNaN(direction.x) || float.IsNaN(direction.y)) return false;
         if (float.IsNaN(travelDistance) || float.IsNaN(force)) return false;
+        if (!IsFinite(GroundPosition)) return false;
 
         _activationDepth = depth;
         _fromHeads = IsHeads;
@@ -166,7 +167,10 @@ public class Cap : MonoBehaviour
     {
         if (_isImmutable) return;
         if (_state != CapState.Idle) return;
-        if (distance <= 0.0001f) return;
+        if (float.IsNaN(distance) || distance <= 0.0001f) return;
+        if (!IsFinite(GroundPosition)) return;
+        if (float.IsNaN(direction.x) || float.IsNaN(direction.y)) return;
+
         _pushStart = GroundPosition;
         _pushDirection = direction.sqrMagnitude > 0.000001f ? direction.normalized : Vector2.right;
         _pushRemaining = distance;
@@ -202,6 +206,7 @@ public class Cap : MonoBehaviour
 
         Vector3 pos = Vector3.Lerp(_throwStart, _throwEnd, t);
         pos.y += _throwArcHeight * Mathf.Sin(t * Mathf.PI);
+        if (!IsFinite(pos)) { _state = CapState.Idle; return; }
         transform.position = pos;
 
         if (_throwElapsed >= _throwDuration)
@@ -217,7 +222,7 @@ public class Cap : MonoBehaviour
         _flyElapsed += dt;
         float t = _flyDuration > 0f ? Mathf.Clamp01(_flyElapsed / _flyDuration) : 1f;
         Vector2 next = _flyStart + _flyDirection * (_flyTotalDistance * t);
-        if (float.IsNaN(next.x) || float.IsNaN(next.y))
+        if (!IsFinite(next))
         {
             _state = CapState.Idle;
             return;
@@ -227,6 +232,7 @@ public class Cap : MonoBehaviour
         if (_flyElapsed >= _flyDuration)
         {
             GroundPosition = _flyStart + _flyDirection * _flyTotalDistance;
+            if (!IsFinite(GroundPosition)) GroundPosition = _flyStart;
             IsHeads = !IsHeads;
             _state = CapState.Idle;
             onLanded?.Invoke(this, GroundPosition, _landingForce);
@@ -239,7 +245,13 @@ public class Cap : MonoBehaviour
         float t = Mathf.Clamp01(_pushElapsed / _pushTotalDuration);
         float eased = 1f - (1f - t) * (1f - t);
         float travelled = _pushRemaining * eased;
-        GroundPosition = _pushStart + _pushDirection * travelled;
+        Vector2 next = _pushStart + _pushDirection * travelled;
+        if (!IsFinite(next))
+        {
+            _state = CapState.Idle;
+            return;
+        }
+        GroundPosition = next;
         if (t >= 1f) _state = CapState.Idle;
     }
 
@@ -268,8 +280,9 @@ public class Cap : MonoBehaviour
                 float hop = Mathf.Sin(flyProgress * Mathf.PI) * _tuning.CapFlipApexHeight;
                 pos = CapMath.FromXZ(GroundPosition, hop);
                 Vector3 motion3D = new Vector3(_flyDirection.x, 0f, _flyDirection.y);
-                Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D).normalized;
-                if (rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
+                Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D);
+                if (!IsFinite(rotAxis) || rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
+                else rotAxis = rotAxis.normalized;
                 rot = Quaternion.AngleAxis(flyProgress * 180f, rotAxis);
                 break;
 
@@ -282,9 +295,9 @@ public class Cap : MonoBehaviour
                 break;
         }
 
-        if (IsNaN(pos)) return;
+        if (!IsFinite(pos)) return;
         transform.position = pos;
-        transform.rotation = rot;
+        if (IsFinite(rot)) transform.rotation = rot;
 
         if (_meshRenderer != null && _resolvedHeadsMat != null && _resolvedTailsMat != null)
         {
@@ -293,7 +306,17 @@ public class Cap : MonoBehaviour
         }
     }
 
-    static bool IsNaN(Vector3 v) => float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z);
+    static bool IsFinite(Vector3 v) =>
+        !float.IsNaN(v.x) && !float.IsNaN(v.y) && !float.IsNaN(v.z) &&
+        !float.IsInfinity(v.x) && !float.IsInfinity(v.y) && !float.IsInfinity(v.z);
+
+    static bool IsFinite(Vector2 v) =>
+        !float.IsNaN(v.x) && !float.IsNaN(v.y) &&
+        !float.IsInfinity(v.x) && !float.IsInfinity(v.y);
+
+    static bool IsFinite(Quaternion q) =>
+        !float.IsNaN(q.x) && !float.IsNaN(q.y) && !float.IsNaN(q.z) && !float.IsNaN(q.w) &&
+        !float.IsInfinity(q.x) && !float.IsInfinity(q.y) && !float.IsInfinity(q.z) && !float.IsInfinity(q.w);
 
     void ApplyOutline()
     {
