@@ -1,11 +1,11 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 
 /// <summary>
 /// Orchestrates the throw flow with the NEW Input System.
-/// Each cap uses its own Radius for overlap checks (supports caps of different sizes).
+/// Drag-and-drop: player must press on the waiting cap, drag to aim, release to throw.
 /// </summary>
 public class CapThrower : MonoBehaviour
 {
@@ -161,6 +161,19 @@ public class CapThrower : MonoBehaviour
         return false;
     }
 
+    bool IsCursorOverWaitingCap()
+    {
+        if (_waitingCap == null || PlayerCamera == null || Mouse.current == null) return false;
+
+        Vector3 capPos = _waitingCap.transform.position;
+        Vector3 screenPos = PlayerCamera.WorldToScreenPoint(capPos);
+        if (screenPos.z < 0f) return false;
+
+        Vector2 mousePos = Mouse.current.position.ReadValue();
+        float screenDist = Vector2.Distance(mousePos, new Vector2(screenPos.x, screenPos.y));
+        return screenDist <= _tuning.CapGrabRadiusPixels;
+    }
+
     void UpdateIdle()
     {
         if (Keyboard.current.rKey.wasPressedThisFrame)
@@ -171,13 +184,16 @@ public class CapThrower : MonoBehaviour
 
         if (ClickedOnUI()) return;
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
-        if (!GetFieldPoint(out Vector3 point, out bool isDirectAimAllowed)) return;
-        if (!isDirectAimAllowed) return;
+        if (!IsCursorOverWaitingCap()) return;
 
-        _aimPoint = CapMath.ToXZ(point);
-        _isDirectAimAllowed = true;
+        // Enter aiming without drawing a preview yet — the first UpdateAiming frame
+        // will compute the real aim point from the cursor's field position.
+        _aimPoint = CapMath.ToXZ(_tuning.SpawnPosition);
+        _isDirectAimAllowed = false;
+        if (TrajectoryPreview != null) TrajectoryPreview.Hide();
+        if (_waitingCap != null)
+            _waitingCap.BeginHeld(_tuning.SpawnPosition);
         CurrentState = State.Aiming;
-        UpdateAimPreview();
     }
 
     void UpdateAiming()
@@ -187,6 +203,9 @@ public class CapThrower : MonoBehaviour
             CancelAiming();
             return;
         }
+
+        if (_waitingCap != null)
+            _waitingCap.StepSimulation(Time.deltaTime, null);
 
         if (GetFieldPoint(out Vector3 point, out bool isDirectAimAllowed))
         {
@@ -200,13 +219,7 @@ public class CapThrower : MonoBehaviour
 
         UpdateAimPreview();
 
-        if (Mouse.current.leftButton.wasPressedThisFrame)
-        {
-            Fire();
-            return;
-        }
-
-        if (!Mouse.current.leftButton.isPressed && GetDragDistance() >= _tuning.MinimumDragDistance)
+        if (!Mouse.current.leftButton.isPressed)
         {
             Fire();
         }
@@ -248,6 +261,11 @@ public class CapThrower : MonoBehaviour
     void CancelAiming()
     {
         if (TrajectoryPreview != null) TrajectoryPreview.Hide();
+        if (_waitingCap != null)
+        {
+            _waitingCap.EndHeldToIdle();
+            _waitingCap.transform.position = _tuning.SpawnPosition;
+        }
         _isDirectAimAllowed = false;
         CurrentState = State.Idle;
     }

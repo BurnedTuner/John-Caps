@@ -18,6 +18,12 @@ public class CapTuning : MonoBehaviour
     [Header("Throw / Spawn")]
     public Transform SpawnPoint;
     [Min(0f)] public float MinimumDragDistance = 0.5f;
+    [Tooltip("Screen-space radius (in pixels) around the waiting cap where the player must press to start a drag-throw.")]
+    [Min(10f)] public float CapGrabRadiusPixels = 80f;
+    [Tooltip("How high the waiting cap lifts (world units) when grabbed.")]
+    [Min(0f)] public float GrabLiftHeight = 0.5f;
+    [Tooltip("How fast the cap lifts (units/second).")]
+    [Min(0.01f)] public float GrabLiftSpeed = 3f;
     [Min(0f)] public float ArcHeight = 3f;
     [Min(0.05f)] public float FlightDuration = 0.8f;
     [Min(0f)] public float FlightSpinDegrees = 540f;

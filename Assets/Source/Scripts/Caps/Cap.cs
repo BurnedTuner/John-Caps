@@ -3,6 +3,7 @@ using UnityEngine.Rendering;
 
 /// States:
 ///   Idle      — sitting still on the field, can be hit.
+///   Held      — grabbed by the player, lifted above spawn, waiting for throw.
 ///   Throwing  — player's thrown cap flying in a visual arc from spawn to landing point.
 ///   Flying    — launched by an impact: flying to destination + flipping 180°.
 ///   Pushed    — nudged by the push radius effect: sliding briefly, no flip.
@@ -10,7 +11,7 @@ using UnityEngine.Rendering;
 [RequireComponent(typeof(MeshRenderer))]
 public class Cap : MonoBehaviour
 {
-    public enum CapState { Idle, Throwing, Flying, Pushed }
+    public enum CapState { Idle, Held, Throwing, Flying, Pushed }
 
     [Header("Identity")]
     [SerializeField] private int _stableId;
@@ -56,6 +57,10 @@ public class Cap : MonoBehaviour
     private float _throwDuration;
     private float _throwArcHeight;
     private float _landingForce;
+
+    // Held (grabbed by player, lifted above spawn)
+    private Vector3 _heldBasePos;
+    private float _heldCurrentHeight;
 
     // Flying (chain-hit cap — straight line + flip)
     private Vector2 _flyStart;
@@ -106,6 +111,22 @@ public class Cap : MonoBehaviour
     {
         _owner = owner;
         ApplyOutline();
+    }
+
+    /// <summary>Called when the player grabs the waiting cap. Smoothly lifts it to GrabLiftHeight.</summary>
+    public void BeginHeld(Vector3 basePos)
+    {
+        _heldBasePos = basePos;
+        _heldCurrentHeight = transform.position.y - basePos.y;
+        _state = CapState.Held;
+        ApplyVisuals();
+    }
+
+    /// <summary>Called when the drag is cancelled. Smoothly lowers back to spawn.</summary>
+    public void EndHeldToIdle()
+    {
+        _state = CapState.Idle;
+        ApplyVisuals();
     }
 
     public void BeginThrow(Vector3 start, Vector3 end, float force, float duration, float arcHeight)
@@ -159,11 +180,19 @@ public class Cap : MonoBehaviour
     {
         switch (_state)
         {
+            case CapState.Held: StepHeld(deltaTime); break;
             case CapState.Throwing: StepThrow(deltaTime, onLanded); break;
             case CapState.Flying: StepFly(deltaTime, onLanded); break;
             case CapState.Pushed: StepPush(deltaTime); break;
         }
         ApplyVisuals();
+    }
+
+    void StepHeld(float dt)
+    {
+        float target = _tuning != null ? _tuning.GrabLiftHeight : 0.5f;
+        float speed = _tuning != null ? _tuning.GrabLiftSpeed : 3f;
+        _heldCurrentHeight = Mathf.MoveTowards(_heldCurrentHeight, target, speed * dt);
     }
 
     void StepThrow(float dt, System.Action<Cap, Vector2, float> onLanded)
@@ -224,6 +253,10 @@ public class Cap : MonoBehaviour
 
         switch (_state)
         {
+            case CapState.Held:
+                pos = _heldBasePos + Vector3.up * _heldCurrentHeight;
+                break;
+
             case CapState.Throwing:
                 pos = transform.position;
                 float throwProgress = _throwDuration > 0f ? _throwElapsed / _throwDuration : 1f;
@@ -261,7 +294,7 @@ public class Cap : MonoBehaviour
     }
 
     static bool IsNaN(Vector3 v) => float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z);
-    
+
     void ApplyOutline()
     {
         if (_outlineRenderer == null) return;
