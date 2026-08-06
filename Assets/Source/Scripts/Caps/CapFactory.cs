@@ -8,7 +8,11 @@ public static class CapFactory
 {
     static int _nextStableId = 1;
 
-    public static Cap Create(Cap prefab, Vector2 groundPosition, bool isHeads)
+    public static Cap Create(
+        Cap prefab,
+        Vector2 groundPosition,
+        bool isHeads,
+        CapOwner owner = CapOwner.Neutral)
     {
         if (prefab == null)
         {
@@ -26,7 +30,7 @@ public static class CapFactory
         Cap cap = instance.GetComponent<Cap>();
         if (cap == null) cap = instance.gameObject.AddComponent<Cap>();
 
-        cap.Configure(_nextStableId++, isHeads);
+        cap.Configure(_nextStableId++, isHeads, owner);
 
         CapRegistry.Register(cap);
         return cap;

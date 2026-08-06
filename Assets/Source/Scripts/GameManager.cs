@@ -9,6 +9,8 @@ public class GameManager : MonoBehaviour
 
     [Header("Initial scatter")]
     public int InitialCapCount = 25;
+    [Min(0)] public int InitialPlayerCapCount;
+    [Min(0)] public int InitialOpponentCapCount;
     public float ScatterRadius = 4.5f;
 
     [Header("Field detection")]
@@ -23,6 +25,9 @@ public class GameManager : MonoBehaviour
     public void ScatterAmbientCaps()
     {
         Vector3 center = Field != null ? Field.position : Vector3.zero;
+        int playerCaps = Mathf.Clamp(InitialPlayerCapCount, 0, InitialCapCount);
+        int opponentCaps = Mathf.Clamp(InitialOpponentCapCount, 0, InitialCapCount - playerCaps);
+
         for (int i = 0; i < InitialCapCount; i++)
         {
             Vector2 r = Random.insideUnitCircle * ScatterRadius;
@@ -36,7 +41,13 @@ public class GameManager : MonoBehaviour
 
             Vector2 groundPos = new Vector2(x, z);
             bool heads = Random.value > 0.5f;
-            CapFactory.Create(CapPrefab, groundPos, heads);
+            CapOwner owner = i < playerCaps
+                ? CapOwner.Player
+                : i < playerCaps + opponentCaps
+                    ? CapOwner.Opponent
+                    : CapOwner.Neutral;
+
+            CapFactory.Create(CapPrefab, groundPos, heads, owner);
         }
     }
 

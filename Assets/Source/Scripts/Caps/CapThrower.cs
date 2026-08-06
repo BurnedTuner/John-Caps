@@ -17,16 +17,27 @@ public class CapThrower : MonoBehaviour
     public Cap CapPrefab;
     public TrajectoryPreview TrajectoryPreview;
 
+    [Header("Ownership")]
+    public CapOwner ThrowOwner = CapOwner.Player;
+
     public State CurrentState { get; private set; } = State.Idle;
+    public bool TurnInputEnabled { get; private set; } = true;
 
     public event System.Action<Vector3, float> OnTableImpact;
     public event System.Action<Vector3, float, int> OnCapImpact;
+    public event System.Action<CapThrower> OnTurnFinished;
+    public event System.Action<CapThrower> OnBoardReset;
 
     private CapTuning _tuning;
     private Vector2 _aimPoint;
+    private bool _isDirectAimAllowed;
     private float _throwForce;
     private Cap _throwingCap;
     private Cap _waitingCap;
+
+    private const int AimOverlapBufferSize = 32;
+    private readonly Collider[] _aimOverlapBuffer = new Collider[AimOverlapBufferSize];
+    private readonly RaycastHit[] _fieldHitBuffer = new RaycastHit[AimOverlapBufferSize];
 
     private int _throwId;
     private int _chainCount;
@@ -58,7 +69,7 @@ public class CapThrower : MonoBehaviour
         if (CapPrefab == null || _tuning == null) return;
 
         Vector3 spawn = _tuning.SpawnPosition;
-        _waitingCap = CapFactory.Create(CapPrefab, CapMath.ToXZ(spawn), isHeads: true);
+        _waitingCap = CapFactory.Create(CapPrefab, CapMath.ToXZ(spawn), isHeads: true, ThrowOwner);
         if (_waitingCap != null)
         {
             _waitingCap.transform.position = spawn;
@@ -67,6 +78,13 @@ public class CapThrower : MonoBehaviour
 
     void Update()
     {
+        if (!TurnInputEnabled)
+        {
+            if (CurrentState == State.Idle && Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
+                ResetBoard();
+            return;
+        }
+
         switch (CurrentState)
         {
             case State.Idle: UpdateIdle(); break;
@@ -79,16 +97,67 @@ public class CapThrower : MonoBehaviour
     static bool ClickedOnUI() =>
         EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
 
-    bool GetFieldPoint(out Vector3 point)
+    bool GetFieldPoint(out Vector3 point, out bool isDirectAimAllowed)
     {
         point = default;
+        isDirectAimAllowed = false;
+
+        if (PlayerCamera == null || Mouse.current == null) return false;
+
         Vector2 mousePos = Mouse.current.position.ReadValue();
         Ray ray = PlayerCamera.ScreenPointToRay(mousePos);
-        if (Physics.Raycast(ray, out RaycastHit hit, 100f, FieldMask))
+
+        int hitCount = Physics.RaycastNonAlloc(
+            ray,
+            _fieldHitBuffer,
+            100f,
+            FieldMask,
+            QueryTriggerInteraction.Ignore);
+
+        bool foundField = false;
+        RaycastHit fieldHit = default;
+        float nearestDistance = float.PositiveInfinity;
+
+        for (int i = 0; i < hitCount; i++)
         {
-            point = hit.point;
-            return true;
+            RaycastHit candidate = _fieldHitBuffer[i];
+            if (candidate.collider == null) continue;
+            if (candidate.collider.GetComponentInParent<Cap>() != null) continue;
+            if (candidate.distance >= nearestDistance) continue;
+
+            foundField = true;
+            fieldHit = candidate;
+            nearestDistance = candidate.distance;
         }
+
+        if (!foundField)
+            return false;
+
+        point = fieldHit.point;
+        float capRadius = _waitingCap != null ? _waitingCap.Parameters.Radius : 0.5f;
+        isDirectAimAllowed = !OverlapsAimBlockingZone(point, capRadius);
+        return true;
+    }
+
+    bool OverlapsAimBlockingZone(Vector3 point, float capRadius)
+    {
+        int hitCount = Physics.OverlapSphereNonAlloc(
+            point,
+            Mathf.Max(0.01f, capRadius),
+            _aimOverlapBuffer,
+            ~0,
+            QueryTriggerInteraction.Collide);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = _aimOverlapBuffer[i];
+            if (hit == null) continue;
+
+            ScoringZone scoringZone = hit.GetComponentInParent<ScoringZone>();
+            if (scoringZone != null && scoringZone.BlocksDirectAiming)
+                return true;
+        }
+
         return false;
     }
 
@@ -102,9 +171,11 @@ public class CapThrower : MonoBehaviour
 
         if (ClickedOnUI()) return;
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
-        if (!GetFieldPoint(out Vector3 point)) return;
+        if (!GetFieldPoint(out Vector3 point, out bool isDirectAimAllowed)) return;
+        if (!isDirectAimAllowed) return;
 
         _aimPoint = CapMath.ToXZ(point);
+        _isDirectAimAllowed = true;
         CurrentState = State.Aiming;
         UpdateAimPreview();
     }
@@ -117,9 +188,14 @@ public class CapThrower : MonoBehaviour
             return;
         }
 
-        if (GetFieldPoint(out Vector3 point))
+        if (GetFieldPoint(out Vector3 point, out bool isDirectAimAllowed))
         {
             _aimPoint = CapMath.ToXZ(point);
+            _isDirectAimAllowed = isDirectAimAllowed;
+        }
+        else
+        {
+            _isDirectAimAllowed = false;
         }
 
         UpdateAimPreview();
@@ -144,6 +220,14 @@ public class CapThrower : MonoBehaviour
 
     void UpdateAimPreview()
     {
+        if (!_isDirectAimAllowed)
+        {
+            _directHitSeeds.Clear();
+            _predictionResults.Clear();
+            if (TrajectoryPreview != null) TrajectoryPreview.Hide();
+            return;
+        }
+
         _throwForce = _waitingCap != null ? _waitingCap.Parameters.ThrowPower : 5f;
         float slammerRadius = _waitingCap != null ? _waitingCap.Parameters.Radius : 0.5f;
 
@@ -164,11 +248,25 @@ public class CapThrower : MonoBehaviour
     void CancelAiming()
     {
         if (TrajectoryPreview != null) TrajectoryPreview.Hide();
+        _isDirectAimAllowed = false;
         CurrentState = State.Idle;
+    }
+
+    public void SetTurnInputEnabled(bool enabled)
+    {
+        TurnInputEnabled = enabled;
+        if (!enabled && CurrentState == State.Aiming)
+            CancelAiming();
     }
 
     void Fire()
     {
+        if (!_isDirectAimAllowed)
+        {
+            CancelAiming();
+            return;
+        }
+
         float dragDist = GetDragDistance();
         if (dragDist < _tuning.MinimumDragDistance)
         {
@@ -195,7 +293,7 @@ public class CapThrower : MonoBehaviour
         }
         else
         {
-            _throwingCap = CapFactory.Create(CapPrefab, CapMath.ToXZ(spawn), isHeads: true);
+            _throwingCap = CapFactory.Create(CapPrefab, CapMath.ToXZ(spawn), isHeads: true, ThrowOwner);
         }
 
         if (_throwingCap == null)
@@ -215,6 +313,13 @@ public class CapThrower : MonoBehaviour
 
     void UpdateThrowing()
     {
+        if (_throwingCap == null)
+        {
+            CurrentState = State.Resolving;
+            _settleElapsed = 0f;
+            return;
+        }
+
         _throwingCap.StepSimulation(Time.deltaTime, OnCapLanded);
 
         if (_throwingCap.CurrentState == Cap.CapState.Idle)
@@ -238,6 +343,12 @@ public class CapThrower : MonoBehaviour
         for (int i = 0; i < _pendingLandings.Count;)
         {
             var pending = _pendingLandings[i];
+            if (pending.LandedCap == null)
+            {
+                _pendingLandings.RemoveAt(i);
+                continue;
+            }
+
             pending.RemainingDelay -= dt;
             if (pending.RemainingDelay > 0f)
             {
@@ -271,6 +382,7 @@ public class CapThrower : MonoBehaviour
     {
         _throwingCap = null;
         CurrentState = State.Idle;
+        OnTurnFinished?.Invoke(this);
         SpawnWaitingCap();
     }
 
@@ -293,6 +405,8 @@ public class CapThrower : MonoBehaviour
 
     void ResolveLanding(Cap landedCap, Vector2 landingPosition, float landingForce)
     {
+        if (landedCap == null) return;
+
         float slammerRadius = landedCap.Parameters.Radius;
 
         var hits = new List<CapPrediction>();
@@ -415,8 +529,10 @@ public class CapThrower : MonoBehaviour
         _chainCount = 0;
         _impactDepth = 0;
         _chainFlightDistance = -1f;
+        _isDirectAimAllowed = false;
         _settleElapsed = 0f;
 
         SpawnWaitingCap();
+        OnBoardReset?.Invoke(this);
     }
 }
