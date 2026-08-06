@@ -150,9 +150,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HeadsMaterial: {fileID: 2100000, guid: 3c9b5658bbefd3a47a59f88f59f67277, type: 2}
   TailsMaterial: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
-  CapThickness: 0.1
   SpawnPoint: {fileID: 730576649}
   MinimumDragDistance: 0.5
+  CapGrabRadiusPixels: 80
+  GrabLiftHeight: 1
+  GrabLiftSpeed: 5
   ArcHeight: 3
   FlightDuration: 0.8
   FlightSpinDegrees: 540
@@ -836,7 +838,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Field: {fileID: 1924152411}
   CapPrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-  InitialCapCount: 30
+  InitialCapCount: 3
   InitialPlayerCapCount: 0
   InitialOpponentCapCount: 0
   ScatterRadius: 4.5
