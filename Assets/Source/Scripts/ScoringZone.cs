@@ -1,6 +1,18 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public readonly struct CapCounts
+{
+    public int Player { get; }
+    public int Opponent { get; }
+
+    public CapCounts(int player, int opponent)
+    {
+        Player = player;
+        Opponent = opponent;
+    }
+}
+
 /// <summary>
 /// Marks a scoring volume and optionally prevents the player from aiming a direct throw into it.
 /// Caps moved by impacts and chain reactions are not restricted by this component.
@@ -40,12 +52,12 @@ public sealed class ScoringZone : MonoBehaviour
         }
     }
 
-    public void GetCapCounts(out int playerCaps, out int opponentCaps)
+    public CapCounts GetCapCounts()
     {
         RefreshOccupants();
 
-        playerCaps = 0;
-        opponentCaps = 0;
+        int playerCaps = 0;
+        int opponentCaps = 0;
 
         foreach (Cap cap in _capsInside)
         {
@@ -61,6 +73,8 @@ public sealed class ScoringZone : MonoBehaviour
                     break;
             }
         }
+
+        return new CapCounts(playerCaps, opponentCaps);
     }
 
     void RefreshOccupants()
@@ -107,7 +121,7 @@ public sealed class ScoringZone : MonoBehaviour
 
         Cap cap = other.GetComponentInParent<Cap>();
         if (cap == null) return;
-        if (!CapRegistry.AllCaps.Contains(cap)) return;
+        if (!CapRegistry.Contains(cap)) return;
 
         _capsInside.Add(cap);
     }

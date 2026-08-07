@@ -3,7 +3,7 @@ using UnityEngine;
 public class ImpactFeedback : MonoBehaviour
 {
     [Header("Source")]
-    public CapThrower CapThrower;
+    public CapTurnResolver TurnResolver;
 
     [Header("Audio")]
     public AudioClip TableImpactSound;
@@ -38,14 +38,24 @@ public class ImpactFeedback : MonoBehaviour
     private float _shakeAmount;
     private float _hitStopTimer;
 
+    void Awake()
+    {
+        ResolveReferences();
+    }
+
     void Start()
     {
-        if (CapThrower == null) CapThrower = FindFirstObjectByType<CapThrower>();
         if (CameraTransform == null) CameraTransform = Camera.main?.transform;
         if (CameraTransform != null)
             _cameraOriginalLocalPos = CameraTransform.localPosition;
 
         SetupAudioPool();
+    }
+
+    void ResolveReferences()
+    {
+        if (TurnResolver == null)
+            TurnResolver = FindFirstObjectByType<CapTurnResolver>();
     }
 
     void SetupAudioPool()
@@ -75,19 +85,20 @@ public class ImpactFeedback : MonoBehaviour
 
     void OnEnable()
     {
-        if (CapThrower != null)
+        ResolveReferences();
+        if (TurnResolver != null)
         {
-            CapThrower.OnTableImpact += HandleTableImpact;
-            CapThrower.OnCapImpact += HandleCapImpact;
+            TurnResolver.OnTableImpact += HandleTableImpact;
+            TurnResolver.OnCapImpact += HandleCapImpact;
         }
     }
 
     void OnDisable()
     {
-        if (CapThrower != null)
+        if (TurnResolver != null)
         {
-            CapThrower.OnTableImpact -= HandleTableImpact;
-            CapThrower.OnCapImpact -= HandleCapImpact;
+            TurnResolver.OnTableImpact -= HandleTableImpact;
+            TurnResolver.OnCapImpact -= HandleCapImpact;
         }
         Time.timeScale = 1f;
     }

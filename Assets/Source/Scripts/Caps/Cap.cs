@@ -38,6 +38,8 @@ public class Cap : MonoBehaviour
     public int ActivationDepthPlusOne => _activationDepth + 1;
 
     private bool _isImmutable;
+    private CapFlipEffect[] _flipEffects;
+    internal CapFlipEffect[] FlipEffects => _flipEffects;
 
     private CapTuning _tuning;
     private MeshRenderer _meshRenderer;
@@ -180,13 +182,16 @@ public class Cap : MonoBehaviour
         ApplyVisuals();
     }
 
-    public void StepSimulation(float deltaTime, System.Action<Cap, Vector2, float> onLanded)
+    public void StepSimulation(
+        float deltaTime,
+        System.Action<Cap, Vector2, float> onLanded,
+        System.Action<Cap, Vector2, float> onFlipped = null)
     {
         switch (_state)
         {
             case CapState.Held: StepHeld(deltaTime); break;
             case CapState.Throwing: StepThrow(deltaTime, onLanded); break;
-            case CapState.Flying: StepFly(deltaTime, onLanded); break;
+            case CapState.Flying: StepFly(deltaTime, onLanded, onFlipped); break;
             case CapState.Pushed: StepPush(deltaTime); break;
         }
         ApplyVisuals();
@@ -217,7 +222,10 @@ public class Cap : MonoBehaviour
         }
     }
 
-    void StepFly(float dt, System.Action<Cap, Vector2, float> onLanded)
+    void StepFly(
+        float dt,
+        System.Action<Cap, Vector2, float> onLanded,
+        System.Action<Cap, Vector2, float> onFlipped)
     {
         _flyElapsed += dt;
         float t = _flyDuration > 0f ? Mathf.Clamp01(_flyElapsed / _flyDuration) : 1f;
@@ -235,6 +243,8 @@ public class Cap : MonoBehaviour
             if (!IsFinite(GroundPosition)) GroundPosition = _flyStart;
             IsHeads = !IsHeads;
             _state = CapState.Idle;
+            if (IsHeads)
+                onFlipped?.Invoke(this, GroundPosition, _landingForce);
             onLanded?.Invoke(this, GroundPosition, _landingForce);
         }
     }
@@ -341,6 +351,7 @@ public class Cap : MonoBehaviour
     void Awake()
     {
         _meshRenderer = GetComponent<MeshRenderer>();
+        _flipEffects = GetComponents<CapFlipEffect>();
         if (_outlineRenderer == null)
         {
             Transform outlineTransform = transform.Find("OutlineRenderer");
@@ -378,7 +389,20 @@ public class Cap : MonoBehaviour
 
 public static class CapRegistry
 {
-    public static readonly System.Collections.Generic.List<Cap> AllCaps = new();
-    public static void Register(Cap cap) { if (!AllCaps.Contains(cap)) AllCaps.Add(cap); }
-    public static void Unregister(Cap cap) { AllCaps.Remove(cap); }
+    private static readonly System.Collections.Generic.List<Cap> _allCaps = new();
+
+    public static System.Collections.Generic.IReadOnlyList<Cap> AllCaps => _allCaps;
+
+    public static void Register(Cap cap)
+    {
+        if (cap != null && !_allCaps.Contains(cap))
+            _allCaps.Add(cap);
+    }
+
+    public static void Unregister(Cap cap) => _allCaps.Remove(cap);
+    public static bool Contains(Cap cap) => _allCaps.Contains(cap);
+    public static Cap[] Snapshot() => _allCaps.ToArray();
+    public static void Clear() => _allCaps.Clear();
+
+    internal static void RemoveAt(int index) => _allCaps.RemoveAt(index);
 }

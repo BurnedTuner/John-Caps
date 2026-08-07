@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,6 +20,8 @@ public sealed class ScoringController : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private ScoringZone _scoringZone;
+    [SerializeField] private CapTurnResolver _turnResolver;
+    [SerializeField] private GameManager _gameManager;
     [SerializeField] private CapThrower[] _turnSources;
 
     [Header("Rules")]
@@ -46,8 +47,6 @@ public sealed class ScoringController : MonoBehaviour
 
     public event Action<int, int, int> ScoreChanged;
     public event Action<MatchResult> MatchFinished;
-
-    private readonly HashSet<CapThrower> _subscribedTurnSources = new();
 
     void Awake()
     {
@@ -82,43 +81,47 @@ public sealed class ScoringController : MonoBehaviour
         if (_scoringZone == null)
             _scoringZone = FindFirstObjectByType<ScoringZone>();
 
+        if (_turnResolver == null)
+            _turnResolver = FindFirstObjectByType<CapTurnResolver>();
+
+        if (_gameManager == null)
+            _gameManager = FindFirstObjectByType<GameManager>();
+
         if (_turnSources == null || _turnSources.Length == 0)
             _turnSources = FindObjectsByType<CapThrower>(FindObjectsSortMode.None);
     }
 
     void SubscribeToTurns()
     {
-        if (_turnSources == null) return;
-
-        foreach (CapThrower turnSource in _turnSources)
+        if (_turnResolver != null)
         {
-            if (turnSource == null || !_subscribedTurnSources.Add(turnSource)) continue;
+            _turnResolver.OnTurnFinished -= HandleBoardChanged;
+            _turnResolver.OnTurnFinished += HandleBoardChanged;
+        }
 
-            turnSource.OnTurnFinished += HandleBoardChanged;
-            turnSource.OnBoardReset += HandleBoardReset;
+        if (_gameManager != null)
+        {
+            _gameManager.OnBoardReset -= HandleBoardReset;
+            _gameManager.OnBoardReset += HandleBoardReset;
         }
     }
 
     void UnsubscribeFromTurns()
     {
-        foreach (CapThrower turnSource in _subscribedTurnSources)
-        {
-            if (turnSource == null) continue;
+        if (_turnResolver != null)
+            _turnResolver.OnTurnFinished -= HandleBoardChanged;
 
-            turnSource.OnTurnFinished -= HandleBoardChanged;
-            turnSource.OnBoardReset -= HandleBoardReset;
-        }
-
-        _subscribedTurnSources.Clear();
+        if (_gameManager != null)
+            _gameManager.OnBoardReset -= HandleBoardReset;
     }
 
-    void HandleBoardChanged(CapThrower _)
+    void HandleBoardChanged(CapTurnResolver _)
     {
         if (CurrentResult == MatchResult.InProgress)
             RecalculateScore();
     }
 
-    void HandleBoardReset(CapThrower _)
+    void HandleBoardReset(GameManager _)
     {
         ResetMatch();
     }
@@ -131,9 +134,9 @@ public sealed class ScoringController : MonoBehaviour
             return;
         }
 
-        _scoringZone.GetCapCounts(out int playerCaps, out int opponentCaps);
-        PlayerCaps = playerCaps;
-        OpponentCaps = opponentCaps;
+        CapCounts counts = _scoringZone.GetCapCounts();
+        PlayerCaps = counts.Player;
+        OpponentCaps = counts.Opponent;
 
         UpdateUI();
         ScoreChanged?.Invoke(PlayerCaps, OpponentCaps, Advantage);
