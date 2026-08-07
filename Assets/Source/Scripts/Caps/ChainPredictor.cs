@@ -17,7 +17,7 @@ public static class ChainPredictor
         for (int i = 0; i < caps.Count; i++)
         {
             Cap c = caps[i];
-            if (!c.IsThrowable) continue;
+            if (!c.CanFlip) continue;
             positions[c] = c.GroundPosition;
         }
 
@@ -59,7 +59,7 @@ public static class ChainPredictor
 
             Cap cap = caps[i];
             if (cap == landedCap) continue;
-            if (!cap.IsThrowable) continue;
+            if (!cap.CanFlip) continue;
             if (!positions.TryGetValue(cap, out Vector2 capPos)) continue;
 
             float combined = slammerRadius + cap.Parameters.Radius;

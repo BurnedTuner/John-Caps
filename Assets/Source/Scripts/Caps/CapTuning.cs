@@ -11,7 +11,8 @@ public class CapTuning : MonoBehaviour
     [Header("Materials (fallback — used when a cap's own material is null)")]
     public Material HeadsMaterial;
     public Material TailsMaterial;
-
+    [Header("Cap Geometry")]
+    public float CapThickness = 0.05f;
     [Header("Throw / Spawn")]
     public Transform SpawnPoint;
     [Min(0f)] public float MinimumDragDistance = 0.5f;

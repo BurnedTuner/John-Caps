@@ -345,7 +345,8 @@ public class CapThrower : MonoBehaviour
     {
         float dt = Time.deltaTime;
 
-        for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
+        int capCount = CapRegistry.AllCaps.Count;
+        for (int i = 0; i < capCount; i++)
         {
             CapRegistry.AllCaps[i].StepSimulation(dt, OnCapLanded);
         }
@@ -420,6 +421,7 @@ public class CapThrower : MonoBehaviour
         float slammerRadius = landedCap.Parameters.Radius;
 
         var hits = new List<CapPrediction>();
+        var stackTargets = new List<Cap>();
         foreach (var cap in CapRegistry.AllCaps)
         {
             if (cap == landedCap) continue;
@@ -434,9 +436,14 @@ public class CapThrower : MonoBehaviour
             float inheritedForce = landingForce * cap.Parameters.PowerConversion;
             float travel = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
 
-            if (travel < _tuning.MinimumFlightLength) continue;
-
             Vector2 direction = CapMath.VerticalImpactDirection(landingPosition, cap.GroundPosition, Vector2.up);
+
+            if (travel < _tuning.MinimumFlightLength)
+            {
+                stackTargets.Add(cap);
+                continue;
+            }
+
             hits.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, inheritedForce, travel));
         }
 
@@ -445,8 +452,16 @@ public class CapThrower : MonoBehaviour
             TryActivateCap(hit.Cap, hit.Direction, hit.Force, hit.TravelDistance, -1, 0);
         }
 
+        foreach (var target in stackTargets)
+        {
+            target.AddToStack(landedCap);
+        }
+
         Vector3 landingPos3D = CapMath.FromXZ(landingPosition, 0f);
-        if (hits.Count > 0)
+        bool isPeelOff = landedCap.WasPeelOff;
+        landedCap.WasPeelOff = false;
+
+        if (hits.Count > 0 || stackTargets.Count > 0 || isPeelOff)
         {
             _impactDepth++;
             OnCapImpact?.Invoke(landingPos3D, landingForce, _impactDepth);
@@ -464,9 +479,11 @@ public class CapThrower : MonoBehaviour
             float dist = Vector2.Distance(landingPosition, cap.GroundPosition);
             if (dist > cap.Parameters.PushRadius) continue;
 
-            bool wasDirectHit = false;
-            foreach (var hit in hits) { if (hit.Cap == cap) { wasDirectHit = true; break; } }
-            if (wasDirectHit) continue;
+            bool wasHit = false;
+            foreach (var hit in hits) { if (hit.Cap == cap) { wasHit = true; break; } }
+            if (wasHit) continue;
+            foreach (var t in stackTargets) { if (t == cap) { wasHit = true; break; } }
+            if (wasHit) continue;
 
             Vector2 dir = cap.GroundPosition - landingPosition;
             if (dir.sqrMagnitude < 0.0001f) dir = Random.insideUnitCircle.normalized;
@@ -495,7 +512,7 @@ public class CapThrower : MonoBehaviour
         foreach (var cap in CapRegistry.AllCaps)
         {
             if (cap == _throwingCap) continue;
-            if (!cap.IsThrowable) continue;
+            if (!cap.CanFlip) continue;
             float combined = slammerRadius + cap.Parameters.Radius;
             float dist = Vector2.Distance(landingPoint, cap.GroundPosition);
             if (dist > combined) continue;

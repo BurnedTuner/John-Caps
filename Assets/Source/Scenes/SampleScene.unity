@@ -150,6 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HeadsMaterial: {fileID: 2100000, guid: 3c9b5658bbefd3a47a59f88f59f67277, type: 2}
   TailsMaterial: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
+  CapThickness: 0.2
   SpawnPoint: {fileID: 730576649}
   MinimumDragDistance: 0.5
   CapGrabRadiusPixels: 80
@@ -160,7 +161,7 @@ MonoBehaviour:
   FlightSpinDegrees: 540
   ForceToTravelDistance: 1
   CapMoveSpeed: 5
-  MinimumFlightLength: 0.1
+  MinimumFlightLength: 0.3
   ChainFlightDuration: 0.4
   ChainDeflection: 0.65
   ChainContactDelay: 0.08
