@@ -3,10 +3,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 
-/// <summary>
-/// Orchestrates the throw flow with the NEW Input System.
-/// Drag-and-drop: player must press on the waiting cap, drag to aim, release to throw.
-/// </summary>
 public class CapThrower : MonoBehaviour
 {
     public enum State { Idle, Aiming, Throwing, Resolving }
@@ -427,7 +423,7 @@ public class CapThrower : MonoBehaviour
         foreach (var cap in CapRegistry.AllCaps)
         {
             if (cap == landedCap) continue;
-            if (cap.IsBusy) continue;
+            if (!cap.CanFlip) continue;
 
             float combined = slammerRadius + cap.Parameters.Radius;
             float dist = Vector2.Distance(landingPosition, cap.GroundPosition);
@@ -435,13 +431,13 @@ public class CapThrower : MonoBehaviour
 
             float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
             float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float force = landingForce * cap.Parameters.PowerConversion * contactFactor;
+            float inheritedForce = landingForce * cap.Parameters.PowerConversion;
+            float travel = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
 
-            float travel = force * _tuning.ForceToTravelDistance;
             if (travel < _tuning.MinimumFlightLength) continue;
 
             Vector2 direction = CapMath.VerticalImpactDirection(landingPosition, cap.GroundPosition, Vector2.up);
-            hits.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, force, travel));
+            hits.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, inheritedForce, travel));
         }
 
         foreach (var hit in hits)
@@ -463,7 +459,7 @@ public class CapThrower : MonoBehaviour
         foreach (var cap in CapRegistry.AllCaps)
         {
             if (cap == landedCap) continue;
-            if (cap.IsBusy) continue;
+            if (!cap.IsThrowable) continue;
 
             float dist = Vector2.Distance(landingPosition, cap.GroundPosition);
             if (dist > cap.Parameters.PushRadius) continue;
@@ -499,19 +495,19 @@ public class CapThrower : MonoBehaviour
         foreach (var cap in CapRegistry.AllCaps)
         {
             if (cap == _throwingCap) continue;
+            if (!cap.IsThrowable) continue;
             float combined = slammerRadius + cap.Parameters.Radius;
             float dist = Vector2.Distance(landingPoint, cap.GroundPosition);
             if (dist > combined) continue;
 
             float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
             float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float force = throwForce * cap.Parameters.PowerConversion * contactFactor;
-
-            Vector2 direction = CapMath.VerticalImpactDirection(landingPoint, cap.GroundPosition, Vector2.up);
-            float travel = force * _tuning.ForceToTravelDistance;
+            float inheritedForce = throwForce * cap.Parameters.PowerConversion;
+            float travel = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
             if (travel < _tuning.MinimumFlightLength) continue;
 
-            results.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, force, travel));
+            Vector2 direction = CapMath.VerticalImpactDirection(landingPoint, cap.GroundPosition, Vector2.up);
+            results.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, inheritedForce, travel));
         }
     }
 

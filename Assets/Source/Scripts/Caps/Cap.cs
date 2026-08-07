@@ -1,13 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-/// States:
-///   Idle      — sitting still on the field, can be hit.
-///   Held      — grabbed by the player, lifted above spawn, waiting for throw.
-///   Throwing  — player's thrown cap flying in a visual arc from spawn to landing point.
-///   Flying    — launched by an impact: flying to destination + flipping 180°.
-///   Pushed    — nudged by the push radius effect: sliding briefly, no flip.
-
 [RequireComponent(typeof(MeshRenderer))]
 public class Cap : MonoBehaviour
 {
@@ -34,6 +27,8 @@ public class Cap : MonoBehaviour
     public Vector2 GroundPosition { get; private set; }
     public bool IsHeads { get; private set; } = true;
     public bool IsBusy => _state != CapState.Idle;
+    public bool IsThrowable => _state == CapState.Idle;
+    public bool CanFlip => _state == CapState.Idle || _state == CapState.Pushed;
     public CapState CurrentState => _state;
     public int ActivationDepthPlusOne => _activationDepth + 1;
 
@@ -50,7 +45,6 @@ public class Cap : MonoBehaviour
 
     private CapState _state = CapState.Idle;
 
-    // Throwing (player's thrown cap — visual arc)
     private Vector3 _throwStart;
     private Vector3 _throwEnd;
     private float _throwElapsed;
@@ -58,11 +52,9 @@ public class Cap : MonoBehaviour
     private float _throwArcHeight;
     private float _landingForce;
 
-    // Held (grabbed by player, lifted above spawn)
     private Vector3 _heldBasePos;
     private float _heldCurrentHeight;
 
-    // Flying (chain-hit cap — straight line + flip)
     private Vector2 _flyStart;
     private Vector2 _flyDirection;
     private float _flyTotalDistance;
@@ -71,7 +63,6 @@ public class Cap : MonoBehaviour
     private int _activationDepth;
     private bool _fromHeads;
 
-    // Pushed
     private Vector2 _pushStart;
     private Vector2 _pushDirection;
     private float _pushRemaining;
@@ -145,7 +136,7 @@ public class Cap : MonoBehaviour
     public bool BeginLaunch(int throwId, int depth, Vector2 direction, float force, float travelDistance, float duration, int ignoredSourceId)
     {
         if (_isImmutable) return false;
-        if (_state != CapState.Idle) return false;
+        if (!CanFlip) return false;
         if (float.IsNaN(direction.x) || float.IsNaN(direction.y)) return false;
         if (float.IsNaN(travelDistance) || float.IsNaN(force)) return false;
         if (!IsFinite(GroundPosition)) return false;

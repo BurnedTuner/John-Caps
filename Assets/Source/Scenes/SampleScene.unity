@@ -168,7 +168,7 @@ MonoBehaviour:
   CapFlipDuration: 0.52
   CapFlipApexHeight: 0.65
   SettleDelay: 0.22
-  PredictionDepth: 4
+  PredictionDepth: 0
   ArcSamples: 24
 --- !u!4 &256113063
 Transform:
