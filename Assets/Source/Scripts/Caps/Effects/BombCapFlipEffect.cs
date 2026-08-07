@@ -19,26 +19,19 @@ public sealed class BombCapFlipEffect : CapFlipEffect
     public float Radius => _radius;
     public float Force => _force;
 
-    public override void Activate(CapFlipEffectContext context)
+    public override void BuildCommands(
+        in CapFlipEvent flipEvent,
+        ICapEffectQuery query,
+        ICapEffectCommandSink commands)
     {
-        if (context == null || context.Source == null || _radius <= 0f || _force <= 0f)
+        if (flipEvent.Source == null || _radius <= 0f || _force <= 0f)
             return;
 
-        for (int i = 0; i < context.Caps.Count; i++)
-        {
-            Cap target = context.Caps[i];
-            if (target == null || target == context.Source || target.IsBusy) continue;
-
-            Vector2 offset = target.GroundPosition - context.Position;
-            float distance = offset.magnitude;
-            if (distance >= _radius) continue;
-
-            Vector2 direction = offset.sqrMagnitude > 0.000001f
-                ? offset / distance
-                : Vector2.right;
-
-            context.TryLaunch(target, direction, _force);
-        }
+        commands.Add(new RadialLaunchCommand(
+            flipEvent.Source,
+            flipEvent.Position,
+            _radius,
+            _force));
     }
 
     void OnValidate()

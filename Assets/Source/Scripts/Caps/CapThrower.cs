@@ -1,110 +1,153 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 /// <summary>
-/// Orchestrates the throw flow with the NEW Input System.
-/// Drag-and-drop: player must press on the waiting cap, drag to aim, release to throw.
+/// Handles player input, aiming and preview, then submits a throw to CapTurnResolver.
 /// </summary>
-public class CapThrower : MonoBehaviour
+public sealed class CapThrower : MonoBehaviour
 {
-    public enum State { Idle, Aiming, Throwing, Resolving }
+    public enum State { Idle, Aiming, WaitingForResolution }
 
     [Header("References")]
     public Camera PlayerCamera;
     public LayerMask FieldMask = ~0;
     public Cap CapPrefab;
     public TrajectoryPreview TrajectoryPreview;
+    [SerializeField] private CapTurnResolver _turnResolver;
+    [SerializeField] private GameManager _gameManager;
 
     [Header("Ownership")]
     public CapOwner ThrowOwner = CapOwner.Player;
 
     public State CurrentState { get; private set; } = State.Idle;
     public bool TurnInputEnabled { get; private set; } = true;
+    public CapTurnResolver TurnResolver => _turnResolver;
 
-    public event System.Action<Vector3, float> OnTableImpact;
-    public event System.Action<Vector3, float, int> OnCapImpact;
-    public event System.Action<CapThrower> OnTurnFinished;
-    public event System.Action<CapThrower> OnBoardReset;
+    private const int AimOverlapBufferSize = 32;
+
+    private readonly Collider[] _aimOverlapBuffer = new Collider[AimOverlapBufferSize];
+    private readonly RaycastHit[] _fieldHitBuffer = new RaycastHit[AimOverlapBufferSize];
+    private readonly List<CapPrediction> _directHitSeeds = new();
+    private readonly List<CapPrediction> _predictionResults = new();
 
     private CapTuning _tuning;
     private Vector2 _aimPoint;
     private bool _isDirectAimAllowed;
     private float _throwForce;
-    private Cap _throwingCap;
     private Cap _waitingCap;
 
-    private const int AimOverlapBufferSize = 32;
-    private readonly Collider[] _aimOverlapBuffer = new Collider[AimOverlapBufferSize];
-    private readonly RaycastHit[] _fieldHitBuffer = new RaycastHit[AimOverlapBufferSize];
-
-    private int _throwId;
-    private int _chainCount;
-    private int _impactDepth;
-    private readonly List<CapPrediction> _directHitSeeds = new();
-    private readonly List<CapPrediction> _predictionResults = new();
-    private readonly List<PendingLanding> _pendingLandings = new();
-    private float _settleElapsed;
-
-    struct PendingLanding
+    void Awake()
     {
-        public Cap LandedCap;
-        public Vector2 LandingPosition;
-        public float LandingForce;
-        public float RemainingDelay;
+        _tuning = CapTuning.Instance;
+        ResolveReferences();
     }
 
-    void Awake() => _tuning = CapTuning.Instance;
+    void OnEnable()
+    {
+        ResolveReferences();
+        Subscribe();
+    }
 
     void Start()
     {
+        ResolveReferences();
+        if (_turnResolver == null)
+            Debug.LogError("[CapThrower] CapTurnResolver is not assigned or present in the scene.", this);
+
         SpawnWaitingCap();
+    }
+
+    void OnDisable()
+    {
+        Unsubscribe();
+    }
+
+    void ResolveReferences()
+    {
+        if (_tuning == null)
+            _tuning = CapTuning.Instance;
+
+        if (_turnResolver == null)
+            _turnResolver = FindFirstObjectByType<CapTurnResolver>();
+
+        if (_gameManager == null)
+            _gameManager = FindFirstObjectByType<GameManager>();
+    }
+
+    void Subscribe()
+    {
+        if (_turnResolver != null)
+        {
+            _turnResolver.OnTurnFinished -= HandleTurnFinished;
+            _turnResolver.OnTurnFinished += HandleTurnFinished;
+        }
+
+        if (_gameManager != null)
+        {
+            _gameManager.OnBoardReset -= HandleBoardReset;
+            _gameManager.OnBoardReset += HandleBoardReset;
+        }
+    }
+
+    void Unsubscribe()
+    {
+        if (_turnResolver != null)
+            _turnResolver.OnTurnFinished -= HandleTurnFinished;
+
+        if (_gameManager != null)
+            _gameManager.OnBoardReset -= HandleBoardReset;
     }
 
     void SpawnWaitingCap()
     {
-        if (_waitingCap != null) return;
-        if (CapPrefab == null || _tuning == null) return;
+        if (_waitingCap != null || CapPrefab == null || _tuning == null) return;
 
-        Vector3 spawn = _tuning.SpawnPosition;
-        _waitingCap = CapFactory.Create(CapPrefab, CapMath.ToXZ(spawn), isHeads: true, ThrowOwner);
+        Vector3 spawnPosition = _tuning.SpawnPosition;
+        _waitingCap = CapFactory.Create(
+            CapPrefab,
+            CapMath.ToXZ(spawnPosition),
+            isHeads: true,
+            ThrowOwner);
+
         if (_waitingCap != null)
-        {
-            _waitingCap.transform.position = spawn;
-        }
+            _waitingCap.transform.position = spawnPosition;
     }
 
     void Update()
     {
         if (!TurnInputEnabled)
         {
-            if (CurrentState == State.Idle && Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
-                ResetBoard();
+            if (CurrentState == State.Idle && Keyboard.current?.rKey.wasPressedThisFrame == true)
+                RequestBoardReset();
             return;
         }
 
         switch (CurrentState)
         {
-            case State.Idle: UpdateIdle(); break;
-            case State.Aiming: UpdateAiming(); break;
-            case State.Throwing: UpdateThrowing(); break;
-            case State.Resolving: UpdateResolving(); break;
+            case State.Idle:
+                if (_turnResolver == null || !_turnResolver.IsBusy)
+                    UpdateIdle();
+                break;
+            case State.Aiming:
+                UpdateAiming();
+                break;
         }
     }
 
     static bool ClickedOnUI() =>
         EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
 
-    bool GetFieldPoint(out Vector3 point, out bool isDirectAimAllowed)
+    bool TryGetFieldPoint(out Vector3 point, out bool isDirectAimAllowed)
     {
         point = default;
         isDirectAimAllowed = false;
 
         if (PlayerCamera == null || Mouse.current == null) return false;
 
-        Vector2 mousePos = Mouse.current.position.ReadValue();
-        Ray ray = PlayerCamera.ScreenPointToRay(mousePos);
+        Vector2 mousePosition = Mouse.current.position.ReadValue();
+        Ray ray = PlayerCamera.ScreenPointToRay(mousePosition);
 
         int hitCount = Physics.RaycastNonAlloc(
             ray,
@@ -129,8 +172,7 @@ public class CapThrower : MonoBehaviour
             nearestDistance = candidate.distance;
         }
 
-        if (!foundField)
-            return false;
+        if (!foundField) return false;
 
         point = fieldHit.point;
         float capRadius = _waitingCap != null ? _waitingCap.Parameters.Radius : 0.5f;
@@ -164,47 +206,54 @@ public class CapThrower : MonoBehaviour
     {
         if (_waitingCap == null || PlayerCamera == null || Mouse.current == null) return false;
 
-        Vector3 capPos = _waitingCap.transform.position;
-        Vector3 screenPos = PlayerCamera.WorldToScreenPoint(capPos);
-        if (screenPos.z < 0f) return false;
+        Vector3 screenPosition = PlayerCamera.WorldToScreenPoint(_waitingCap.transform.position);
+        if (screenPosition.z < 0f) return false;
 
-        Vector2 mousePos = Mouse.current.position.ReadValue();
-        float screenDist = Vector2.Distance(mousePos, new Vector2(screenPos.x, screenPos.y));
-        return screenDist <= _tuning.CapGrabRadiusPixels;
+        Vector2 mousePosition = Mouse.current.position.ReadValue();
+        float screenDistance = Vector2.Distance(
+            mousePosition,
+            new Vector2(screenPosition.x, screenPosition.y));
+
+        return screenDistance <= _tuning.CapGrabRadiusPixels;
     }
 
     void UpdateIdle()
     {
-        if (Keyboard.current.rKey.wasPressedThisFrame)
+        if (Keyboard.current?.rKey.wasPressedThisFrame == true)
         {
-            ResetBoard();
+            RequestBoardReset();
             return;
         }
 
-        if (ClickedOnUI()) return;
+        if (ClickedOnUI() || Mouse.current == null) return;
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
         if (!IsCursorOverWaitingCap()) return;
 
         _aimPoint = CapMath.ToXZ(_tuning.SpawnPosition);
         _isDirectAimAllowed = false;
-        if (TrajectoryPreview != null) TrajectoryPreview.Hide();
-        if (_waitingCap != null)
-            _waitingCap.BeginHeld(_tuning.SpawnPosition);
+        TrajectoryPreview?.Hide();
+        _waitingCap?.BeginHeld(_tuning.SpawnPosition);
         CurrentState = State.Aiming;
     }
 
     void UpdateAiming()
     {
-        if (Mouse.current.rightButton.wasPressedThisFrame || Keyboard.current.escapeKey.wasPressedThisFrame)
+        if (Mouse.current == null)
         {
             CancelAiming();
             return;
         }
 
-        if (_waitingCap != null)
-            _waitingCap.StepSimulation(Time.deltaTime, null);
+        if (Mouse.current.rightButton.wasPressedThisFrame ||
+            Keyboard.current?.escapeKey.wasPressedThisFrame == true)
+        {
+            CancelAiming();
+            return;
+        }
 
-        if (GetFieldPoint(out Vector3 point, out bool isDirectAimAllowed))
+        _waitingCap?.StepSimulation(Time.deltaTime, null);
+
+        if (TryGetFieldPoint(out Vector3 point, out bool isDirectAimAllowed))
         {
             _aimPoint = CapMath.ToXZ(point);
             _isDirectAimAllowed = isDirectAimAllowed;
@@ -217,16 +266,11 @@ public class CapThrower : MonoBehaviour
         UpdateAimPreview();
 
         if (!Mouse.current.leftButton.isPressed)
-        {
             Fire();
-        }
     }
 
-    float GetDragDistance()
-    {
-        Vector2 spawnXZ = CapMath.ToXZ(_tuning.SpawnPosition);
-        return Vector2.Distance(spawnXZ, _aimPoint);
-    }
+    float GetDragDistance() =>
+        Vector2.Distance(CapMath.ToXZ(_tuning.SpawnPosition), _aimPoint);
 
     void UpdateAimPreview()
     {
@@ -234,7 +278,7 @@ public class CapThrower : MonoBehaviour
         {
             _directHitSeeds.Clear();
             _predictionResults.Clear();
-            if (TrajectoryPreview != null) TrajectoryPreview.Hide();
+            TrajectoryPreview?.Hide();
             return;
         }
 
@@ -246,23 +290,33 @@ public class CapThrower : MonoBehaviour
         _predictionResults.Clear();
         if (_tuning.PredictionDepth > 0)
         {
-            ChainPredictor.Predict(CapRegistry.AllCaps, _directHitSeeds, _tuning, _tuning.PredictionDepth, _predictionResults);
+            ChainPredictor.Predict(
+                CapRegistry.AllCaps,
+                _directHitSeeds,
+                _tuning,
+                _tuning.PredictionDepth,
+                _predictionResults);
         }
 
-        if (TrajectoryPreview != null)
-        {
-            TrajectoryPreview.Show(_tuning.SpawnPosition, _aimPoint, slammerRadius, _tuning, _directHitSeeds, _predictionResults);
-        }
+        TrajectoryPreview?.Show(
+            _tuning.SpawnPosition,
+            _aimPoint,
+            slammerRadius,
+            _tuning,
+            _directHitSeeds,
+            _predictionResults);
     }
 
     void CancelAiming()
     {
-        if (TrajectoryPreview != null) TrajectoryPreview.Hide();
+        TrajectoryPreview?.Hide();
+
         if (_waitingCap != null)
         {
             _waitingCap.EndHeldToIdle();
             _waitingCap.transform.position = _tuning.SpawnPosition;
         }
+
         _isDirectAimAllowed = false;
         CurrentState = State.Idle;
     }
@@ -276,300 +330,124 @@ public class CapThrower : MonoBehaviour
 
     void Fire()
     {
-        if (!_isDirectAimAllowed)
+        if (!_isDirectAimAllowed || GetDragDistance() < _tuning.MinimumDragDistance)
         {
             CancelAiming();
             return;
         }
 
-        float dragDist = GetDragDistance();
-        if (dragDist < _tuning.MinimumDragDistance)
+        if (_turnResolver == null)
         {
+            Debug.LogError("[CapThrower] Cannot throw without a CapTurnResolver.", this);
             CancelAiming();
             return;
         }
 
-        if (TrajectoryPreview != null) TrajectoryPreview.Hide();
+        TrajectoryPreview?.Hide();
 
-        _throwId++;
-        _chainCount = 0;
-        _impactDepth = 0;
-        _pendingLandings.Clear();
+        Vector3 startPosition = _tuning.SpawnPosition;
+        Vector3 landingPosition = CapMath.FromXZ(_aimPoint, 0f);
+        Cap cap = _waitingCap;
 
-        Vector3 spawn = _tuning.SpawnPosition;
-        Vector3 landPos = CapMath.FromXZ(_aimPoint, 0f);
-
-        if (_waitingCap != null)
+        if (cap == null)
         {
-            _throwingCap = _waitingCap;
-            _waitingCap = null;
-            _throwingCap.transform.position = spawn;
-        }
-        else
-        {
-            _throwingCap = CapFactory.Create(CapPrefab, CapMath.ToXZ(spawn), isHeads: true, ThrowOwner);
+            cap = CapFactory.Create(
+                CapPrefab,
+                CapMath.ToXZ(startPosition),
+                isHeads: true,
+                ThrowOwner);
         }
 
-        if (_throwingCap == null)
+        if (cap == null)
         {
-            Debug.LogError("[CapThrower] Failed to spawn throwing cap. Is CapPrefab assigned?");
+            Debug.LogError("[CapThrower] Failed to create a cap for the throw.", this);
             CurrentState = State.Idle;
             return;
         }
 
-        _throwForce = _throwingCap.Parameters.ThrowPower;
+        float force = cap.Parameters.ThrowPower;
+        var request = new CapThrowRequest(cap, startPosition, landingPosition, force);
 
-        _throwingCap.SetImmutable(true);
-        _throwingCap.BeginThrow(spawn, landPos, _throwForce, _tuning.FlightDuration, _tuning.ArcHeight);
-
-        CurrentState = State.Throwing;
-    }
-
-    void UpdateThrowing()
-    {
-        if (_throwingCap == null)
+        if (_turnResolver.TryStartThrow(request))
         {
-            CurrentState = State.Resolving;
-            _settleElapsed = 0f;
+            _waitingCap = null;
+            CurrentState = State.WaitingForResolution;
             return;
         }
 
-        _throwingCap.StepSimulation(Time.deltaTime, OnCapLanded);
-
-        if (_throwingCap.CurrentState == Cap.CapState.Idle)
-        {
-            _throwingCap.SetImmutable(false);
-            _throwingCap = null;
-            CurrentState = State.Resolving;
-            _settleElapsed = 0f;
-        }
-    }
-
-    void UpdateResolving()
-    {
-        float dt = Time.deltaTime;
-
-        for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
-        {
-            CapRegistry.AllCaps[i].StepSimulation(dt, OnCapLanded, OnCapFlipped);
-        }
-
-        for (int i = 0; i < _pendingLandings.Count;)
-        {
-            var pending = _pendingLandings[i];
-            if (pending.LandedCap == null)
-            {
-                _pendingLandings.RemoveAt(i);
-                continue;
-            }
-
-            pending.RemainingDelay -= dt;
-            if (pending.RemainingDelay > 0f)
-            {
-                _pendingLandings[i] = pending;
-                i++;
-                continue;
-            }
-            _pendingLandings.RemoveAt(i);
-
-            if (_chainCount >= _tuning.MaximumChainLength) continue;
-
-            ResolveLanding(pending.LandedCap, pending.LandingPosition, pending.LandingForce);
-        }
-
-        bool anyBusy = _pendingLandings.Count > 0;
-        if (!anyBusy)
-        {
-            for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
-            {
-                if (CapRegistry.AllCaps[i].IsBusy) { anyBusy = true; break; }
-            }
-        }
-
-        if (anyBusy) { _settleElapsed = 0f; return; }
-
-        _settleElapsed += dt;
-        if (_settleElapsed >= _tuning.SettleDelay) FinishThrow();
-    }
-
-    void FinishThrow()
-    {
-        _throwingCap = null;
+        _waitingCap = cap;
+        _waitingCap.EndHeldToIdle();
+        _waitingCap.transform.position = startPosition;
         CurrentState = State.Idle;
-        OnTurnFinished?.Invoke(this);
-        SpawnWaitingCap();
     }
 
-    void OnCapLanded(Cap landedCap, Vector2 landingPosition, float landingForce)
-    {
-        if (landedCap != _throwingCap)
-        {
-            _pendingLandings.Add(new PendingLanding
-            {
-                LandedCap = landedCap,
-                LandingPosition = landingPosition,
-                LandingForce = landingForce,
-                RemainingDelay = _tuning.ChainContactDelay
-            });
-            return;
-        }
-
-        ResolveLanding(landedCap, landingPosition, landingForce);
-    }
-
-    void OnCapFlipped(Cap flippedCap, Vector2 position, float incomingForce)
-    {
-        if (flippedCap == null) return;
-
-        var context = new CapFlipEffectContext(
-            flippedCap,
-            position,
-            incomingForce,
-            CapRegistry.AllCaps,
-            (target, direction, force) => TryLaunchFromEffect(flippedCap, target, direction, force));
-
-        flippedCap.ActivateFlipEffects(context);
-    }
-
-    bool TryLaunchFromEffect(Cap source, Cap target, Vector2 direction, float rawForce)
-    {
-        if (source == null || target == null || _tuning == null) return false;
-
-        float force = rawForce * target.Parameters.PowerConversion;
-        float travelDistance = force * _tuning.ForceToTravelDistance;
-        if (!float.IsFinite(force) || !float.IsFinite(travelDistance)) return false;
-        if (travelDistance < _tuning.MinimumFlightLength) return false;
-
-        return TryActivateCap(
-            target,
-            direction,
-            force,
-            travelDistance,
-            source.StableId,
-            source.ActivationDepthPlusOne);
-    }
-
-    void ResolveLanding(Cap landedCap, Vector2 landingPosition, float landingForce)
-    {
-        if (landedCap == null) return;
-
-        float slammerRadius = landedCap.Parameters.Radius;
-
-        var hits = new List<CapPrediction>();
-        foreach (var cap in CapRegistry.AllCaps)
-        {
-            if (cap == landedCap) continue;
-            if (cap.IsBusy) continue;
-
-            float combined = slammerRadius + cap.Parameters.Radius;
-            float dist = Vector2.Distance(landingPosition, cap.GroundPosition);
-            if (dist > combined) continue;
-
-            float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
-            float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float force = landingForce * cap.Parameters.PowerConversion * contactFactor;
-
-            float travel = force * _tuning.ForceToTravelDistance;
-            if (travel < _tuning.MinimumFlightLength) continue;
-
-            Vector2 direction = CapMath.VerticalImpactDirection(landingPosition, cap.GroundPosition, Vector2.up);
-            hits.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, force, travel));
-        }
-
-        foreach (var hit in hits)
-        {
-            TryActivateCap(hit.Cap, hit.Direction, hit.Force, hit.TravelDistance, -1, 0);
-        }
-
-        Vector3 landingPos3D = CapMath.FromXZ(landingPosition, 0f);
-        if (hits.Count > 0)
-        {
-            _impactDepth++;
-            OnCapImpact?.Invoke(landingPos3D, landingForce, _impactDepth);
-        }
-        else
-        {
-            OnTableImpact?.Invoke(landingPos3D, landingForce);
-        }
-
-        foreach (var cap in CapRegistry.AllCaps)
-        {
-            if (cap == landedCap) continue;
-            if (cap.IsBusy) continue;
-
-            float dist = Vector2.Distance(landingPosition, cap.GroundPosition);
-            if (dist > cap.Parameters.PushRadius) continue;
-
-            bool wasDirectHit = false;
-            foreach (var hit in hits) { if (hit.Cap == cap) { wasDirectHit = true; break; } }
-            if (wasDirectHit) continue;
-
-            Vector2 dir = cap.GroundPosition - landingPosition;
-            if (dir.sqrMagnitude < 0.0001f) dir = Random.insideUnitCircle.normalized;
-            else dir.Normalize();
-
-            float falloff = 1f - (dist / cap.Parameters.PushRadius);
-            cap.BeginPush(dir, cap.Parameters.PushDistance * falloff, cap.Parameters.PushDuration);
-        }
-    }
-
-    bool TryActivateCap(Cap target, Vector2 direction, float force, float travelDistance, int ignoredSourceId, int depth)
-    {
-        if (target == null || _chainCount >= _tuning.MaximumChainLength) return false;
-        if (target.BeginLaunch(_throwId, depth, direction, force, travelDistance, _tuning.ChainFlightDuration, ignoredSourceId))
-        {
-            _chainCount++;
-            return true;
-        }
-        return false;
-    }
-
-    void CollectDirectHitPredictions(Vector2 landingPoint, float throwForce, float slammerRadius, List<CapPrediction> results)
+    void CollectDirectHitPredictions(
+        Vector2 landingPoint,
+        float throwForce,
+        float slammerRadius,
+        List<CapPrediction> results)
     {
         results.Clear();
 
-        foreach (var cap in CapRegistry.AllCaps)
+        for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
         {
-            if (cap == _throwingCap) continue;
-            float combined = slammerRadius + cap.Parameters.Radius;
-            float dist = Vector2.Distance(landingPoint, cap.GroundPosition);
-            if (dist > combined) continue;
+            Cap cap = CapRegistry.AllCaps[i];
+            if (cap == _waitingCap) continue;
 
-            float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
+            float combinedRadius = slammerRadius + cap.Parameters.Radius;
+            float distance = Vector2.Distance(landingPoint, cap.GroundPosition);
+            if (distance > combinedRadius) continue;
+
+            float normalizedOffset = combinedRadius > 0f
+                ? Mathf.Clamp01(distance / combinedRadius)
+                : 0f;
             float contactFactor = cap.GetContactFactor(normalizedOffset);
             float force = throwForce * cap.Parameters.PowerConversion * contactFactor;
+            float travelDistance = force * _tuning.ForceToTravelDistance;
+            if (travelDistance < _tuning.MinimumFlightLength) continue;
 
-            Vector2 direction = CapMath.VerticalImpactDirection(landingPoint, cap.GroundPosition, Vector2.up);
-            float travel = force * _tuning.ForceToTravelDistance;
-            if (travel < _tuning.MinimumFlightLength) continue;
+            Vector2 direction = CapMath.VerticalImpactDirection(
+                landingPoint,
+                cap.GroundPosition,
+                Vector2.up);
 
-            results.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, force, travel));
+            results.Add(new CapPrediction(
+                cap,
+                0,
+                cap.GroundPosition,
+                direction,
+                force,
+                travelDistance));
         }
     }
 
-    void ResetBoard()
+    void HandleTurnFinished(CapTurnResolver resolver)
     {
-        foreach (var cap in CapRegistry.AllCaps.ToArray())
-        {
-            if (cap != null) Destroy(cap.gameObject);
-        }
-        CapRegistry.AllCaps.Clear();
-        CapFactory.ResetIdCounter();
+        if (resolver != _turnResolver || CurrentState != State.WaitingForResolution) return;
 
-        var gm = FindFirstObjectByType<GameManager>();
-        if (gm != null) gm.ScatterAmbientCaps();
-
-        if (TrajectoryPreview != null) TrajectoryPreview.Hide();
         CurrentState = State.Idle;
-        _throwingCap = null;
-        _waitingCap = null;
-        _pendingLandings.Clear();
-        _chainCount = 0;
-        _impactDepth = 0;
-        _isDirectAimAllowed = false;
-        _settleElapsed = 0f;
-
         SpawnWaitingCap();
-        OnBoardReset?.Invoke(this);
+    }
+
+    void RequestBoardReset()
+    {
+        ResolveReferences();
+        if (_gameManager != null)
+            _gameManager.ResetBoard();
+        else
+            Debug.LogWarning("[CapThrower] Cannot reset the board without a GameManager.", this);
+    }
+
+    void HandleBoardReset(GameManager gameManager)
+    {
+        if (gameManager != _gameManager) return;
+
+        TrajectoryPreview?.Hide();
+        _waitingCap = null;
+        _directHitSeeds.Clear();
+        _predictionResults.Clear();
+        _isDirectAimAllowed = false;
+        CurrentState = State.Idle;
+        SpawnWaitingCap();
     }
 }

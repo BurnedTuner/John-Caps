@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class GameManager : MonoBehaviour
 {
@@ -19,10 +18,25 @@ public class GameManager : MonoBehaviour
     [Header("Field detection")]
     public LayerMask FieldMask = ~0;
 
+    [Header("Simulation")]
+    [SerializeField] private CapTurnResolver _turnResolver;
+
+    public event System.Action<GameManager> OnBoardReset;
+
+    void Awake()
+    {
+        ResolveReferences();
+    }
 
     void Start()
     {
         ScatterAmbientCaps();
+    }
+
+    void ResolveReferences()
+    {
+        if (_turnResolver == null)
+            _turnResolver = FindFirstObjectByType<CapTurnResolver>();
     }
 
     public void ScatterAmbientCaps()
@@ -52,6 +66,24 @@ public class GameManager : MonoBehaviour
 
             CapFactory.Create(GetAmbientCapPrefab(), groundPos, heads, owner);
         }
+    }
+
+    public void ResetBoard()
+    {
+        ResolveReferences();
+        _turnResolver?.ResetSimulation();
+
+        Cap[] caps = CapRegistry.Snapshot();
+        for (int i = 0; i < caps.Length; i++)
+        {
+            if (caps[i] != null)
+                Destroy(caps[i].gameObject);
+        }
+
+        CapRegistry.Clear();
+        CapFactory.ResetIdCounter();
+        ScatterAmbientCaps();
+        OnBoardReset?.Invoke(this);
     }
 
     Cap GetAmbientCapPrefab()

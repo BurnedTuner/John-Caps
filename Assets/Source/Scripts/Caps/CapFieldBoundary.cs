@@ -42,7 +42,7 @@ public sealed class CapFieldBoundary : MonoBehaviour
             Cap cap = CapRegistry.AllCaps[i];
             if (cap == null)
             {
-                CapRegistry.AllCaps.RemoveAt(i);
+                CapRegistry.RemoveAt(i);
                 continue;
             }
 

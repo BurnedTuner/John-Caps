@@ -119,6 +119,50 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &155613449
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 155613451}
+  - component: {fileID: 155613450}
+  m_Layer: 0
+  m_Name: CapTurnResolver
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &155613450
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 155613449}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d673f2d30d249518bb7c635c0737e23, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!4 &155613451
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 155613449}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &190726863 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3850691182823398213, guid: be373eb106cc3c1459358a82a32cb42f, type: 3}
@@ -1684,6 +1728,7 @@ MonoBehaviour:
   FieldMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  _turnResolver: {fileID: 155613450}
 --- !u!4 &930590274
 Transform:
   m_ObjectHideFlags: 0
@@ -1908,6 +1953,8 @@ MonoBehaviour:
     m_Bits: 4294967295
   CapPrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
   TrajectoryPreview: {fileID: 7961701183480889502, guid: 39e83f0848cd18a4e964832a4d612587, type: 3}
+  _turnResolver: {fileID: 155613450}
+  _gameManager: {fileID: 930590273}
   ThrowOwner: 1
 --- !u!4 &1351139397
 Transform:
@@ -1936,7 +1983,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6c16410fc3a3ca43b5610fffa872346, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CapThrower: {fileID: 1351139396}
+  TurnResolver: {fileID: 155613450}
   TableImpactSound: {fileID: 8300000, guid: ee1193c0411723840a4b45f88681e983, type: 3}
   CapImpactSound: {fileID: 8300000, guid: 4d6641076dcf3d945b9518042ddefe7d, type: 3}
   BasePitch: 1
@@ -2236,7 +2283,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _scoringZone: {fileID: 190726863}
-  _turnSources: []
+  _turnResolver: {fileID: 155613450}
+  _gameManager: {fileID: 930590273}
+  _turnSources:
+  - {fileID: 1351139396}
   _maximumAdvantage: 4
   _lockTurnsWhenMatchFinished: 1
   _advantageSlider: {fileID: 2070416866}
@@ -2658,6 +2708,7 @@ SceneRoots:
   - {fileID: 1924152411}
   - {fileID: 930590274}
   - {fileID: 1351139397}
+  - {fileID: 155613451}
   - {fileID: 383078233}
   - {fileID: 421113198}
   - {fileID: 256113063}
