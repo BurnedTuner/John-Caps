@@ -130,6 +130,14 @@ public class Cap : MonoBehaviour
         ApplyVisuals();
     }
 
+    public void UpdateHeldBasePosition(Vector3 basePos)
+    {
+        if (_state == CapState.Held)
+        {
+            _heldBasePos = basePos;
+        }
+    }
+
     public void EndHeldToIdle()
     {
         _state = CapState.Idle;
@@ -404,7 +412,6 @@ public class Cap : MonoBehaviour
         {
             float yOff = _tuning != null ? _tuning.CapThickness : 0.1f;
             int myIndex = _stackBase._stackAbove.IndexOf(this) + 1;
-            // Offset along the head's LOCAL up axis so the stack stays rigid during flips
             Vector3 localUp = _stackBase.transform.rotation * Vector3.up;
             pos = _stackBase.transform.position + localUp * (yOff * myIndex);
             rot = _stackBase.transform.rotation;

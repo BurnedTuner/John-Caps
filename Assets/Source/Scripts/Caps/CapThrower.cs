@@ -16,6 +16,10 @@ public class CapThrower : MonoBehaviour
     [Header("Ownership")]
     public CapOwner ThrowOwner = CapOwner.Player;
 
+    [Header("Layers")]
+    [Tooltip("Layer for the cap while held in hand (renders above everything).")]
+    public int PlayerHandLayer = 0; // Set this in inspector to your "PlayerHand" layer index
+
     public State CurrentState { get; private set; } = State.Idle;
     public bool TurnInputEnabled { get; private set; } = true;
 
@@ -68,6 +72,7 @@ public class CapThrower : MonoBehaviour
         if (_waitingCap != null)
         {
             _waitingCap.transform.position = spawn;
+            SetCapLayerRecursive(_waitingCap.gameObject, PlayerHandLayer);
         }
     }
 
@@ -177,6 +182,11 @@ public class CapThrower : MonoBehaviour
             return;
         }
 
+        if (_waitingCap != null && _tuning.SpawnPoint != null)
+        {
+            _waitingCap.transform.position = _tuning.SpawnPosition;
+        }
+
         if (ClickedOnUI()) return;
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
         if (!IsCursorOverWaitingCap()) return;
@@ -195,6 +205,11 @@ public class CapThrower : MonoBehaviour
         {
             CancelAiming();
             return;
+        }
+
+        if (_waitingCap != null && _tuning.SpawnPoint != null)
+        {
+            _waitingCap.UpdateHeldBasePosition(_tuning.SpawnPosition);
         }
 
         if (_waitingCap != null)
@@ -300,6 +315,8 @@ public class CapThrower : MonoBehaviour
             _throwingCap = _waitingCap;
             _waitingCap = null;
             _throwingCap.transform.position = spawn;
+            // Reset layer back to Default (0) so it interacts with the world normally
+            SetCapLayerRecursive(_throwingCap.gameObject, 0);
         }
         else
         {
@@ -525,6 +542,16 @@ public class CapThrower : MonoBehaviour
 
             Vector2 direction = CapMath.VerticalImpactDirection(landingPoint, cap.GroundPosition, Vector2.up);
             results.Add(new CapPrediction(cap, 0, cap.GroundPosition, direction, inheritedForce, travel));
+        }
+    }
+
+    void SetCapLayerRecursive(GameObject obj, int layer)
+    {
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
+        {
+            if (child != null)
+                SetCapLayerRecursive(child.gameObject, layer);
         }
     }
 
