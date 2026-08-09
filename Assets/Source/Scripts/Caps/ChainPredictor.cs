@@ -1,11 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Side-effect-free chain reaction predictor for the hop-by-hop model.
-/// Each cap uses its own Radius for overlap checks (supports caps of different sizes).
-/// Travel distance is computed per-hop from force × ForceToTravelDistance (dependent on hit position).
-/// </summary>
 public static class ChainPredictor
 {
     public static void Predict(
@@ -20,7 +15,11 @@ public static class ChainPredictor
 
         var positions = new Dictionary<Cap, Vector2>(caps.Count);
         for (int i = 0; i < caps.Count; i++)
-            positions[caps[i]] = caps[i].GroundPosition;
+        {
+            Cap c = caps[i];
+            if (!c.CanFlip) continue;
+            positions[c] = c.GroundPosition;
+        }
 
         for (int i = 0; i < directHits.Count; i++)
         {
@@ -60,6 +59,7 @@ public static class ChainPredictor
 
             Cap cap = caps[i];
             if (cap == landedCap) continue;
+            if (!cap.CanFlip) continue;
             if (!positions.TryGetValue(cap, out Vector2 capPos)) continue;
 
             float combined = slammerRadius + cap.Parameters.Radius;
@@ -68,9 +68,8 @@ public static class ChainPredictor
 
             float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
             float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float transferForce = force * cap.Parameters.PowerConversion * contactFactor;
-
-            float travel = transferForce * tuning.ForceToTravelDistance;
+            float transferForce = force * cap.Parameters.PowerConversion;
+            float travel = transferForce * contactFactor * tuning.ForceToTravelDistance;
             if (travel < tuning.MinimumFlightLength) continue;
 
             Vector2 direction = CapMath.VerticalImpactDirection(landingPos, capPos, Vector2.up);

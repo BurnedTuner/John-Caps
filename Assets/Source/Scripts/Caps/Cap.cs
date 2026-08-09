@@ -1,12 +1,6 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Rendering;
-
-/// States:
-///   Idle      — sitting still on the field, can be hit.
-///   Held      — grabbed by the player, lifted above spawn, waiting for throw.
-///   Throwing  — player's thrown cap flying in a visual arc from spawn to landing point.
-///   Flying    — launched by an impact: flying to destination + flipping 180°.
-///   Pushed    — nudged by the push radius effect: sliding briefly, no flip.
+using System.Collections.Generic;
 
 [RequireComponent(typeof(MeshRenderer))]
 public class Cap : MonoBehaviour
@@ -34,8 +28,12 @@ public class Cap : MonoBehaviour
     public Vector2 GroundPosition { get; private set; }
     public bool IsHeads { get; private set; } = true;
     public bool IsBusy => _state != CapState.Idle;
+    public bool IsThrowable => _state == CapState.Idle && _stackBase == null;
+    public bool CanFlip => (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
     public CapState CurrentState => _state;
     public int ActivationDepthPlusOne => _activationDepth + 1;
+    public int StackCount => _stackAbove.Count + 1;
+    public bool WasPeelOff { get; set; }
 
     private bool _isImmutable;
     private CapFlipEffect[] _flipEffects;
@@ -52,7 +50,6 @@ public class Cap : MonoBehaviour
 
     private CapState _state = CapState.Idle;
 
-    // Throwing (player's thrown cap — visual arc)
     private Vector3 _throwStart;
     private Vector3 _throwEnd;
     private float _throwElapsed;
@@ -60,11 +57,9 @@ public class Cap : MonoBehaviour
     private float _throwArcHeight;
     private float _landingForce;
 
-    // Held (grabbed by player, lifted above spawn)
     private Vector3 _heldBasePos;
     private float _heldCurrentHeight;
 
-    // Flying (chain-hit cap — straight line + flip)
     private Vector2 _flyStart;
     private Vector2 _flyDirection;
     private float _flyTotalDistance;
@@ -73,12 +68,20 @@ public class Cap : MonoBehaviour
     private int _activationDepth;
     private bool _fromHeads;
 
-    // Pushed
     private Vector2 _pushStart;
     private Vector2 _pushDirection;
     private float _pushRemaining;
     private float _pushElapsed;
     private float _pushTotalDuration;
+
+    private List<Cap> _stackAbove = new();
+    private Cap _stackBase;
+
+    private bool _isPeeling;
+    private float _peelTravelDistance;
+    private float _peelDuration;
+    private float _peelForce;
+    private System.Action<Cap, Vector2, float> _pendingLandedCallback;
 
     public void Configure(int id, bool isHeads, CapOwner owner = CapOwner.Neutral)
     {
@@ -88,6 +91,11 @@ public class Cap : MonoBehaviour
         Vector3 pos = transform.position;
         GroundPosition = IsFinite(pos) ? CapMath.ToXZ(pos) : Vector2.zero;
         _state = CapState.Idle;
+        _stackAbove.Clear();
+        _stackBase = null;
+        _isPeeling = false;
+        _pendingLandedCallback = null;
+        WasPeelOff = false;
         ResolveMaterials();
         ApplyVisuals();
         ApplyOutline();
@@ -124,6 +132,14 @@ public class Cap : MonoBehaviour
         ApplyVisuals();
     }
 
+    public void UpdateHeldBasePosition(Vector3 basePos)
+    {
+        if (_state == CapState.Held)
+        {
+            _heldBasePos = basePos;
+        }
+    }
+
     public void EndHeldToIdle()
     {
         _state = CapState.Idle;
@@ -147,7 +163,7 @@ public class Cap : MonoBehaviour
     public bool BeginLaunch(int throwId, int depth, Vector2 direction, float force, float travelDistance, float duration, int ignoredSourceId)
     {
         if (_isImmutable) return false;
-        if (_state != CapState.Idle) return false;
+        if (!CanFlip) return false;
         if (float.IsNaN(direction.x) || float.IsNaN(direction.y)) return false;
         if (float.IsNaN(travelDistance) || float.IsNaN(force)) return false;
         if (!IsFinite(GroundPosition)) return false;
@@ -160,8 +176,19 @@ public class Cap : MonoBehaviour
         _flyElapsed = 0f;
         _flyDuration = duration;
         _landingForce = force;
+        _isPeeling = _stackAbove.Count > 0;
+        if (_isPeeling)
+        {
+            _peelTravelDistance = travelDistance;
+            _peelDuration = duration;
+            _peelForce = force;
+        }
         _state = CapState.Flying;
         ApplyVisuals();
+        for (int i = 0; i < _stackAbove.Count; i++)
+        {
+            _stackAbove[i].ApplyVisuals();
+        }
         return true;
     }
 
@@ -169,6 +196,7 @@ public class Cap : MonoBehaviour
     {
         if (_isImmutable) return;
         if (_state != CapState.Idle) return;
+        if (_stackBase != null) return;
         if (float.IsNaN(distance) || distance <= 0.0001f) return;
         if (!IsFinite(GroundPosition)) return;
         if (float.IsNaN(direction.x) || float.IsNaN(direction.y)) return;
@@ -182,11 +210,43 @@ public class Cap : MonoBehaviour
         ApplyVisuals();
     }
 
-    public void StepSimulation(
-        float deltaTime,
-        System.Action<Cap, Vector2, float> onLanded,
-        System.Action<Cap, Vector2, float> onFlipped = null)
+    public void AddToStack(Cap incoming)
     {
+        if (incoming == null || incoming == this) return;
+
+        Cap head = this;
+        while (head._stackBase != null)
+            head = head._stackBase;
+
+        if (incoming._stackAbove.Count > 0)
+        {
+            for (int i = 0; i < incoming._stackAbove.Count; i++)
+            {
+                Cap c = incoming._stackAbove[i];
+                c._stackBase = head;
+                head._stackAbove.Add(c);
+            }
+            incoming._stackAbove.Clear();
+        }
+        incoming._stackBase = head;
+        head._stackAbove.Add(incoming);
+        CapRegistry.Unregister(incoming);
+
+        incoming._state = CapState.Idle;
+        incoming.ApplyVisuals();
+        head.ApplyVisuals();
+    }
+
+    public Cap GetStackTop()
+    {
+        if (_stackAbove.Count == 0) return this;
+        return _stackAbove[_stackAbove.Count - 1];
+    }
+
+    public void StepSimulation(float deltaTime, System.Action<Cap, Vector2, float> onLanded, System.Action<Cap, Vector2, float> onFlipped = null)
+    {
+        if (_stackBase != null) return;
+
         switch (_state)
         {
             case CapState.Held: StepHeld(deltaTime); break;
@@ -195,6 +255,11 @@ public class Cap : MonoBehaviour
             case CapState.Pushed: StepPush(deltaTime); break;
         }
         ApplyVisuals();
+
+        for (int i = 0; i < _stackAbove.Count; i++)
+        {
+            _stackAbove[i].ApplyVisuals();
+        }
     }
 
     void StepHeld(float dt)
@@ -222,10 +287,7 @@ public class Cap : MonoBehaviour
         }
     }
 
-    void StepFly(
-        float dt,
-        System.Action<Cap, Vector2, float> onLanded,
-        System.Action<Cap, Vector2, float> onFlipped)
+    void StepFly(float dt, System.Action<Cap, Vector2, float> onLanded, System.Action<Cap, Vector2, float> onFlipped)
     {
         _flyElapsed += dt;
         float t = _flyDuration > 0f ? Mathf.Clamp01(_flyElapsed / _flyDuration) : 1f;
@@ -241,11 +303,89 @@ public class Cap : MonoBehaviour
         {
             GroundPosition = _flyStart + _flyDirection * _flyTotalDistance;
             if (!IsFinite(GroundPosition)) GroundPosition = _flyStart;
+
             IsHeads = !IsHeads;
-            _state = CapState.Idle;
+            for (int i = 0; i < _stackAbove.Count; i++)
+            {
+                _stackAbove[i].IsHeads = !_stackAbove[i].IsHeads;
+            }
+
             if (IsHeads)
                 onFlipped?.Invoke(this, GroundPosition, _landingForce);
+
+            if (_isPeeling && _stackAbove.Count > 0)
+            {
+                _pendingLandedCallback = onLanded;
+                HandleStackPeelOff();
+                return;
+            }
+
+            _isPeeling = false;
+            _state = CapState.Idle;
             onLanded?.Invoke(this, GroundPosition, _landingForce);
+        }
+    }
+
+    void HandleStackPeelOff()
+    {
+        var fullStack = new List<Cap> { this };
+        fullStack.AddRange(_stackAbove);
+
+        fullStack.Reverse();
+
+        Cap leftBehind = fullStack[0];
+        fullStack.RemoveAt(0);
+
+        leftBehind.GroundPosition = GroundPosition;
+        leftBehind._stackAbove.Clear();
+        leftBehind._stackBase = null;
+        leftBehind._state = CapState.Idle;
+        leftBehind._isPeeling = false;
+        leftBehind._pendingLandedCallback = null;
+        leftBehind.WasPeelOff = true;
+        if (!CapRegistry.AllCaps.Contains(leftBehind))
+            CapRegistry.Register(leftBehind);
+        leftBehind.ApplyVisuals();
+
+        _pendingLandedCallback?.Invoke(leftBehind, GroundPosition, _peelForce);
+
+        if (fullStack.Count == 0)
+        {
+            return;
+        }
+
+        Cap newHead = fullStack[0];
+        fullStack.RemoveAt(0);
+
+        newHead._stackAbove.Clear();
+        for (int i = 0; i < fullStack.Count; i++)
+        {
+            fullStack[i]._stackBase = newHead;
+            newHead._stackAbove.Add(fullStack[i]);
+        }
+        newHead._stackBase = null;
+
+        if (!CapRegistry.AllCaps.Contains(newHead))
+            CapRegistry.Register(newHead);
+
+        newHead._isPeeling = newHead._stackAbove.Count > 0;
+        newHead._peelTravelDistance = _peelTravelDistance;
+        newHead._peelDuration = _peelDuration;
+        newHead._peelForce = _peelForce;
+        newHead._pendingLandedCallback = _pendingLandedCallback;
+        newHead.GroundPosition = GroundPosition;
+        newHead._flyStart = GroundPosition;
+        newHead._flyDirection = _flyDirection;
+        newHead._flyTotalDistance = _peelTravelDistance;
+        newHead._flyElapsed = 0f;
+        newHead._flyDuration = _peelDuration;
+        newHead._landingForce = _peelForce;
+        newHead._fromHeads = newHead.IsHeads;
+        newHead._state = CapState.Flying;
+        newHead.ApplyVisuals();
+        for (int i = 0; i < newHead._stackAbove.Count; i++)
+        {
+            newHead._stackAbove[i].ApplyVisuals();
         }
     }
 
@@ -273,36 +413,47 @@ public class Cap : MonoBehaviour
         Vector3 pos;
         Quaternion rot = Quaternion.identity;
 
-        switch (_state)
+        if (_stackBase != null)
         {
-            case CapState.Held:
-                pos = _heldBasePos + Vector3.up * _heldCurrentHeight;
-                break;
+            float yOff = _tuning != null ? _tuning.CapThickness : 0.1f;
+            int myIndex = _stackBase._stackAbove.IndexOf(this) + 1;
+            Vector3 localUp = _stackBase.transform.rotation * Vector3.up;
+            pos = _stackBase.transform.position + localUp * (yOff * myIndex);
+            rot = _stackBase.transform.rotation;
+        }
+        else
+        {
+            switch (_state)
+            {
+                case CapState.Held:
+                    pos = _heldBasePos + Vector3.up * _heldCurrentHeight;
+                    break;
 
-            case CapState.Throwing:
-                pos = transform.position;
-                float throwProgress = _throwDuration > 0f ? _throwElapsed / _throwDuration : 1f;
-                rot = Quaternion.Euler(0f, throwProgress * _tuning.FlightSpinDegrees, 0f);
-                break;
+                case CapState.Throwing:
+                    pos = transform.position;
+                    float throwProgress = _throwDuration > 0f ? _throwElapsed / _throwDuration : 1f;
+                    rot = Quaternion.Euler(0f, throwProgress * _tuning.FlightSpinDegrees, 0f);
+                    break;
 
-            case CapState.Flying:
-                float flyProgress = _flyDuration > 0f ? Mathf.Clamp01(_flyElapsed / _flyDuration) : 1f;
-                float hop = Mathf.Sin(flyProgress * Mathf.PI) * _tuning.CapFlipApexHeight;
-                pos = CapMath.FromXZ(GroundPosition, hop);
-                Vector3 motion3D = new Vector3(_flyDirection.x, 0f, _flyDirection.y);
-                Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D);
-                if (!IsFinite(rotAxis) || rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
-                else rotAxis = rotAxis.normalized;
-                rot = Quaternion.AngleAxis(flyProgress * 180f, rotAxis);
-                break;
+                case CapState.Flying:
+                    float flyProgress = _flyDuration > 0f ? Mathf.Clamp01(_flyElapsed / _flyDuration) : 1f;
+                    float hop = Mathf.Sin(flyProgress * Mathf.PI) * _tuning.CapFlipApexHeight;
+                    pos = CapMath.FromXZ(GroundPosition, hop);
+                    Vector3 motion3D = new Vector3(_flyDirection.x, 0f, _flyDirection.y);
+                    Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D);
+                    if (!IsFinite(rotAxis) || rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
+                    else rotAxis = rotAxis.normalized;
+                    rot = Quaternion.AngleAxis(flyProgress * 180f, rotAxis);
+                    break;
 
-            case CapState.Pushed:
-                pos = CapMath.FromXZ(GroundPosition, 0f);
-                break;
+                case CapState.Pushed:
+                    pos = CapMath.FromXZ(GroundPosition, 0f);
+                    break;
 
-            default:
-                pos = CapMath.FromXZ(GroundPosition, 0f);
-                break;
+                default:
+                    pos = CapMath.FromXZ(GroundPosition, 0f);
+                    break;
+            }
         }
 
         if (!IsFinite(pos)) return;
@@ -389,20 +540,7 @@ public class Cap : MonoBehaviour
 
 public static class CapRegistry
 {
-    private static readonly System.Collections.Generic.List<Cap> _allCaps = new();
-
-    public static System.Collections.Generic.IReadOnlyList<Cap> AllCaps => _allCaps;
-
-    public static void Register(Cap cap)
-    {
-        if (cap != null && !_allCaps.Contains(cap))
-            _allCaps.Add(cap);
-    }
-
-    public static void Unregister(Cap cap) => _allCaps.Remove(cap);
-    public static bool Contains(Cap cap) => _allCaps.Contains(cap);
-    public static Cap[] Snapshot() => _allCaps.ToArray();
-    public static void Clear() => _allCaps.Clear();
-
-    internal static void RemoveAt(int index) => _allCaps.RemoveAt(index);
+    public static readonly System.Collections.Generic.List<Cap> AllCaps = new();
+    public static void Register(Cap cap) { if (!AllCaps.Contains(cap)) AllCaps.Add(cap); }
+    public static void Unregister(Cap cap) { AllCaps.Remove(cap); }
 }
