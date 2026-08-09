@@ -30,6 +30,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     private readonly List<PendingLanding> _pendingLandings = new();
     private readonly List<CapFlipEvent> _pendingFlipEvents = new();
     private readonly List<CapPrediction> _landingHits = new();
+    private readonly List<Cap> _stackTargets = new();
 
     struct PendingLanding
     {
@@ -74,6 +75,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
         _pendingLandings.Clear();
         _pendingFlipEvents.Clear();
         _landingHits.Clear();
+        _stackTargets.Clear();
 
         _throwingCap = request.Cap;
         _throwingCap.transform.position = request.StartPosition;
@@ -101,6 +103,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
         _pendingLandings.Clear();
         _pendingFlipEvents.Clear();
         _landingHits.Clear();
+        _stackTargets.Clear();
         CurrentState = State.Idle;
     }
 
@@ -113,7 +116,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             return;
         }
 
-        _throwingCap.StepSimulation(Time.deltaTime, OnCapLanded);
+        _throwingCap.StepSimulation(Time.deltaTime, OnCapLanded, OnCapFlipped);
 
         if (_throwingCap.CurrentState == Cap.CapState.Idle)
         {
@@ -128,8 +131,11 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     {
         float deltaTime = Time.deltaTime;
 
-        for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
+        int capCount = CapRegistry.AllCaps.Count;
+        for (int i = 0; i < capCount; i++)
+        {
             CapRegistry.AllCaps[i].StepSimulation(deltaTime, OnCapLanded, OnCapFlipped);
+        }
 
         ResolvePendingFlipEffects();
         ResolvePendingLandings(deltaTime);
@@ -247,11 +253,12 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
 
         float slammerRadius = landedCap.Parameters.Radius;
         _landingHits.Clear();
+        _stackTargets.Clear();
 
         for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
         {
             Cap cap = CapRegistry.AllCaps[i];
-            if (cap == landedCap || cap.IsBusy) continue;
+            if (cap == landedCap || !cap.CanFlip) continue;
 
             float combinedRadius = slammerRadius + cap.Parameters.Radius;
             float distance = Vector2.Distance(landingPosition, cap.GroundPosition);
@@ -261,21 +268,26 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
                 ? Mathf.Clamp01(distance / combinedRadius)
                 : 0f;
             float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float force = landingForce * cap.Parameters.PowerConversion * contactFactor;
-            float travelDistance = force * _tuning.ForceToTravelDistance;
-            if (travelDistance < _tuning.MinimumFlightLength) continue;
+            float inheritedForce = landingForce * cap.Parameters.PowerConversion;
+            float travelDistance = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
 
             Vector2 direction = CapMath.VerticalImpactDirection(
                 landingPosition,
                 cap.GroundPosition,
                 Vector2.up);
 
+            if (travelDistance < _tuning.MinimumFlightLength)
+            {
+                _stackTargets.Add(cap);
+                continue;
+            }
+
             _landingHits.Add(new CapPrediction(
                 cap,
                 0,
                 cap.GroundPosition,
                 direction,
-                force,
+                inheritedForce,
                 travelDistance));
         }
 
@@ -285,8 +297,16 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             TryActivateCap(hit.Cap, hit.Direction, hit.Force, hit.TravelDistance, -1, 0);
         }
 
+        for (int i = 0; i < _stackTargets.Count; i++)
+        {
+            _stackTargets[i].AddToStack(landedCap);
+        }
+
         Vector3 landingPosition3D = CapMath.FromXZ(landingPosition, 0f);
-        if (_landingHits.Count > 0)
+        bool isPeelOff = landedCap.WasPeelOff;
+        landedCap.WasPeelOff = false;
+
+        if (_landingHits.Count > 0 || _stackTargets.Count > 0 || isPeelOff)
         {
             _impactDepth++;
             OnCapImpact?.Invoke(landingPosition3D, landingForce, _impactDepth);
@@ -304,11 +324,12 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
         for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
         {
             Cap cap = CapRegistry.AllCaps[i];
-            if (cap == landedCap || cap.IsBusy) continue;
+            if (cap == landedCap || !cap.IsThrowable) continue;
 
             float distance = Vector2.Distance(landingPosition, cap.GroundPosition);
             if (distance > cap.Parameters.PushRadius) continue;
             if (WasDirectHit(cap)) continue;
+            if (WasStackTarget(cap)) continue;
 
             Vector2 direction = cap.GroundPosition - landingPosition;
             if (direction.sqrMagnitude < 0.0001f)
@@ -331,7 +352,16 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             if (_landingHits[i].Cap == cap)
                 return true;
         }
+        return false;
+    }
 
+    bool WasStackTarget(Cap cap)
+    {
+        for (int i = 0; i < _stackTargets.Count; i++)
+        {
+            if (_stackTargets[i] == cap)
+                return true;
+        }
         return false;
     }
 

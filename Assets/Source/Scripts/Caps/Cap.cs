@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.Rendering;
+using System.Linq;
 using System.Collections.Generic;
 
 [RequireComponent(typeof(MeshRenderer))]
@@ -540,7 +541,20 @@ public class Cap : MonoBehaviour
 
 public static class CapRegistry
 {
-    public static readonly System.Collections.Generic.List<Cap> AllCaps = new();
-    public static void Register(Cap cap) { if (!AllCaps.Contains(cap)) AllCaps.Add(cap); }
-    public static void Unregister(Cap cap) { AllCaps.Remove(cap); }
+    private static readonly System.Collections.Generic.List<Cap> _allCaps = new();
+
+    public static System.Collections.Generic.IReadOnlyList<Cap> AllCaps => _allCaps;
+
+    public static void Register(Cap cap)
+    {
+        if (cap != null && !_allCaps.Contains(cap))
+            _allCaps.Add(cap);
+    }
+
+    public static void Unregister(Cap cap) => _allCaps.Remove(cap);
+    public static bool Contains(Cap cap) => _allCaps.Contains(cap);
+    public static Cap[] Snapshot() => _allCaps.ToArray();
+    public static void Clear() => _allCaps.Clear();
+
+    internal static void RemoveAt(int index) => _allCaps.RemoveAt(index);
 }
