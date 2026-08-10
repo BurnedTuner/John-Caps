@@ -182,6 +182,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _radius: 4
   _force: 4
+  ExplosionVFX: {fileID: 1651180019113697609, guid: f5f44277cf002e24e827f7d37c1a587e, type: 3}
+  ExplosionSound: {fileID: 8300000, guid: 4d6641076dcf3d945b9518042ddefe7d, type: 3}
+  ExplosionShakeAmount: 0.4
+  ExplosionShakeDuration: 0.6
 --- !u!1 &4378826819257500001
 GameObject:
   m_ObjectHideFlags: 0
