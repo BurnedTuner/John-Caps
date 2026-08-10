@@ -4,8 +4,7 @@ using UnityEngine;
 /// Turns a cap that left the field into a plain physics object so it visibly tips over the edge
 /// and falls down. By the time this runs the cap is already out of the game logic, so the fall is
 /// purely cosmetic: it never collides with caps that are still in play.
-/// The cap reports two moments to its owner — when it hits the field while tipping over the edge,
-/// and when it drops below the vanish height, where it disappears.
+/// The cap reports the moment it drops below the vanish height, where it disappears.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class FallingCap : MonoBehaviour
@@ -13,8 +12,7 @@ public sealed class FallingCap : MonoBehaviour
     public struct Settings
     {
         public Vector2 FieldCenter;
-        public Vector2 GroundVelocity;
-        public float PushSpeed;
+        public Vector3 Velocity;
         public float Spin;
         public float GravityScale;
         public float VanishHeight;
@@ -25,7 +23,6 @@ public sealed class FallingCap : MonoBehaviour
     private Settings _settings;
     private Rigidbody _body;
     private float _remainingLifetime;
-    private bool _reportedFieldHit;
 
     /// <summary>Hands the cap over to the physics engine.</summary>
     public static void Begin(Cap cap, CapFieldBoundary owner, in Settings settings)
@@ -33,11 +30,11 @@ public sealed class FallingCap : MonoBehaviour
         if (cap == null || cap.GetComponent<FallingCap>() != null) return;
 
         GameObject capObject = cap.gameObject;
-        cap.AbortSimulation();
+        cap.LeaveGame();
         cap.enabled = false;
 
         Vector2 outward = CapMath.ToXZ(capObject.transform.position) - settings.FieldCenter;
-        Vector3 pushDirection = outward.sqrMagnitude > 0.000001f
+        Vector3 outwardDirection = outward.sqrMagnitude > 0.000001f
             ? new Vector3(outward.x, 0f, outward.y).normalized
             : Vector3.forward;
 
@@ -48,10 +45,9 @@ public sealed class FallingCap : MonoBehaviour
         body.useGravity = false;
         body.interpolation = RigidbodyInterpolation.Interpolate;
         body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-        body.linearVelocity = new Vector3(settings.GroundVelocity.x, 0f, settings.GroundVelocity.y)
-            + pushDirection * settings.PushSpeed;
+        body.linearVelocity = settings.Velocity;
         // Tips the outer edge downwards, so the cap rolls over the border instead of sliding off flat.
-        body.angularVelocity = Vector3.Cross(Vector3.up, pushDirection) * settings.Spin;
+        body.angularVelocity = Vector3.Cross(Vector3.up, outwardDirection) * settings.Spin;
 
         FallingCap falling = capObject.AddComponent<FallingCap>();
         falling._owner = owner;
@@ -59,14 +55,6 @@ public sealed class FallingCap : MonoBehaviour
         falling._body = body;
         falling._remainingLifetime = settings.MaximumLifetime;
         falling.IgnoreCollisionsWithOtherCaps();
-    }
-
-    void FixedUpdate()
-    {
-        if (_body == null) return;
-
-        // ForceMode.Acceleration ignores mass, so the scale reads as a plain gravity multiplier.
-        _body.AddForce(Physics.gravity * _settings.GravityScale, ForceMode.Acceleration);
     }
 
     void IgnoreCollisionsWithOtherCaps()
@@ -91,16 +79,12 @@ public sealed class FallingCap : MonoBehaviour
         }
     }
 
-    void OnCollisionEnter(Collision collision)
+    void FixedUpdate()
     {
-        // Only the first touch counts: the cap lands on its edge once and then rolls off the field.
-        if (_reportedFieldHit || _owner == null) return;
+        if (_body == null) return;
 
-        _reportedFieldHit = true;
-        Vector3 contactPoint = collision.contactCount > 0
-            ? collision.GetContact(0).point
-            : transform.position;
-        _owner.ReportFallingCapHitField(contactPoint);
+        // ForceMode.Acceleration ignores mass, so the scale reads as a plain gravity multiplier.
+        _body.AddForce(Physics.gravity * _settings.GravityScale, ForceMode.Acceleration);
     }
 
     void Update()

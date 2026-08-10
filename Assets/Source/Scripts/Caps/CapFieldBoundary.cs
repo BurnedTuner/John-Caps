@@ -2,10 +2,12 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Removes caps after their center leaves the field in the XZ plane.
-/// A cap must enter the field at least once before it can be removed, so a waiting
-/// cap may safely stay at a spawn point outside the field.
-/// The cap leaves the game logic immediately and then falls off the table as a physics object.
+/// Removes caps after their center leaves the field in the XZ plane and hands them over to physics,
+/// so they visibly fall off the table while the game logic treats them as gone.
+/// Only settled caps are checked: a cap that is still animating finishes its move first, so it lands
+/// exactly where the prediction promised and falls from there.
+/// A cap must also reach the field at least once before it can be removed, so a waiting cap may
+/// safely stay at a spawn point outside the field.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(BoxCollider))]
@@ -15,29 +17,25 @@ public sealed class CapFieldBoundary : MonoBehaviour
     [SerializeField] private BoxCollider _fieldCollider;
 
     [Header("Fall off the field")]
-    [Tooltip("Extra outward speed given to a cap the moment it leaves the field, so it tips over the edge.")]
-    [Min(0f)][SerializeField] private float _fallPushSpeed = 1.5f;
-    [Tooltip("Upper limit for the speed a cap keeps from its last movement when it starts to fall. " +
-             "Low values keep the cap over the table long enough to land on its edge first.")]
-    [Min(0f)][SerializeField] private float _fallMaxSpeed = 3f;
     [Tooltip("Tumble speed (radians/second) around the edge the cap falls over.")]
-    [Min(0f)][SerializeField] private float _fallSpin = 6f;
+    [Min(0f)][SerializeField] private float _fallSpin = 1f;
     [Tooltip("Gravity multiplier for a falling cap. Caps are large, so scene gravity alone looks floaty.")]
     [Range(1f, 20f)][SerializeField] private float _fallGravityScale = 6f;
     [Tooltip("World height at which a falling cap disappears.")]
-    [SerializeField] private float _vanishHeight = -3f;
+    [SerializeField] private float _vanishHeight = -10f;
     [Tooltip("Safety timeout: seconds after which a fallen cap is removed even if it never reached the vanish height.")]
-    [Min(0.1f)][SerializeField] private float _fallLifetime = 6f;
-
-    /// <summary>Raised when a falling cap lands on the field while tipping over the edge.</summary>
-    public event System.Action<Vector3> OnFallingCapHitField;
+    [Min(0.1f)][SerializeField] private float _fallLifetime = 10f;
 
     /// <summary>Raised when a falling cap drops below the vanish height and is removed.</summary>
     public event System.Action<Vector3> OnFallingCapVanished;
 
-    // Last position of every cap that was inside the field. Being in this map means the cap has
-    // entered the field at least once; the stored position gives the cap its speed when it falls.
-    private readonly Dictionary<Cap, Vector2> _groundPositionsInField = new();
+    struct CapTrail
+    {
+        public Vector3 PreviousPosition;
+        public bool ReachedField;
+    }
+
+    private readonly Dictionary<Cap, CapTrail> _trails = new();
     private readonly List<Cap> _destroyedCaps = new();
 
     void Reset()
@@ -53,6 +51,33 @@ public sealed class CapFieldBoundary : MonoBehaviour
     void OnValidate()
     {
         ResolveCollider();
+    }
+
+    /// <summary>
+    /// True when the field reaches a ground point that is <paramref name="radius"/> wide — that is,
+    /// a cap of that radius standing there still rests on the field.
+    /// A radius of zero asks whether the point itself is on the field.
+    /// </summary>
+    public bool Supports(Vector2 groundPoint, float radius)
+    {
+        if (_fieldCollider == null) return false;
+
+        Transform fieldTransform = _fieldCollider.transform;
+        Vector3 fieldCenter = fieldTransform.TransformPoint(_fieldCollider.center);
+        Vector3 localPoint = fieldTransform.InverseTransformPoint(
+            new Vector3(groundPoint.x, fieldCenter.y, groundPoint.y));
+
+        Vector3 halfSize = _fieldCollider.size * 0.5f;
+        Vector3 center = _fieldCollider.center;
+        float nearestX = Mathf.Clamp(localPoint.x, center.x - halfSize.x, center.x + halfSize.x);
+        float nearestZ = Mathf.Clamp(localPoint.z, center.z - halfSize.z, center.z + halfSize.z);
+
+        if (nearestX == localPoint.x && nearestZ == localPoint.z) return true;
+
+        Vector3 nearestFieldPoint = fieldTransform.TransformPoint(
+            new Vector3(nearestX, localPoint.y, nearestZ));
+
+        return Vector2.Distance(groundPoint, CapMath.ToXZ(nearestFieldPoint)) <= radius;
     }
 
     void LateUpdate()
@@ -71,37 +96,44 @@ public sealed class CapFieldBoundary : MonoBehaviour
                 continue;
             }
 
-            if (ContainsGroundPoint(cap.GroundPosition))
+            _trails.TryGetValue(cap, out CapTrail trail);
+            Vector3 currentPosition = cap.transform.position;
+
+            if (Supports(cap.GroundPosition, 0f))
             {
-                _groundPositionsInField[cap] = cap.GroundPosition;
+                trail.ReachedField = true;
+            }
+            // A busy cap is still animating, so it is left alone until it has settled.
+            else if (trail.ReachedField && !cap.IsBusy)
+            {
+                _trails.Remove(cap);
+
+                // Unregister now rather than waiting for the fall to play out. This prevents scoring
+                // and chain-reaction code from seeing a cap that is already out of the game.
+                CapRegistry.Unregister(cap);
+                DropCap(cap, trail.PreviousPosition);
                 continue;
             }
 
-            if (!_groundPositionsInField.TryGetValue(cap, out Vector2 lastPositionInField)) continue;
-            _groundPositionsInField.Remove(cap);
-
-            // Unregister now rather than waiting for the fall animation to finish.
-            // This prevents scoring and chain-reaction code from seeing a removed cap.
-            CapRegistry.Unregister(cap);
-            DropCap(cap, lastPositionInField);
+            trail.PreviousPosition = currentPosition;
+            _trails[cap] = trail;
         }
     }
 
-    void DropCap(Cap cap, Vector2 lastPositionInField)
+    void DropCap(Cap cap, Vector3 previousPosition)
     {
-        Vector3 colliderWorldCenter = _fieldCollider.transform.TransformPoint(_fieldCollider.center);
-        Vector2 fieldCenter = CapMath.ToXZ(colliderWorldCenter);
-
-        // Carry over the movement of the last frame so a cap that was flying keeps flying.
-        Vector2 groundVelocity = Time.deltaTime > 0f
-            ? (cap.GroundPosition - lastPositionInField) / Time.deltaTime
-            : Vector2.zero;
+        // A cap that still reaches the field has landed on it, so it starts falling from rest and
+        // simply tips over the edge. A cap that came down past the field never touched anything, so
+        // it keeps the speed of its last move and flies on.
+        bool landedOnField = Supports(cap.GroundPosition, cap.Parameters.Radius);
+        Vector3 velocity = landedOnField || Time.deltaTime <= 0f
+            ? Vector3.zero
+            : (cap.transform.position - previousPosition) / Time.deltaTime;
 
         var settings = new FallingCap.Settings
         {
-            FieldCenter = fieldCenter,
-            GroundVelocity = Vector2.ClampMagnitude(groundVelocity, _fallMaxSpeed),
-            PushSpeed = _fallPushSpeed,
+            FieldCenter = CapMath.ToXZ(_fieldCollider.transform.TransformPoint(_fieldCollider.center)),
+            Velocity = velocity,
             Spin = _fallSpin,
             GravityScale = _fallGravityScale,
             VanishHeight = _vanishHeight,
@@ -114,38 +146,24 @@ public sealed class CapFieldBoundary : MonoBehaviour
             FallingCap.Begin(stack[i], this, settings);
     }
 
-    internal void ReportFallingCapHitField(Vector3 position) => OnFallingCapHitField?.Invoke(position);
-
     internal void ReportFallingCapVanished(Vector3 position) => OnFallingCapVanished?.Invoke(position);
 
     void ForgetDestroyedCaps()
     {
         _destroyedCaps.Clear();
-        foreach (KeyValuePair<Cap, Vector2> entry in _groundPositionsInField)
+        foreach (KeyValuePair<Cap, CapTrail> entry in _trails)
         {
             if (entry.Key == null)
                 _destroyedCaps.Add(entry.Key);
         }
 
         for (int i = 0; i < _destroyedCaps.Count; i++)
-            _groundPositionsInField.Remove(_destroyedCaps[i]);
+            _trails.Remove(_destroyedCaps[i]);
     }
 
     void OnDisable()
     {
-        _groundPositionsInField.Clear();
-    }
-
-    bool ContainsGroundPoint(Vector2 groundPoint)
-    {
-        Vector3 colliderWorldCenter = _fieldCollider.transform.TransformPoint(_fieldCollider.center);
-        Vector3 worldPoint = new Vector3(groundPoint.x, colliderWorldCenter.y, groundPoint.y);
-        Vector3 localPoint = _fieldCollider.transform.InverseTransformPoint(worldPoint);
-        Vector3 halfSize = _fieldCollider.size * 0.5f;
-        Vector3 offset = localPoint - _fieldCollider.center;
-
-        return Mathf.Abs(offset.x) <= halfSize.x
-            && Mathf.Abs(offset.z) <= halfSize.z;
+        _trails.Clear();
     }
 
     void ResolveCollider()

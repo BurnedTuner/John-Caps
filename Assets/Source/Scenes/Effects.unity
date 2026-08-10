@@ -148,6 +148,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5d673f2d30d249518bb7c635c0737e23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _fieldBoundary: {fileID: 0}
 --- !u!4 &155613451
 Transform:
   m_ObjectHideFlags: 0
@@ -2129,10 +2130,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _fieldCollider: {fileID: 1924152408}
-  _fallPushSpeed: 1.5
-  _fallMaxSpeed: 3
   _fallSpin: 6
-  _fallGravityScale: 6
+  _fallGravityScale: 3
   _vanishHeight: -10
   _fallLifetime: 10
 --- !u!1 &1955335072

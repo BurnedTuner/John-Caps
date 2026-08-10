@@ -99,10 +99,7 @@ public class ImpactFeedback : MonoBehaviour
             TurnResolver.OnCapImpact += HandleCapImpact;
         }
         if (FieldBoundary != null)
-        {
-            FieldBoundary.OnFallingCapHitField += HandleFallingCapHitField;
             FieldBoundary.OnFallingCapVanished += HandleFallingCapVanished;
-        }
     }
 
     void OnDisable()
@@ -113,10 +110,7 @@ public class ImpactFeedback : MonoBehaviour
             TurnResolver.OnCapImpact -= HandleCapImpact;
         }
         if (FieldBoundary != null)
-        {
-            FieldBoundary.OnFallingCapHitField -= HandleFallingCapHitField;
             FieldBoundary.OnFallingCapVanished -= HandleFallingCapVanished;
-        }
         Time.timeScale = 1f;
     }
 
@@ -146,16 +140,6 @@ public class ImpactFeedback : MonoBehaviour
         _shakeTimer = ShakeDuration;
 
         _hitStopTimer = Mathf.Min(HitStopBaseDuration + chainDepth * HitStopPerDepth, HitStopMaxDuration);
-    }
-
-    // A cap that tips over the edge still lands on the field once, so it uses the regular landing sound.
-    void HandleFallingCapHitField(Vector3 pos)
-    {
-        if (TableImpactSound == null) return;
-
-        var src = GetPooledAudioSource(pos);
-        src.pitch = BasePitch + Random.Range(-PitchRandom, PitchRandom);
-        src.PlayOneShot(TableImpactSound);
     }
 
     void HandleFallingCapVanished(Vector3 pos)
