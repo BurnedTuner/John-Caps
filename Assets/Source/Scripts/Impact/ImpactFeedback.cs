@@ -4,10 +4,14 @@ public class ImpactFeedback : MonoBehaviour
 {
     [Header("Source")]
     public CapTurnResolver TurnResolver;
+    public CapFieldBoundary FieldBoundary;
 
     [Header("Audio")]
     public AudioClip TableImpactSound;
     public AudioClip CapImpactSound;
+    [Tooltip("Abstract sound for a cap disappearing after it fell off the field.")]
+    public AudioClip CapVanishSound;
+    [Range(0f, 1f)] public float CapVanishVolume = 1f;
     [Range(0f, 2f)] public float BasePitch = 1f;
     [Range(0f, 0.5f)] public float PitchStepPerDepth = 0.1f;
     [Range(0f, 0.5f)] public float PitchRandom = 0.05f;
@@ -56,6 +60,9 @@ public class ImpactFeedback : MonoBehaviour
     {
         if (TurnResolver == null)
             TurnResolver = FindFirstObjectByType<CapTurnResolver>();
+
+        if (FieldBoundary == null)
+            FieldBoundary = FindFirstObjectByType<CapFieldBoundary>();
     }
 
     void SetupAudioPool()
@@ -91,6 +98,11 @@ public class ImpactFeedback : MonoBehaviour
             TurnResolver.OnTableImpact += HandleTableImpact;
             TurnResolver.OnCapImpact += HandleCapImpact;
         }
+        if (FieldBoundary != null)
+        {
+            FieldBoundary.OnFallingCapHitField += HandleFallingCapHitField;
+            FieldBoundary.OnFallingCapVanished += HandleFallingCapVanished;
+        }
     }
 
     void OnDisable()
@@ -99,6 +111,11 @@ public class ImpactFeedback : MonoBehaviour
         {
             TurnResolver.OnTableImpact -= HandleTableImpact;
             TurnResolver.OnCapImpact -= HandleCapImpact;
+        }
+        if (FieldBoundary != null)
+        {
+            FieldBoundary.OnFallingCapHitField -= HandleFallingCapHitField;
+            FieldBoundary.OnFallingCapVanished -= HandleFallingCapVanished;
         }
         Time.timeScale = 1f;
     }
@@ -129,6 +146,25 @@ public class ImpactFeedback : MonoBehaviour
         _shakeTimer = ShakeDuration;
 
         _hitStopTimer = Mathf.Min(HitStopBaseDuration + chainDepth * HitStopPerDepth, HitStopMaxDuration);
+    }
+
+    // A cap that tips over the edge still lands on the field once, so it uses the regular landing sound.
+    void HandleFallingCapHitField(Vector3 pos)
+    {
+        if (TableImpactSound == null) return;
+
+        var src = GetPooledAudioSource(pos);
+        src.pitch = BasePitch + Random.Range(-PitchRandom, PitchRandom);
+        src.PlayOneShot(TableImpactSound);
+    }
+
+    void HandleFallingCapVanished(Vector3 pos)
+    {
+        if (CapVanishSound == null) return;
+
+        var src = GetPooledAudioSource(pos);
+        src.pitch = BasePitch;
+        src.PlayOneShot(CapVanishSound, CapVanishVolume);
     }
 
     void SpawnVFX(GameObject prefab, Vector3 pos)

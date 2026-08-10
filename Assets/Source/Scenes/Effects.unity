@@ -342,6 +342,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HeadsMaterial: {fileID: 2100000, guid: 3c9b5658bbefd3a47a59f88f59f67277, type: 2}
   TailsMaterial: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
+  CapThickness: 0.05
   SpawnPoint: {fileID: 730576649}
   MinimumDragDistance: 0.5
   CapGrabRadiusPixels: 80
@@ -1956,6 +1957,7 @@ MonoBehaviour:
   _turnResolver: {fileID: 155613450}
   _gameManager: {fileID: 930590273}
   ThrowOwner: 1
+  PlayerHandLayer: 0
 --- !u!4 &1351139397
 Transform:
   m_ObjectHideFlags: 0
@@ -1984,8 +1986,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   TurnResolver: {fileID: 155613450}
+  FieldBoundary: {fileID: 1924152412}
   TableImpactSound: {fileID: 8300000, guid: ee1193c0411723840a4b45f88681e983, type: 3}
   CapImpactSound: {fileID: 8300000, guid: 4d6641076dcf3d945b9518042ddefe7d, type: 3}
+  CapVanishSound: {fileID: 8300000, guid: 0a42898e2e13c26409bcbee2a401a6d8, type: 3}
+  CapVanishVolume: 1
   BasePitch: 1
   PitchStepPerDepth: 0.1
   PitchRandom: 0.05
@@ -2124,6 +2129,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _fieldCollider: {fileID: 1924152408}
+  _fallPushSpeed: 1.5
+  _fallMaxSpeed: 3
+  _fallSpin: 6
+  _fallGravityScale: 6
+  _vanishHeight: -10
+  _fallLifetime: 10
 --- !u!1 &1955335072
 GameObject:
   m_ObjectHideFlags: 0

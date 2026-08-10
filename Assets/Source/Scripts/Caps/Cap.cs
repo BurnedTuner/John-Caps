@@ -238,14 +238,43 @@ public class Cap : MonoBehaviour
         head.ApplyVisuals();
     }
 
+    /// <summary>
+    /// Breaks this stack apart and returns every cap it consisted of, this one included.
+    /// The caps keep their current position and are no longer driven by the stack base.
+    /// </summary>
+    public List<Cap> ReleaseStack()
+    {
+        var released = new List<Cap> { this };
+        for (int i = 0; i < _stackAbove.Count; i++)
+        {
+            _stackAbove[i]._stackBase = null;
+            released.Add(_stackAbove[i]);
+        }
+        _stackAbove.Clear();
+        return released;
+    }
+
     public Cap GetStackTop()
     {
         if (_stackAbove.Count == 0) return this;
         return _stackAbove[_stackAbove.Count - 1];
     }
 
+    /// <summary>
+    /// Stops every running animation and reports the cap as idle. Used when the cap leaves the game
+    /// and is handed over to the physics engine, so nothing keeps waiting for it to settle.
+    /// </summary>
+    public void AbortSimulation()
+    {
+        _state = CapState.Idle;
+        _isPeeling = false;
+        _pendingLandedCallback = null;
+        _isImmutable = false;
+    }
+
     public void StepSimulation(float deltaTime, System.Action<Cap, Vector2, float> onLanded, System.Action<Cap, Vector2, float> onFlipped = null)
     {
+        if (!enabled) return;
         if (_stackBase != null) return;
 
         switch (_state)
