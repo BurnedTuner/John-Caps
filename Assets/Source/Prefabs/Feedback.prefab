@@ -73,8 +73,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6c16410fc3a3ca43b5610fffa872346, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  TurnResolver: {fileID: 0}
+  FieldBoundary: {fileID: 0}
   TableImpactSound: {fileID: 8300000, guid: ee1193c0411723840a4b45f88681e983, type: 3}
   CapImpactSound: {fileID: 8300000, guid: 4d6641076dcf3d945b9518042ddefe7d, type: 3}
+  CapVanishSound: {fileID: 8300000, guid: 0a42898e2e13c26409bcbee2a401a6d8, type: 3}
+  CapVanishVolume: 1
   BasePitch: 1
   PitchStepPerDepth: 0.1
   MaxPitch: 2
