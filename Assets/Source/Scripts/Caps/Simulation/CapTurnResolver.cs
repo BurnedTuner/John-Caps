@@ -18,6 +18,9 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     public event Action<Vector3, float, int> OnCapImpact;
     public event Action<CapTurnResolver> OnTurnFinished;
 
+    [Header("References")]
+    [SerializeField] private CapFieldBoundary _fieldBoundary;
+
     private CapTuning _tuning;
     private Cap _throwingCap;
     private CapEffectResolver _effectResolver;
@@ -44,6 +47,9 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     {
         _tuning = CapTuning.Instance;
         _effectResolver = new CapEffectResolver(new CapRegistryEffectQuery(), this);
+
+        if (_fieldBoundary == null)
+            _fieldBoundary = FindFirstObjectByType<CapFieldBoundary>();
     }
 
     void Update()
@@ -311,13 +317,17 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             _impactDepth++;
             OnCapImpact?.Invoke(landingPosition3D, landingForce, _impactDepth);
         }
-        else
+        else if (IsLandingSupported(landedCap, landingPosition))
         {
             OnTableImpact?.Invoke(landingPosition3D, landingForce);
         }
 
         ApplyPush(landedCap, landingPosition);
     }
+
+    // A cap that came down past the field never touched the table, so it makes no landing sound.
+    bool IsLandingSupported(Cap landedCap, Vector2 landingPosition) =>
+        _fieldBoundary == null || _fieldBoundary.Supports(landingPosition, landedCap.Parameters.Radius);
 
     void ApplyPush(Cap landedCap, Vector2 landingPosition)
     {

@@ -29,14 +29,15 @@ public class Cap : MonoBehaviour
     public Vector2 GroundPosition { get; private set; }
     public bool IsHeads { get; private set; } = true;
     public bool IsBusy => _state != CapState.Idle;
-    public bool IsThrowable => _state == CapState.Idle && _stackBase == null;
-    public bool CanFlip => (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
+    public bool IsThrowable => !_hasLeftGame && _state == CapState.Idle && _stackBase == null;
+    public bool CanFlip => !_hasLeftGame && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
     public CapState CurrentState => _state;
     public int ActivationDepthPlusOne => _activationDepth + 1;
     public int StackCount => _stackAbove.Count + 1;
     public bool WasPeelOff { get; set; }
 
     private bool _isImmutable;
+    private bool _hasLeftGame;
     private CapFlipEffect[] _flipEffects;
     internal CapFlipEffect[] FlipEffects => _flipEffects;
 
@@ -96,6 +97,7 @@ public class Cap : MonoBehaviour
         _stackBase = null;
         _isPeeling = false;
         _pendingLandedCallback = null;
+        _hasLeftGame = false;
         WasPeelOff = false;
         ResolveMaterials();
         ApplyVisuals();
@@ -213,7 +215,7 @@ public class Cap : MonoBehaviour
 
     public void AddToStack(Cap incoming)
     {
-        if (incoming == null || incoming == this) return;
+        if (incoming == null || incoming == this || incoming._hasLeftGame) return;
 
         Cap head = this;
         while (head._stackBase != null)
@@ -238,14 +240,46 @@ public class Cap : MonoBehaviour
         head.ApplyVisuals();
     }
 
+    /// <summary>
+    /// Breaks this stack apart and returns every cap it consisted of, this one included.
+    /// The caps keep their current position and are no longer driven by the stack base.
+    /// </summary>
+    public List<Cap> ReleaseStack()
+    {
+        var released = new List<Cap> { this };
+        for (int i = 0; i < _stackAbove.Count; i++)
+        {
+            _stackAbove[i]._stackBase = null;
+            released.Add(_stackAbove[i]);
+        }
+        _stackAbove.Clear();
+        return released;
+    }
+
     public Cap GetStackTop()
     {
         if (_stackAbove.Count == 0) return this;
         return _stackAbove[_stackAbove.Count - 1];
     }
 
+    /// <summary>
+    /// Takes the cap out of the game: it stops animating, reports itself as idle so nothing keeps
+    /// waiting for it to settle, and refuses any further interaction. Used when the cap leaves the
+    /// field and is handed over to the physics engine. A landing that was queued earlier can still
+    /// resolve a few frames later, and it must not drag the cap back onto the table.
+    /// </summary>
+    public void LeaveGame()
+    {
+        _state = CapState.Idle;
+        _isPeeling = false;
+        _pendingLandedCallback = null;
+        _isImmutable = false;
+        _hasLeftGame = true;
+    }
+
     public void StepSimulation(float deltaTime, System.Action<Cap, Vector2, float> onLanded, System.Action<Cap, Vector2, float> onFlipped = null)
     {
+        if (!enabled) return;
         if (_stackBase != null) return;
 
         switch (_state)
