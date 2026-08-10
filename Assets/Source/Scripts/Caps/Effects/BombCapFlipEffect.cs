@@ -25,6 +25,12 @@ public sealed class BombCapFlipEffect : CapFlipEffect
     public float ExplosionShakeAmount = 0.4f;
     public float ExplosionShakeDuration = 0.6f;
 
+    [Header("Material Change")]
+    [Tooltip("Material to switch to when the bomb explodes.")]
+    public Material ExplosionMaterial;
+    [Tooltip("How long (in seconds) to stay in the explosion material.")]
+    public float MaterialChangeDuration = 0.5f;
+
     public override void BuildCommands(
         in CapFlipEvent flipEvent,
         ICapEffectQuery query,
@@ -50,5 +56,15 @@ public sealed class BombCapFlipEffect : CapFlipEffect
 
         if (CameraShake.Instance != null)
             CameraShake.Instance.Shake(ExplosionShakeAmount, ExplosionShakeDuration);
+
+        // Trigger the material override on the Cap component
+        if (ExplosionMaterial != null)
+        {
+            Cap cap = GetComponent<Cap>();
+            if (cap != null)
+            {
+                cap.SetOverrideMaterial(ExplosionMaterial, MaterialChangeDuration);
+            }
+        }
     }
 }

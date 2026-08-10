@@ -47,6 +47,10 @@ public class Cap : MonoBehaviour
     private Material _resolvedTailsMat;
     private MaterialPropertyBlock _outlineProperties;
 
+    // Material Override System
+    private Material _overrideMaterial;
+    private float _overrideMaterialTimer;
+
     private static readonly int OutlineColorId = Shader.PropertyToID("_OutlineColor");
     private static readonly int OutlineWidthId = Shader.PropertyToID("_OutlineWidth");
 
@@ -99,6 +103,8 @@ public class Cap : MonoBehaviour
         _pendingLandedCallback = null;
         _hasLeftGame = false;
         WasPeelOff = false;
+        _overrideMaterial = null;
+        _overrideMaterialTimer = 0f;
         ResolveMaterials();
         ApplyVisuals();
         ApplyOutline();
@@ -440,6 +446,16 @@ public class Cap : MonoBehaviour
         if (t >= 1f) _state = CapState.Idle;
     }
 
+    /// <summary>
+    /// Sets a temporary material to be displayed on the cap.
+    /// Pass null to clear it immediately.
+    /// </summary>
+    public void SetOverrideMaterial(Material mat, float duration)
+    {
+        _overrideMaterial = mat;
+        _overrideMaterialTimer = duration;
+    }
+
     void ApplyVisuals()
     {
         if (_meshRenderer == null) _meshRenderer = GetComponent<MeshRenderer>();
@@ -497,8 +513,17 @@ public class Cap : MonoBehaviour
 
         if (_meshRenderer != null && _resolvedHeadsMat != null && _resolvedTailsMat != null)
         {
-            bool showHeads = _state == CapState.Flying ? _fromHeads : IsHeads;
-            _meshRenderer.sharedMaterial = showHeads ? _resolvedHeadsMat : _resolvedTailsMat;
+            if (_overrideMaterialTimer > 0 && _overrideMaterial != null)
+            {
+                _meshRenderer.sharedMaterial = _overrideMaterial;
+                _overrideMaterialTimer -= Time.deltaTime;
+            }
+            else if (_resolvedHeadsMat != null && _resolvedTailsMat != null)
+            {
+                _overrideMaterial = null; // Clear override when timer expires
+                bool showHeads = _state == CapState.Flying ? _fromHeads : IsHeads;
+                _meshRenderer.sharedMaterial = showHeads ? _resolvedHeadsMat : _resolvedTailsMat;
+            }
         }
     }
 
