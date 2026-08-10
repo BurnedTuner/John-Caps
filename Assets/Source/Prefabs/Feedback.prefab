@@ -75,18 +75,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   TurnResolver: {fileID: 0}
   FieldBoundary: {fileID: 0}
-  TableImpactSound: {fileID: 8300000, guid: ee1193c0411723840a4b45f88681e983, type: 3}
-  CapImpactSound: {fileID: 8300000, guid: 4d6641076dcf3d945b9518042ddefe7d, type: 3}
+  TableImpactSound: {fileID: 8300000, guid: b88ad1d1164051a4b8ad2612efb7998b, type: 3}
+  TableImpactPitch: 1
+  TableImpactVolume: 1
+  CapImpactSound: {fileID: 8300000, guid: d49a46d800ceec04c80efcfabe32791d, type: 3}
+  CapImpactBasePitch: 1
+  CapImpactPitchStepPerDepth: 0.1
+  CapImpactMaxPitch: 2
+  CapImpactVolume: 1
+  StackSound: {fileID: 8300000, guid: 03e10c4fa5b6c1b40a16692fe9f8872f, type: 3}
+  StackBasePitch: 1
+  StackPitchStepPerStack: 0.05
+  StackMaxPitch: 2
+  StackVolume: 1
   CapVanishSound: {fileID: 8300000, guid: 0a42898e2e13c26409bcbee2a401a6d8, type: 3}
+  CapVanishPitch: 1
   CapVanishVolume: 1
-  BasePitch: 1
-  PitchStepPerDepth: 0.1
-  MaxPitch: 2
   TableImpactVFX: {fileID: 1665320002680328946, guid: 81f722c6dab8a524aaaeb6e227989306, type: 3}
   CapImpactVFX: {fileID: 1651180019113697609, guid: f5f44277cf002e24e827f7d37c1a587e, type: 3}
+  StackVFX: {fileID: 1651180019113697609, guid: f5f44277cf002e24e827f7d37c1a587e, type: 3}
+  StackVFXLifetime: 0.8
   ShakeBaseAmount: 0.05
   ShakePerDepth: 0.03
   ShakeDuration: 0.25
+  StackShakeAmount: 0.02
+  StackShakeDuration: 0.1
   HitStopBaseDuration: 0.04
   HitStopPerDepth: 0.02
   HitStopMaxDuration: 0.15

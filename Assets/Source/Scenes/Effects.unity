@@ -343,8 +343,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HeadsMaterial: {fileID: 2100000, guid: 3c9b5658bbefd3a47a59f88f59f67277, type: 2}
   TailsMaterial: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
-  CapThickness: 0.05
-  SpawnPoint: {fileID: 730576649}
+  CapThickness: 0.2
+  SpawnPoint: {fileID: 481329482}
   MinimumDragDistance: 0.5
   CapGrabRadiusPixels: 80
   GrabLiftHeight: 1
@@ -1086,6 +1086,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 446264078}
   m_CullTransparentMesh: 1
+--- !u!4 &481329482 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2101367398943089904, guid: ec017d5b06c81f646b40c1c193e3afb0, type: 3}
+  m_PrefabInstance: {fileID: 505614656}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &505614656
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1355,37 +1360,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 675554659}
   m_CullTransparentMesh: 1
---- !u!1 &730576646
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 730576649}
-  m_Layer: 0
-  m_Name: SpawnPoint
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &730576649
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 730576646}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -11}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &771465620
 GameObject:
   m_ObjectHideFlags: 0
@@ -2325,6 +2299,10 @@ PrefabInstance:
       propertyPath: FieldBoundary
       value: 
       objectReference: {fileID: 1924152412}
+    - target: {fileID: 2034032191453799987, guid: 462abe6aaef4baa4ca1f1ce18682ffd2, type: 3}
+      propertyPath: StackBasePitch
+      value: 1.2
+      objectReference: {fileID: 0}
     - target: {fileID: 3218750116721829574, guid: 462abe6aaef4baa4ca1f1ce18682ffd2, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -2547,7 +2525,6 @@ SceneRoots:
   - {fileID: 383078233}
   - {fileID: 421113198}
   - {fileID: 256113063}
-  - {fileID: 730576649}
   - {fileID: 90125380285312711}
   - {fileID: 2019028401}
   - {fileID: 2073362502}

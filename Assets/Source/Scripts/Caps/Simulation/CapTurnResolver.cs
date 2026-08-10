@@ -16,6 +16,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
 
     public event Action<Vector3, float> OnTableImpact;
     public event Action<Vector3, float, int> OnCapImpact;
+    public event Action<Vector3, float, int> OnCapStacked;
     public event Action<CapTurnResolver> OnTurnFinished;
 
     [Header("References")]
@@ -325,12 +326,19 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
         bool isPeelOff = landedCap.WasPeelOff;
         landedCap.WasPeelOff = false;
 
-        if (_landingHits.Count > 0 || _stackTargets.Count > 0 || isPeelOff)
+        if (_landingHits.Count > 0 || isPeelOff)
         {
             _impactDepth++;
             OnCapImpact?.Invoke(landingPosition3D, landingForce, _impactDepth);
         }
-        else if (IsLandingSupported(landedCap, landingPosition))
+
+        if (_stackTargets.Count > 0)
+        {
+            OnCapStacked?.Invoke(landingPosition3D, landingForce, _stackTargets.Count);
+        }
+
+        if (_landingHits.Count == 0 && _stackTargets.Count == 0 && !isPeelOff
+            && IsLandingSupported(landedCap, landingPosition))
         {
             OnTableImpact?.Invoke(landingPosition3D, landingForce);
         }

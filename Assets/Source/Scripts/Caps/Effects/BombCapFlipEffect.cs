@@ -22,6 +22,8 @@ public sealed class BombCapFlipEffect : CapFlipEffect
     [Header("Feedback")]
     public GameObject ExplosionVFX;
     public AudioClip ExplosionSound;
+    [Range(0f, 2f)] public float ExplosionPitch = 0.8f;
+    [Range(0f, 1f)] public float ExplosionVolume = 1f;
     public float ExplosionShakeAmount = 0.4f;
     public float ExplosionShakeDuration = 0.6f;
 
@@ -52,12 +54,11 @@ public sealed class BombCapFlipEffect : CapFlipEffect
             VFXManager.Instance.Spawn(ExplosionVFX, position);
 
         if (ExplosionSound != null && AudioManager.Instance != null)
-            AudioManager.Instance.Play3D(ExplosionSound, position, 0.8f);
+            AudioManager.Instance.Play3D(ExplosionSound, position, ExplosionPitch, ExplosionVolume);
 
         if (CameraShake.Instance != null)
             CameraShake.Instance.Shake(ExplosionShakeAmount, ExplosionShakeDuration);
 
-        // Trigger the material override on the Cap component
         if (ExplosionMaterial != null)
         {
             Cap cap = GetComponent<Cap>();

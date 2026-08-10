@@ -31,13 +31,13 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    public void Play3D(AudioClip clip, Vector3 pos, float pitch = 1f)
+    public void Play3D(AudioClip clip, Vector3 pos, float pitch = 1f, float volume = 1f)
     {
         if (clip == null) return;
         var src = _audioPool[_poolIndex];
         _poolIndex = (_poolIndex + 1) % PoolSize;
         src.transform.position = pos;
         src.pitch = pitch;
-        src.PlayOneShot(clip);
+        src.PlayOneShot(clip, Mathf.Clamp01(volume));
     }
 }
