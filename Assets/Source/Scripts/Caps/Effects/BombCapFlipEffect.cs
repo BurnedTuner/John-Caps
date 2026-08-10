@@ -19,24 +19,36 @@ public sealed class BombCapFlipEffect : CapFlipEffect
     public float Radius => _radius;
     public float Force => _force;
 
+    [Header("Feedback")]
+    public GameObject ExplosionVFX;
+    public AudioClip ExplosionSound;
+    public float ExplosionShakeAmount = 0.4f;
+    public float ExplosionShakeDuration = 0.6f;
+
     public override void BuildCommands(
         in CapFlipEvent flipEvent,
         ICapEffectQuery query,
         ICapEffectCommandSink commands)
     {
-        if (flipEvent.Source == null || _radius <= 0f || _force <= 0f)
-            return;
-
-        commands.Add(new RadialLaunchCommand(
-            flipEvent.Source,
-            flipEvent.Position,
-            _radius,
-            _force));
+        if (flipEvent.Source == null || _radius <= 0f || _force <= 0f) return;
+        commands.Add(new RadialLaunchCommand(flipEvent.Source, flipEvent.Position, _radius, _force));
     }
 
     void OnValidate()
     {
         _radius = Mathf.Max(0.01f, _radius);
         _force = Mathf.Max(0f, _force);
+    }
+
+    public override void PlayFeedback(Vector3 position, float force)
+    {
+        if (ExplosionVFX != null && VFXManager.Instance != null)
+            VFXManager.Instance.Spawn(ExplosionVFX, position);
+
+        if (ExplosionSound != null && AudioManager.Instance != null)
+            AudioManager.Instance.Play3D(ExplosionSound, position, 0.8f);
+
+        if (CameraShake.Instance != null)
+            CameraShake.Instance.Shake(ExplosionShakeAmount, ExplosionShakeDuration);
     }
 }

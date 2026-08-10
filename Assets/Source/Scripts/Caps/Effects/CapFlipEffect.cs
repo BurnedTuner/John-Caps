@@ -10,4 +10,10 @@ public abstract class CapFlipEffect : MonoBehaviour
         in CapFlipEvent flipEvent,
         ICapEffectQuery query,
         ICapEffectCommandSink commands);
+
+    /// <summary>
+    /// Called by CapTurnResolver after commands are executed.
+    /// Override this to play effect-specific VFX/Audio.
+    /// </summary>
+    public virtual void PlayFeedback(Vector3 position, float force) { }
 }

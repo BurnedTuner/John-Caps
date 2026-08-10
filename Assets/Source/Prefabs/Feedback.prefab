@@ -1,0 +1,88 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &9208508332898657543
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3218750116721829574}
+  - component: {fileID: 5301455649904793595}
+  - component: {fileID: 3687587521901605989}
+  - component: {fileID: 2034032191453799987}
+  m_Layer: 0
+  m_Name: Feedback
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3218750116721829574
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9208508332898657543}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5301455649904793595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9208508332898657543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d0080d841ef2514482aa537dfe9f803, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  DefaultLifetime: 2
+--- !u!114 &3687587521901605989
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9208508332898657543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ea3adaf49b261342ab9a619d706e40e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  PoolSize: 8
+  MaxDistance: 1000
+--- !u!114 &2034032191453799987
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9208508332898657543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6c16410fc3a3ca43b5610fffa872346, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  TableImpactSound: {fileID: 8300000, guid: ee1193c0411723840a4b45f88681e983, type: 3}
+  CapImpactSound: {fileID: 8300000, guid: 4d6641076dcf3d945b9518042ddefe7d, type: 3}
+  BasePitch: 1
+  PitchStepPerDepth: 0.1
+  MaxPitch: 2
+  TableImpactVFX: {fileID: 1665320002680328946, guid: 81f722c6dab8a524aaaeb6e227989306, type: 3}
+  CapImpactVFX: {fileID: 1651180019113697609, guid: f5f44277cf002e24e827f7d37c1a587e, type: 3}
+  ShakeBaseAmount: 0.05
+  ShakePerDepth: 0.03
+  ShakeDuration: 0.25
+  HitStopBaseDuration: 0.04
+  HitStopPerDepth: 0.02
+  HitStopMaxDuration: 0.15

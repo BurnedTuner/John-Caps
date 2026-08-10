@@ -230,7 +230,20 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
         if (_pendingFlipEvents.Count == 0) return;
 
         for (int i = 0; i < _pendingFlipEvents.Count; i++)
+        {
             _effectResolver.ResolveImmediate(_pendingFlipEvents[i]);
+
+            Cap sourceCap = _pendingFlipEvents[i].Source;
+            if (sourceCap != null && sourceCap.FlipEffects != null)
+            {
+                Vector3 pos3D = CapMath.FromXZ(_pendingFlipEvents[i].Position, 0f);
+                for (int j = 0; j < sourceCap.FlipEffects.Length; j++)
+                {
+                    // Let the effect handle its own feedback
+                    sourceCap.FlipEffects[j].PlayFeedback(pos3D, _pendingFlipEvents[i].IncomingForce);
+                }
+            }
+        }
 
         _pendingFlipEvents.Clear();
     }
