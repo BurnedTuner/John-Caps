@@ -80,6 +80,78 @@ public sealed class CapFieldBoundary : MonoBehaviour
         return Vector2.Distance(groundPoint, CapMath.ToXZ(nearestFieldPoint)) <= radius;
     }
 
+    /// <summary>
+    /// Distance in world units from a ground point to the nearest field edge.
+    /// Positive inside the field, zero outside it. A cap standing this far from the edge needs at
+    /// least this much travel to be knocked off, which is what makes the value useful as a measure
+    /// of how exposed the cap is.
+    /// </summary>
+    public float DistanceToEdge(Vector2 groundPoint) => DistanceToEdge(groundPoint, out _);
+
+    /// <summary>World-space bounds of the field, used to sweep candidate landing points.</summary>
+    public Bounds FieldWorldBounds => _fieldCollider != null ? _fieldCollider.bounds : new Bounds();
+
+    /// <summary>
+    /// As <see cref="DistanceToEdge(Vector2)"/>, and also reports the point on the edge that is
+    /// nearest. The direction towards it is the shortest way to shove a cap off the table.
+    /// </summary>
+    public float DistanceToEdge(Vector2 groundPoint, out Vector2 nearestEdgePoint)
+    {
+        nearestEdgePoint = groundPoint;
+        if (_fieldCollider == null) return 0f;
+
+        Transform fieldTransform = _fieldCollider.transform;
+        Vector3 fieldCenter = fieldTransform.TransformPoint(_fieldCollider.center);
+        Vector3 localPoint = fieldTransform.InverseTransformPoint(
+            new Vector3(groundPoint.x, fieldCenter.y, groundPoint.y));
+
+        Vector3 halfSize = _fieldCollider.size * 0.5f;
+        Vector3 center = _fieldCollider.center;
+        float minX = center.x - halfSize.x;
+        float maxX = center.x + halfSize.x;
+        float minZ = center.z - halfSize.z;
+        float maxZ = center.z + halfSize.z;
+
+        if (localPoint.x < minX || localPoint.x > maxX || localPoint.z < minZ || localPoint.z > maxZ)
+        {
+            float clampedX = Mathf.Clamp(localPoint.x, minX, maxX);
+            float clampedZ = Mathf.Clamp(localPoint.z, minZ, maxZ);
+            nearestEdgePoint = CapMath.ToXZ(fieldTransform.TransformPoint(
+                new Vector3(clampedX, localPoint.y, clampedZ)));
+            return 0f;
+        }
+
+        // Nearest point on the border: push the point out to whichever of the four sides is closest.
+        // The distance is then measured in world space so field scale and rotation are respected.
+        float toMinX = localPoint.x - minX;
+        float toMaxX = maxX - localPoint.x;
+        float toMinZ = localPoint.z - minZ;
+        float toMaxZ = maxZ - localPoint.z;
+
+        float nearest = toMinX;
+        Vector3 borderPoint = new Vector3(minX, localPoint.y, localPoint.z);
+
+        if (toMaxX < nearest)
+        {
+            nearest = toMaxX;
+            borderPoint = new Vector3(maxX, localPoint.y, localPoint.z);
+        }
+
+        if (toMinZ < nearest)
+        {
+            nearest = toMinZ;
+            borderPoint = new Vector3(localPoint.x, localPoint.y, minZ);
+        }
+
+        if (toMaxZ < nearest)
+        {
+            borderPoint = new Vector3(localPoint.x, localPoint.y, maxZ);
+        }
+
+        nearestEdgePoint = CapMath.ToXZ(fieldTransform.TransformPoint(borderPoint));
+        return Vector2.Distance(groundPoint, nearestEdgePoint);
+    }
+
     void LateUpdate()
     {
         if (_fieldCollider == null || !_fieldCollider.enabled) return;

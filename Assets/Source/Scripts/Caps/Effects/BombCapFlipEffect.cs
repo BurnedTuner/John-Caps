@@ -42,6 +42,13 @@ public sealed class BombCapFlipEffect : CapFlipEffect
         commands.Add(new RadialLaunchCommand(flipEvent.Source, flipEvent.Position, _radius, _force));
     }
 
+    public override bool TryGetRadialLaunch(out float radius, out float force)
+    {
+        radius = _radius;
+        force = _force;
+        return _radius > 0f && _force > 0f;
+    }
+
     void OnValidate()
     {
         _radius = Mathf.Max(0.01f, _radius);

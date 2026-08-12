@@ -28,10 +28,15 @@ public sealed class CapThrower : MonoBehaviour
     public bool TurnInputEnabled { get; private set; } = true;
     public CapTurnResolver TurnResolver => _turnResolver;
 
-    private const int AimOverlapBufferSize = 32;
+    /// <summary>
+    /// The cap waiting to be thrown. It sits at the spawn point and is registered like any other cap,
+    /// so board readers such as the AI move search must skip it.
+    /// </summary>
+    public Cap WaitingCap => _waitingCap;
 
-    private readonly Collider[] _aimOverlapBuffer = new Collider[AimOverlapBufferSize];
-    private readonly RaycastHit[] _fieldHitBuffer = new RaycastHit[AimOverlapBufferSize];
+    private const int FieldHitBufferSize = 32;
+
+    private readonly RaycastHit[] _fieldHitBuffer = new RaycastHit[FieldHitBufferSize];
     private readonly List<CapPrediction> _directHitSeeds = new();
     private readonly List<CapPrediction> _predictionResults = new();
 
@@ -103,6 +108,14 @@ public sealed class CapThrower : MonoBehaviour
             _gameManager.OnBoardReset -= HandleBoardReset;
     }
 
+    void KeepWaitingCapAtSpawn()
+    {
+        if (_waitingCap == null || _tuning == null || _tuning.SpawnPoint == null) return;
+        if (_waitingCap.CurrentState != Cap.CapState.Idle) return;
+
+        _waitingCap.transform.position = _tuning.SpawnPosition;
+    }
+
     void SpawnWaitingCap()
     {
         if (_waitingCap != null || CapPrefab == null || _tuning == null) return;
@@ -125,6 +138,10 @@ public sealed class CapThrower : MonoBehaviour
     {
         if (!TurnInputEnabled)
         {
+            // The spawn point rides the camera rig, so the waiting cap has to keep following it even
+            // while the other side is throwing — otherwise it hangs in mid-air until the turn returns.
+            KeepWaitingCapAtSpawn();
+
             if (CurrentState == State.Idle && Keyboard.current?.rKey.wasPressedThisFrame == true)
                 RequestBoardReset();
             return;
@@ -182,30 +199,8 @@ public sealed class CapThrower : MonoBehaviour
 
         point = fieldHit.point;
         float capRadius = _waitingCap != null ? _waitingCap.Parameters.Radius : 0.5f;
-        isDirectAimAllowed = !OverlapsAimBlockingZone(point, capRadius);
+        isDirectAimAllowed = !CapAimRules.IsBlockedByScoringZone(point, capRadius);
         return true;
-    }
-
-    bool OverlapsAimBlockingZone(Vector3 point, float capRadius)
-    {
-        int hitCount = Physics.OverlapSphereNonAlloc(
-            point,
-            Mathf.Max(0.01f, capRadius),
-            _aimOverlapBuffer,
-            ~0,
-            QueryTriggerInteraction.Collide);
-
-        for (int i = 0; i < hitCount; i++)
-        {
-            Collider hit = _aimOverlapBuffer[i];
-            if (hit == null) continue;
-
-            ScoringZone scoringZone = hit.GetComponentInParent<ScoringZone>();
-            if (scoringZone != null && scoringZone.BlocksDirectAiming)
-                return true;
-        }
-
-        return false;
     }
 
     bool IsCursorOverWaitingCap()
@@ -231,10 +226,7 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        if (_waitingCap != null && _tuning.SpawnPoint != null)
-        {
-            _waitingCap.transform.position = _tuning.SpawnPosition;
-        }
+        KeepWaitingCapAtSpawn();
 
         if (ClickedOnUI() || Mouse.current == null) return;
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
