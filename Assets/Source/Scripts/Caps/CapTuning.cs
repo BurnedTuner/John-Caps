@@ -1,16 +1,14 @@
 using UnityEngine;
 
 /// <summary>
-/// All tunable parameters for the cap prototype, plus a fallback source for cap materials.
+/// All tunable parameters for the cap prototype.
 /// Throw force and cap radius are NOT here — they come from each cap's own CapParameters.
+/// Cap materials come from the cap prefab's MeshRenderer (3D model with top/bottom/rim).
 /// </summary>
 public class CapTuning : MonoBehaviour
 {
     public static CapTuning Instance { get; private set; }
 
-    [Header("Materials (fallback — used when a cap's own material is null)")]
-    public Material HeadsMaterial;
-    public Material TailsMaterial;
     [Header("Cap Geometry")]
     public float CapThickness = 0.05f;
     [Header("Throw / Spawn")]

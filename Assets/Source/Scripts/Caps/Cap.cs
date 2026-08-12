@@ -3,7 +3,6 @@ using UnityEngine.Rendering;
 using System.Linq;
 using System.Collections.Generic;
 
-[RequireComponent(typeof(MeshRenderer))]
 public class Cap : MonoBehaviour
 {
     public enum CapState { Idle, Held, Throwing, Flying, Pushed }
@@ -13,6 +12,14 @@ public class Cap : MonoBehaviour
     [SerializeField] private CapOwner _owner = CapOwner.Neutral;
     public int StableId => _stableId;
     public CapOwner Owner => _owner;
+
+    [Header("Coin Parts (assign in prefab)")]
+    [Tooltip("The renderer for the TOP face of the coin (heads side).")]
+    [SerializeField] private MeshRenderer _topRenderer;
+    [Tooltip("The renderer for the BOTTOM face of the coin (tails side).")]
+    [SerializeField] private MeshRenderer _bottomRenderer;
+    [Tooltip("The renderer for the RIM (edge) of the coin.")]
+    [SerializeField] private MeshRenderer _rimRenderer;
 
     [Header("Team outline")]
     [SerializeField] private MeshRenderer _outlineRenderer;
@@ -57,15 +64,12 @@ public class Cap : MonoBehaviour
     }
 
     /// <summary>
-    /// Returns the resolved material for the side this cap will show after landing.
-    /// Mirrors the material selection in ApplyVisuals() but for an arbitrary
-    /// landing side — used by the ghost-preview system.
+    /// Returns the rotation that shows the requested side facing up.
+    /// Identity = heads up, 180° X rotation = tails up.
+    /// Used by the ghost-preview system to show which side the cap will land on.
     /// </summary>
-    public Material GetLandingMaterial(bool willLandHeads)
-    {
-        if (_resolvedHeadsMat == null || _resolvedTailsMat == null) ResolveMaterials();
-        return willLandHeads ? _resolvedHeadsMat : _resolvedTailsMat;
-    }
+    public Quaternion GetLandingRotation(bool willLandHeads) =>
+        willLandHeads ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
 
     private bool _isImmutable;
     private bool _hasLeftGame;
@@ -73,9 +77,8 @@ public class Cap : MonoBehaviour
     internal CapFlipEffect[] FlipEffects => _flipEffects;
 
     private CapTuning _tuning;
-    private MeshRenderer _meshRenderer;
-    private Material _resolvedHeadsMat;
-    private Material _resolvedTailsMat;
+    private List<MeshRenderer> _meshRenderers = new();
+    private Dictionary<MeshRenderer, Material[]> _originalMaterials = new();
     private MaterialPropertyBlock _outlineProperties;
 
     // Material Override System
@@ -103,7 +106,6 @@ public class Cap : MonoBehaviour
     private float _flyElapsed;
     private float _flyDuration;
     private int _activationDepth;
-    private bool _fromHeads;
 
     private Vector2 _pushStart;
     private Vector2 _pushDirection;
@@ -136,24 +138,8 @@ public class Cap : MonoBehaviour
         WasPeelOff = false;
         _overrideMaterial = null;
         _overrideMaterialTimer = 0f;
-        ResolveMaterials();
         ApplyVisuals();
         ApplyOutline();
-    }
-
-    void ResolveMaterials()
-    {
-        if (_tuning == null) _tuning = CapTuning.Instance;
-        if (_tuning != null)
-        {
-            _resolvedHeadsMat = _parameters.HeadsMaterial != null ? _parameters.HeadsMaterial : _tuning.HeadsMaterial;
-            _resolvedTailsMat = _parameters.TailsMaterial != null ? _parameters.TailsMaterial : _tuning.TailsMaterial;
-        }
-        else
-        {
-            _resolvedHeadsMat = _parameters.HeadsMaterial;
-            _resolvedTailsMat = _parameters.TailsMaterial;
-        }
     }
 
     public void SetImmutable(bool value) => _isImmutable = value;
@@ -209,7 +195,6 @@ public class Cap : MonoBehaviour
         if (!IsFinite(GroundPosition)) return false;
 
         _activationDepth = depth;
-        _fromHeads = IsHeads;
         _flyStart = GroundPosition;
         _flyDirection = direction.sqrMagnitude > 0.000001f ? direction.normalized : Vector2.right;
         _flyTotalDistance = travelDistance;
@@ -452,7 +437,6 @@ public class Cap : MonoBehaviour
         newHead._flyElapsed = 0f;
         newHead._flyDuration = _peelDuration;
         newHead._landingForce = _peelForce;
-        newHead._fromHeads = newHead.IsHeads;
         newHead._state = CapState.Flying;
         newHead.ApplyVisuals();
         for (int i = 0; i < newHead._stackAbove.Count; i++)
@@ -489,11 +473,15 @@ public class Cap : MonoBehaviour
 
     void ApplyVisuals()
     {
-        if (_meshRenderer == null) _meshRenderer = GetComponent<MeshRenderer>();
         if (_tuning == null) _tuning = CapTuning.Instance;
 
+        // Base rotation: identity if heads-up, 180° X-flip if tails-up.
+        // This is applied to ALL non-flying states so the 3D model shows the
+        // correct face. Flying state overrides this with its own flip animation.
+        Quaternion sideRot = IsHeads ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
+
         Vector3 pos;
-        Quaternion rot = Quaternion.identity;
+        Quaternion rot = sideRot;
 
         if (_stackBase != null)
         {
@@ -501,7 +489,10 @@ public class Cap : MonoBehaviour
             int myIndex = _stackBase._stackAbove.IndexOf(this) + 1;
             Vector3 localUp = _stackBase.transform.rotation * Vector3.up;
             pos = _stackBase.transform.position + localUp * (yOff * myIndex);
-            rot = _stackBase.transform.rotation;
+            // Stacked caps inherit the base's rotation (which already encodes
+            // the base's side). Each stacked cap's own IsHeads is encoded in
+            // an additional local flip on top of the base rotation.
+            rot = _stackBase.transform.rotation * sideRot;
         }
         else
         {
@@ -514,7 +505,9 @@ public class Cap : MonoBehaviour
                 case CapState.Throwing:
                     pos = transform.position;
                     float throwProgress = _throwDuration > 0f ? _throwElapsed / _throwDuration : 1f;
-                    rot = Quaternion.Euler(0f, throwProgress * _tuning.FlightSpinDegrees, 0f);
+                    // Y-spin for the throw arc, composed with the side rotation
+                    // so the correct face stays up while spinning.
+                    rot = sideRot * Quaternion.Euler(0f, throwProgress * _tuning.FlightSpinDegrees, 0f);
                     break;
 
                 case CapState.Flying:
@@ -525,7 +518,11 @@ public class Cap : MonoBehaviour
                     Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D);
                     if (!IsFinite(rotAxis) || rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
                     else rotAxis = rotAxis.normalized;
-                    rot = Quaternion.AngleAxis(flyProgress * 180f, rotAxis);
+                    // The flip animation: 180° rotation around the lateral axis.
+                    // Start from the current side (sideRot) so the model begins
+                    // showing the correct face, then the 180° flip reveals the
+                    // other side as it rotates.
+                    rot = sideRot * Quaternion.AngleAxis(flyProgress * 180f, rotAxis);
                     break;
 
                 case CapState.Pushed:
@@ -542,19 +539,42 @@ public class Cap : MonoBehaviour
         transform.position = pos;
         if (IsFinite(rot)) transform.rotation = rot;
 
-        if (_meshRenderer != null && _resolvedHeadsMat != null && _resolvedTailsMat != null)
+        // Material handling: override ALL material slots on ALL child renderers
+        // (e.g. bomb explosion), or restore the original materials when the
+        // override expires. The cap is made of 3 separate meshes (top, bottom,
+        // rim), each with its own MeshRenderer and material.
+        if (_overrideMaterialTimer > 0 && _overrideMaterial != null)
         {
-            if (_overrideMaterialTimer > 0 && _overrideMaterial != null)
+            // Override: replace ALL materials on ALL renderers with the override material.
+            for (int r = 0; r < _meshRenderers.Count; r++)
             {
-                _meshRenderer.sharedMaterial = _overrideMaterial;
-                _overrideMaterialTimer -= Time.deltaTime;
+                MeshRenderer mr = _meshRenderers[r];
+                if (mr == null) continue;
+
+                Material[] current = mr.sharedMaterials;
+                bool needsUpdate = current == null
+                    || current.Length == 0
+                    || current[0] != _overrideMaterial;
+                if (needsUpdate)
+                {
+                    Material[] allOverride = new Material[current != null ? current.Length : 1];
+                    for (int i = 0; i < allOverride.Length; i++) allOverride[i] = _overrideMaterial;
+                    mr.sharedMaterials = allOverride;
+                }
             }
-            else if (_resolvedHeadsMat != null && _resolvedTailsMat != null)
+            _overrideMaterialTimer -= Time.deltaTime;
+        }
+        else if (_overrideMaterial != null)
+        {
+            // Timer just expired — restore original materials on all renderers.
+            for (int r = 0; r < _meshRenderers.Count; r++)
             {
-                _overrideMaterial = null; // Clear override when timer expires
-                bool showHeads = _state == CapState.Flying ? _fromHeads : IsHeads;
-                _meshRenderer.sharedMaterial = showHeads ? _resolvedHeadsMat : _resolvedTailsMat;
+                MeshRenderer mr = _meshRenderers[r];
+                if (mr == null) continue;
+                if (_originalMaterials.TryGetValue(mr, out Material[] originals))
+                    mr.sharedMaterials = originals;
             }
+            _overrideMaterial = null;
         }
     }
 
@@ -592,14 +612,23 @@ public class Cap : MonoBehaviour
 
     void Awake()
     {
-        _meshRenderer = GetComponent<MeshRenderer>();
-        _flipEffects = GetComponents<CapFlipEffect>();
+        // Find the OutlineRenderer if not assigned.
         if (_outlineRenderer == null)
         {
             Transform outlineTransform = transform.Find("OutlineRenderer");
             if (outlineTransform != null)
                 _outlineRenderer = outlineTransform.GetComponent<MeshRenderer>();
         }
+
+        // Register the assigned coin-part renderers (top, bottom, rim).
+        // Any null fields are silently skipped — e.g. a cap with no rim, or
+        // a 2-mesh cap. Cache original materials for each so we can restore
+        // them after a material override (e.g. bomb explosion) expires.
+        TryRegisterRenderer(_topRenderer);
+        TryRegisterRenderer(_bottomRenderer);
+        TryRegisterRenderer(_rimRenderer);
+
+        _flipEffects = GetComponents<CapFlipEffect>();
 
         if (_outlineRenderer != null)
         {
@@ -619,6 +648,19 @@ public class Cap : MonoBehaviour
         }
 
         ApplyOutline();
+    }
+
+    /// <summary>
+    /// Register a coin-part renderer in the tracked list and cache its original
+    /// materials. Silently skips null renderers (e.g. a cap with no rim).
+    /// </summary>
+    void TryRegisterRenderer(MeshRenderer mr)
+    {
+        if (mr == null) return;
+        if (_meshRenderers.Contains(mr)) return; // defensive: same renderer assigned twice
+        _meshRenderers.Add(mr);
+        if (mr.sharedMaterials != null)
+            _originalMaterials[mr] = (Material[])mr.sharedMaterials.Clone();
     }
 
     void OnValidate() => ApplyOutline();
@@ -647,4 +689,4 @@ public static class CapRegistry
     public static void Clear() => _allCaps.Clear();
 
     internal static void RemoveAt(int index) => _allCaps.RemoveAt(index);
-}
+}

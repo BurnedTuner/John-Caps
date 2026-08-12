@@ -78,26 +78,35 @@ public class GhostCapPool
 
             PositionGhost(ghost, pred);
 
-            // Activate the ghost FIRST, before setting materials. The cap's root
-            // mesh renderer IS the ghost GameObject itself, so checking
-            // activeSelf before activation would skip it and no material gets applied.
+            // Activate the ghost FIRST, before setting materials.
             ghost.SetActive(true);
 
-            Material sourceMat = pred.Cap.GetLandingMaterial(pred.WillLandHeads);
-            Material ghostMat = GetTransparentMaterial(sourceMat);
-
-            // Set the transparent material on ALL mesh renderers that are actually
-            // enabled. We use renderer.enabled (component-level) rather than
-            // gameObject.activeSelf because the ghost GameObject is now active
-            // and we only want to skip renderers we explicitly disabled (OutlineRenderer).
+            // Apply transparent materials to ALL sub-meshes of the ghost.
+            // The 3D cap model has 3 material slots (top, bottom, rim). We need
+            // to make all of them transparent so the ghost is see-through from
+            // any angle. Each slot's material is individually cloned + made transparent.
             MeshRenderer[] renderers = ghost.GetComponentsInChildren<MeshRenderer>(true);
             for (int r = 0; r < renderers.Length; r++)
             {
                 MeshRenderer mr = renderers[r];
                 if (mr == null) continue;
                 if (!mr.enabled) continue; // skip disabled renderers (OutlineRenderer)
-                if (mr.sharedMaterial != ghostMat)
-                    mr.sharedMaterial = ghostMat;
+
+                // Get all materials on this renderer and make each one transparent.
+                Material[] currentMats = mr.sharedMaterials;
+                if (currentMats == null || currentMats.Length == 0) continue;
+
+                Material[] transparentMats = new Material[currentMats.Length];
+                bool anyChanged = false;
+                for (int m = 0; m < currentMats.Length; m++)
+                {
+                    Material src = currentMats[m];
+                    Material ghostMat = GetTransparentMaterial(src);
+                    transparentMats[m] = ghostMat;
+                    if (ghostMat != src) anyChanged = true;
+                }
+                if (anyChanged)
+                    mr.sharedMaterials = transparentMats;
             }
 
             _usedThisFrame.Add(pred.Cap);
@@ -232,11 +241,13 @@ public class GhostCapPool
 
     void PositionGhost(GameObject ghost, CapPrediction pred)
     {
-        // Match Cap.ApplyVisuals() Idle state: position = FromXZ(GroundPosition, 0),
-        // rotation = identity. Side is encoded in material, not mesh rotation.
+        // Position at the predicted landing point. Rotation shows the predicted
+        // side: identity = heads up, 180° X rotation = tails up.
         Vector3 worldPos = CapMath.FromXZ(pred.EndPosition, GhostYOffset);
         ghost.transform.position = worldPos;
-        ghost.transform.rotation = Quaternion.identity;
+        ghost.transform.rotation = pred.Cap != null
+            ? pred.Cap.GetLandingRotation(pred.WillLandHeads)
+            : Quaternion.identity;
     }
 
     Material GetTransparentMaterial(Material source)
@@ -247,33 +258,30 @@ public class GhostCapPool
         if (_transparentMats.TryGetValue(source, out Material cached) && cached != null)
             return cached;
 
-        Material ghostMat;
         Material template = CapTuning.Instance != null ? CapTuning.Instance.GhostMaterial : null;
 
+        Material ghostMat;
         if (template != null)
         {
-            // PREFERRED PATH: clone the user-assigned template material.
-            // The template is a pre-made material asset with transparent surface
-            // type already configured in the inspector. This guarantees the
-            // transparent shader variant is compiled into the build (URP strips
-            // transparent variants if no material asset uses them). We just copy
-            // the texture from the source cap material and set the alpha.
+            // PREFERRED PATH: clone the template material (guaranteed to have
+            // the transparent shader variant compiled into the build), then
+            // copy ALL textures + properties from the source cap material.
+            // CRITICAL: re-apply transparent setup AFTER copying, because
+            // copying floats includes _Surface which would override the
+            // template's transparent setting back to opaque.
             ghostMat = new Material(template);
             ghostMat.name = source.name + "_Ghost";
-
-            CopyTextureAndColor(source, ghostMat);
+            CopyAllTexturesAndColors(source, ghostMat);
+            ApplyTransparentSetup(ghostMat); // re-apply: copying _Surface=0 broke transparency
         }
         else
         {
-            // FALLBACK PATH: no template material assigned. Create one from a
-            // shader at runtime. WARNING: this may not work in URP builds because
-            // the transparent shader variant may be stripped. For reliable
-            // transparency, assign a GhostMaterial in CapTuning.
-            Shader ghostShader = FindGhostShader();
-            ghostMat = new Material(ghostShader);
+            // FALLBACK: no template. Clone the source directly and apply
+            // transparent setup. May not work in URP builds due to shader
+            // variant stripping — assign a GhostMaterial in CapTuning for
+            // reliable transparency.
+            ghostMat = new Material(source);
             ghostMat.name = source.name + "_Ghost";
-
-            CopyTextureAndColor(source, ghostMat);
             ApplyTransparentSetup(ghostMat);
         }
 
@@ -282,76 +290,92 @@ public class GhostCapPool
     }
 
     /// <summary>
-    /// Copy the main texture and RGB color (with forced GhostAlpha) from the
-    /// source cap material to the ghost material. Handles both URP property
-    /// names (_BaseMap/_BaseColor) and Standard names (_MainTex/_Color).
+    /// Copy ALL textures, colors, floats, vectors, AND texture tiling/offset
+    /// from the source material to the ghost material. Iterates every shader
+    /// property on the source and copies by name — works regardless of which
+    /// properties the shader uses.
+    ///
+    /// CRITICAL: skips render-state properties (_Surface, _Blend, _AlphaClip,
+    /// _SrcBlend, _DstBlend, _ZWrite, _Cull) so the template's transparent
+    /// setup is preserved. These would otherwise be copied from the source
+    /// (opaque) material and break transparency.
     /// </summary>
-    void CopyTextureAndColor(Material source, Material ghostMat)
+    void CopyAllTexturesAndColors(Material source, Material ghostMat)
     {
-        // Copy texture.
-        Texture mainTex = null;
-        if (source.HasProperty("_BaseMap"))
-            mainTex = source.GetTexture("_BaseMap");
-        else if (source.HasProperty("_MainTex"))
-            mainTex = source.GetTexture("_MainTex");
+        if (source == null || ghostMat == null) return;
 
-        if (mainTex != null)
+        // Properties that control render state / transparency. NEVER copy these
+        // from the source — they would override the template's transparent setup.
+        System.Collections.Generic.HashSet<string> skipProps = new()
         {
-            if (ghostMat.HasProperty("_MainTex"))
-                ghostMat.SetTexture("_MainTex", mainTex);
-            else if (ghostMat.HasProperty("_BaseMap"))
-                ghostMat.SetTexture("_BaseMap", mainTex);
-        }
-
-        // Extract only RGB from source — never inherit source alpha (could be 0 or 1).
-        Color srcColor = Color.white;
-        if (source.HasProperty("_BaseColor"))
-            srcColor = source.GetColor("_BaseColor");
-        else if (source.HasProperty("_Color"))
-            srcColor = source.color;
-
-        Color ghostColor = new Color(srcColor.r, srcColor.g, srcColor.b, GhostAlpha);
-        if (ghostMat.HasProperty("_Color"))
-            ghostMat.color = ghostColor;
-        if (ghostMat.HasProperty("_BaseColor"))
-            ghostMat.SetColor("_BaseColor", ghostColor);
-    }
-
-    /// <summary>
-    /// Find a shader for the fallback path (when no GhostMaterial is assigned).
-    /// Tries shaders in order of reliability. NOTE: this fallback may not work
-    /// in URP builds due to shader variant stripping. For reliable transparency,
-    /// assign a GhostMaterial in CapTuning.
-    /// </summary>
-    Shader FindGhostShader()
-    {
-        string[] candidates = {
-            "UI/Default",                          // Always available, always transparent
-            "Unlit/Transparent",                   // Built-in RP transparent
-            "Universal Render Pipeline/Unlit",     // URP unlit
-            "Unlit/Color",                         // Always available, alpha via _Color
-            "Standard",                            // Last resort
+            "_Surface", "_Blend", "_AlphaClip",
+            "_SrcBlend", "_DstBlend", "_ZWrite",
+            "_Cull", "_ZTest",
+            "_ALPHATEST_ON", "_ALPHABLEND_ON", "_ALPHAPREMULTIPLY_ON",
+            "_SURFACE_TYPE_TRANSPARENT",
         };
 
-        foreach (string name in candidates)
+        int propCount = source.shader.GetPropertyCount();
+        for (int i = 0; i < propCount; i++)
         {
-            Shader s = Shader.Find(name);
-            if (s != null) return s;
-        }
+            string propName = source.shader.GetPropertyName(i);
+            ShaderPropertyType propType = source.shader.GetPropertyType(i);
 
-        return Shader.Find("Standard");
+            // Skip render-state properties — preserve template's transparent setup.
+            if (skipProps.Contains(propName)) continue;
+
+            // Only copy if the ghost material also has this property.
+            if (!ghostMat.HasProperty(propName)) continue;
+
+            switch (propType)
+            {
+                case ShaderPropertyType.Texture:
+                    Texture tex = source.GetTexture(propName);
+                    if (tex != null)
+                    {
+                        ghostMat.SetTexture(propName, tex);
+                        // Copy texture tiling and offset.
+                        Vector2 scale = source.GetTextureScale(propName);
+                        Vector2 offset = source.GetTextureOffset(propName);
+                        ghostMat.SetTextureScale(propName, scale);
+                        ghostMat.SetTextureOffset(propName, offset);
+                    }
+                    break;
+
+                case ShaderPropertyType.Color:
+                    Color c = source.GetColor(propName);
+                    // Force alpha to GhostAlpha on the main color property,
+                    // keep source alpha on other color properties (e.g. emission).
+                    if (propName == "_Color" || propName == "_BaseColor")
+                        c.a = GhostAlpha;
+                    ghostMat.SetColor(propName, c);
+                    break;
+
+                case ShaderPropertyType.Float:
+                case ShaderPropertyType.Range:
+                    ghostMat.SetFloat(propName, source.GetFloat(propName));
+                    break;
+
+                case ShaderPropertyType.Vector:
+                    ghostMat.SetVector(propName, source.GetVector(propName));
+                    break;
+            }
+        }
     }
 
     Material GetDefaultTransparent()
     {
         if (_defaultTransparentMat != null) return _defaultTransparentMat;
 
-        Shader shader = FindGhostShader();
+        // Fallback when source material is null. Try URP first, then Standard.
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null) shader = Shader.Find("Standard");
+        if (shader == null) shader = Shader.Find("Unlit/Transparent");
 
         _defaultTransparentMat = new Material(shader);
         _defaultTransparentMat.name = "Ghost_Default";
         _defaultTransparentMat.color = new Color(1f, 1f, 1f, GhostAlpha);
-        _defaultTransparentMat.renderQueue = (int)RenderQueue.Transparent;
+        ApplyTransparentSetup(_defaultTransparentMat);
         return _defaultTransparentMat;
     }
 

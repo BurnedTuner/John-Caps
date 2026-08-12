@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1001 &5805564706354908887
+--- !u!1001 &3217595775703196311
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -8,33 +8,21 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 376556644052359217, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-      propertyPath: 'm_Materials.Array.data[0]'
-      value: 
-      objectReference: {fileID: 2100000, guid: 36ed6d10a8b1e3543af5c69498b678cd, type: 2}
-    - target: {fileID: 778941114169733653, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-      propertyPath: 'm_Materials.Array.data[0]'
-      value: 
-      objectReference: {fileID: 2100000, guid: 4c93763bc90aabd4ab6b1451a93b77e7, type: 2}
     - target: {fileID: 2105830833890437631, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: m_Name
-      value: Cap_Bomb_Base
+      value: CapWithPicturesTest Variant
       objectReference: {fileID: 0}
-    - target: {fileID: 5262984797595299007, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-      propertyPath: 'm_Materials.Array.data[0]'
-      value: 
-      objectReference: {fileID: 2100000, guid: 36ed6d10a8b1e3543af5c69498b678cd, type: 2}
     - target: {fileID: 6703822240632803327, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: -4.561359
       objectReference: {fileID: 0}
     - target: {fileID: 6703822240632803327, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.67
+      value: -0.13000011
       objectReference: {fileID: 0}
     - target: {fileID: 6703822240632803327, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: 6.3645544
       objectReference: {fileID: 0}
     - target: {fileID: 6703822240632803327, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: m_LocalRotation.w
@@ -67,35 +55,5 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 2105830833890437631, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2549372138949770001}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
---- !u!1 &5595981657246983976 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 2105830833890437631, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-  m_PrefabInstance: {fileID: 5805564706354908887}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &2549372138949770001
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5595981657246983976}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 63080206d5904b8c9b4fa70be5e67db6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _radius: 4
-  _force: 4
-  ExplosionVFX: {fileID: 1651180019113697609, guid: 988ed3d3f7ac6be43b99a58ca3111dfc, type: 3}
-  ExplosionSound: {fileID: 8300000, guid: 16ba4a80a1493354485faf8f01fad6fe, type: 3}
-  ExplosionPitch: 0.8
-  ExplosionVolume: 1
-  ExplosionShakeAmount: 0.4
-  ExplosionShakeDuration: 0.6
-  ExplosionMaterial: {fileID: 2100000, guid: d46fa4d416e20a6409f851fbe2566115, type: 2}
-  MaterialChangeDuration: 0.2

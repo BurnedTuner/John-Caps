@@ -996,6 +996,7 @@ MonoBehaviour:
   SlotSpacing: 3
   SlotBackOffset: 1.5
   SlotYOffset: -2
+  CapGrabRadiusPixels: 80
   Owner: 1
   PlayerHandLayer: 3
 --- !u!1 &511798837

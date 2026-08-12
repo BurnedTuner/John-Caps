@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Caps:
   - {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-  - {fileID: 8693585558862005274, guid: 21a3a79e2bc267242995580d2798209e, type: 3}
   - {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
   - {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+  - {fileID: 2897028790850669261, guid: 21a3a79e2bc267242995580d2798209e, type: 3}
   ShuffleOnStart: 1
