@@ -1,6 +1,26 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>Details of an extra turn earned by knocking enemy caps off the field.</summary>
+public readonly struct ExtraTurnInfo
+{
+    /// <summary>The side that keeps the turn.</summary>
+    public readonly CapOwner Owner;
+
+    /// <summary>How many enemy caps this turn drove off the field.</summary>
+    public readonly int CapsKnockedOff;
+
+    /// <summary>Length of the streak the extra turn continues, the upcoming turn included.</summary>
+    public readonly int ConsecutiveTurns;
+
+    public ExtraTurnInfo(CapOwner owner, int capsKnockedOff, int consecutiveTurns)
+    {
+        Owner = owner;
+        CapsKnockedOff = capsKnockedOff;
+        ConsecutiveTurns = consecutiveTurns;
+    }
+}
+
 /// <summary>
 /// Decides whose turn it is.
 ///
@@ -39,7 +59,8 @@ public sealed class TurnController : MonoBehaviour
     [Tooltip("Whether knocking a neutral cap off also earns another turn. Off: only enemy caps count.")]
     [SerializeField] private bool _neutralGrantsExtraTurn;
 
-    [Tooltip("End the match once a side that started with caps has none left on the field.")]
+    [Tooltip("End the match once a side has no caps left on the field. " +
+             "Turn it off for a sandbox that never ends.")]
     [SerializeField] private bool _endMatchWhenSideWipedOut = true;
 
     [Tooltip("Cap on how many turns in a row one side may take. 0 = unlimited, which is the rule as written.")]
@@ -63,11 +84,27 @@ public sealed class TurnController : MonoBehaviour
     public event System.Action<CapOwner> TurnStarted;
     public event System.Action<CapOwner> MatchFinished;
 
-    private FieldCounts _countsAtTurnStart;
-    private FieldCounts _initialCounts;
-    private bool _hasInitialCounts;
+    /// <summary>
+    /// Raised just before an extra turn starts, i.e. when a side knocked enemy caps off and therefore
+    /// keeps the board. Fires only once the extra turn is certain — after the streak limit and the
+    /// "can this side still throw" checks have had their say.
+    /// </summary>
+    public event System.Action<ExtraTurnInfo> ExtraTurnEarned;
+
+    // Knockouts are tallied from CapFieldBoundary.OnCapLeftField as they happen, not by diffing cap
+    // counts before and after the turn. A diff cannot tell a knockout from a cap that merely landed
+    // in a stack, because Cap.AddToStack also removes it from CapRegistry.
+    private int _playerCapsLostThisTurn;
+    private int _opponentCapsLostThisTurn;
+    private int _neutralCapsLostThisTurn;
+
     private float _turnElapsed;
     private bool _restartRequested;
+
+    // A side can only be wiped out if it ever had caps on the field. Tracked as it happens rather than
+    // snapshotted at the first turn, because a side may start empty and put its first cap down later.
+    private bool _playerEverHadCaps;
+    private bool _opponentEverHadCaps;
 
     void Awake()
     {
@@ -86,6 +123,12 @@ public sealed class TurnController : MonoBehaviour
 
         if (_turnResolver == null)
             Debug.LogError("[TurnController] CapTurnResolver is not assigned or present in the scene.", this);
+
+        if (_fieldBoundary == null)
+        {
+            Debug.LogError("[TurnController] CapFieldBoundary is not assigned or present in the scene. " +
+                           "Without it no knockout can be detected, so turns will never repeat.", this);
+        }
 
         BeginTurn(_firstTurn, isRepeat: false);
     }
@@ -123,6 +166,12 @@ public sealed class TurnController : MonoBehaviour
             _opponentThrower.TurnSkipped -= HandleOpponentSkipped;
             _opponentThrower.TurnSkipped += HandleOpponentSkipped;
         }
+
+        if (_fieldBoundary != null)
+        {
+            _fieldBoundary.OnCapLeftField -= HandleCapLeftField;
+            _fieldBoundary.OnCapLeftField += HandleCapLeftField;
+        }
     }
 
     void Unsubscribe()
@@ -135,6 +184,9 @@ public sealed class TurnController : MonoBehaviour
 
         if (_opponentThrower != null)
             _opponentThrower.TurnSkipped -= HandleOpponentSkipped;
+
+        if (_fieldBoundary != null)
+            _fieldBoundary.OnCapLeftField -= HandleCapLeftField;
     }
 
     void Update()
@@ -152,10 +204,11 @@ public sealed class TurnController : MonoBehaviour
     }
 
     /// <summary>
-    /// Starts a turn for a side. <paramref name="isRepeat"/> marks the extra turn earned by a knockout,
-    /// which only matters for the consecutive-turn counter and its optional limit.
+    /// Starts a turn for a side. <paramref name="isRepeat"/> marks the extra turn earned by a knockout;
+    /// <paramref name="capsKnockedOff"/> is how many enemy caps earned it, and both only travel as far
+    /// as the streak counter and the ExtraTurnEarned event.
     /// </summary>
-    void BeginTurn(CapOwner owner, bool isRepeat)
+    void BeginTurn(CapOwner owner, bool isRepeat, int capsKnockedOff = 0)
     {
         if (CurrentPhase == TurnPhase.MatchOver) return;
 
@@ -180,14 +233,14 @@ public sealed class TurnController : MonoBehaviour
 
         ConsecutiveTurns = isRepeat ? ConsecutiveTurns + 1 : 1;
         CurrentTurn = owner;
-        _countsAtTurnStart = CountCapsOnField();
         _turnElapsed = 0f;
 
-        if (!_hasInitialCounts)
-        {
-            _initialCounts = _countsAtTurnStart;
-            _hasInitialCounts = true;
-        }
+        _playerCapsLostThisTurn = 0;
+        _opponentCapsLostThisTurn = 0;
+        _neutralCapsLostThisTurn = 0;
+
+        // Marks both sides as being in the game so an empty board can be told from one not yet played on.
+        CountCapsOnField();
 
         if (owner == CapOwner.Player)
         {
@@ -202,6 +255,10 @@ public sealed class TurnController : MonoBehaviour
 
         if (_logTurns)
             Debug.Log($"[TurnController] {owner} turn #{ConsecutiveTurns} in a row.", this);
+
+        // Announced before the turn itself, so a listener can explain why the board is not changing hands.
+        if (isRepeat)
+            ExtraTurnEarned?.Invoke(new ExtraTurnInfo(owner, capsKnockedOff, ConsecutiveTurns));
 
         TurnStarted?.Invoke(owner);
 
@@ -218,16 +275,28 @@ public sealed class TurnController : MonoBehaviour
         FieldCounts counts = CountCapsOnField();
 
         int enemyRemoved = CurrentTurn == CapOwner.Player
-            ? _countsAtTurnStart.Opponent - counts.Opponent
-            : _countsAtTurnStart.Player - counts.Player;
+            ? _opponentCapsLostThisTurn
+            : _playerCapsLostThisTurn;
 
         if (_neutralGrantsExtraTurn)
-            enemyRemoved += _countsAtTurnStart.Neutral - counts.Neutral;
+            enemyRemoved += _neutralCapsLostThisTurn;
 
         if (TryFinishMatch(counts)) return;
 
         bool keepsTurn = enemyRemoved > 0;
-        BeginTurn(keepsTurn ? CurrentTurn : Other(CurrentTurn), keepsTurn);
+        BeginTurn(keepsTurn ? CurrentTurn : Other(CurrentTurn), keepsTurn, enemyRemoved);
+    }
+
+    void HandleCapLeftField(Cap cap)
+    {
+        if (cap == null) return;
+
+        switch (cap.Owner)
+        {
+            case CapOwner.Player: _playerCapsLostThisTurn++; break;
+            case CapOwner.Opponent: _opponentCapsLostThisTurn++; break;
+            default: _neutralCapsLostThisTurn++; break;
+        }
     }
 
     void HandleOpponentSkipped(AiCapThrower thrower)
@@ -246,7 +315,11 @@ public sealed class TurnController : MonoBehaviour
         CurrentTurn = CapOwner.Neutral;
         Winner = CapOwner.Neutral;
         ConsecutiveTurns = 0;
-        _hasInitialCounts = false;
+        _playerEverHadCaps = false;
+        _opponentEverHadCaps = false;
+        _playerCapsLostThisTurn = 0;
+        _opponentCapsLostThisTurn = 0;
+        _neutralCapsLostThisTurn = 0;
         _turnElapsed = 0f;
         _restartRequested = true;
     }
@@ -255,24 +328,31 @@ public sealed class TurnController : MonoBehaviour
     {
         if (!_endMatchWhenSideWipedOut) return false;
 
-        // A side that never had caps to begin with cannot be wiped out — that is a sandbox setup,
-        // not a finished match.
-        if (_initialCounts.Player > 0 && counts.Player == 0)
+        if (IsWipedOut(CapOwner.Player, counts.Player))
         {
             FinishMatch(CapOwner.Opponent);
             return true;
         }
 
-        bool opponentIsOut = counts.Opponent == 0
-            && (_opponentThrower == null || !_opponentThrower.HasCapToThrow);
-
-        if (_initialCounts.Opponent > 0 && opponentIsOut)
+        if (IsWipedOut(CapOwner.Opponent, counts.Opponent))
         {
             FinishMatch(CapOwner.Player);
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// A side is beaten the moment its last cap leaves the field, whatever it still has in reserve.
+    /// The one exception is a side that has never put a cap down: it has not started, not lost, which
+    /// is what keeps a sandbox board of neutral caps from ending the match on the first throw.
+    /// </summary>
+    bool IsWipedOut(CapOwner owner, int capsOnField)
+    {
+        if (capsOnField > 0) return false;
+
+        return owner == CapOwner.Player ? _playerEverHadCaps : _opponentEverHadCaps;
     }
 
     void FinishMatch(CapOwner winner)
@@ -302,17 +382,34 @@ public sealed class TurnController : MonoBehaviour
         {
             Cap cap = caps[i];
             if (cap == null || cap == playerWaiting || cap == opponentWaiting) continue;
+            if (cap.IsParked) continue;
             if (_fieldBoundary != null && !_fieldBoundary.Supports(cap.GroundPosition, 0f)) continue;
 
-            switch (cap.Owner)
-            {
-                case CapOwner.Player: counts.Player++; break;
-                case CapOwner.Opponent: counts.Opponent++; break;
-                default: counts.Neutral++; break;
-            }
+            Count(cap, ref counts);
+
+            // Caps riding in a stack are unregistered but still very much on the table, so a side
+            // whose last cap got covered has not lost.
+            IReadOnlyList<Cap> stacked = cap.StackedAbove;
+            for (int s = 0; s < stacked.Count; s++)
+                Count(stacked[s], ref counts);
         }
 
+        _playerEverHadCaps |= counts.Player > 0;
+        _opponentEverHadCaps |= counts.Opponent > 0;
+
         return counts;
+    }
+
+    static void Count(Cap cap, ref FieldCounts counts)
+    {
+        if (cap == null) return;
+
+        switch (cap.Owner)
+        {
+            case CapOwner.Player: counts.Player++; break;
+            case CapOwner.Opponent: counts.Opponent++; break;
+            default: counts.Neutral++; break;
+        }
     }
 
     bool CanThrow(CapOwner owner) => owner == CapOwner.Player

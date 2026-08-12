@@ -130,6 +130,7 @@ public sealed class CapThrower : MonoBehaviour
         if (_waitingCap != null)
         {
             _waitingCap.transform.position = spawnPosition;
+            _waitingCap.SetParked(true);
             SetCapLayerRecursive(_waitingCap.gameObject, PlayerHandLayer);
         }
     }
@@ -375,6 +376,7 @@ public sealed class CapThrower : MonoBehaviour
 
         // Reset layer back to Default (0) so it interacts with the world normally
         SetCapLayerRecursive(cap.gameObject, 0);
+        cap.SetParked(false);
 
         float force = cap.Parameters.ThrowPower;
         var request = new CapThrowRequest(cap, startPosition, landingPosition, force);
@@ -386,9 +388,12 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
+        // The throw was refused, so put the cap back in hand exactly as it was.
         _waitingCap = cap;
         _waitingCap.EndHeldToIdle();
         _waitingCap.transform.position = startPosition;
+        _waitingCap.SetParked(true);
+        SetCapLayerRecursive(_waitingCap.gameObject, PlayerHandLayer);
         CurrentState = State.Idle;
     }
 

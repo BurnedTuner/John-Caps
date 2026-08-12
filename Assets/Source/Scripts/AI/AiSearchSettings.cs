@@ -42,6 +42,13 @@ public sealed class AiSearchSettings
     [Tooltip("Score for a move that clears the last player cap off the board.")]
     public float WinScore = 10000f;
 
+    [Header("Chain lookahead")]
+    [Tooltip("How many links of the chain the AI foresees. 0 = the whole chain, bounded only by " +
+             "CapTuning.MaximumChainLength. 1 = only the caps the throw hits directly; they still fly " +
+             "and can still leave the field, they just knock nothing else over. 2 = one link further, " +
+             "and so on. Lowering it makes the AI blind to long cascades, which is a way to weaken it.")]
+    [Min(0)] public int MaxChainDepth;
+
     [Header("Candidate sampling")]
     [Tooltip("Landing points sampled on a ring around each target cap.")]
     [Range(4, 32)] public int RingAngles = 12;

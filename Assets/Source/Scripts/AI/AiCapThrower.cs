@@ -173,6 +173,7 @@ public sealed class AiCapThrower : MonoBehaviour
 
         _lastMove = move;
         _hasLastMove = true;
+        move.Cap.SetParked(false);
 
         var request = new CapThrowRequest(
             move.Cap,
@@ -182,6 +183,7 @@ public sealed class AiCapThrower : MonoBehaviour
 
         if (!_turnResolver.TryStartThrow(request))
         {
+            move.Cap.SetParked(true);
             SkipTurn("CapTurnResolver refused the throw");
             return;
         }

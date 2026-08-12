@@ -29,6 +29,14 @@ public sealed class CapFieldBoundary : MonoBehaviour
     /// <summary>Raised when a falling cap drops below the vanish height and is removed.</summary>
     public event System.Action<Vector3> OnFallingCapVanished;
 
+    /// <summary>
+    /// Raised for every cap the moment it leaves the field, before it is handed over to physics.
+    /// This is the authoritative "a cap is out of the game" signal: counting registry membership is
+    /// not equivalent, because a stacked cap also leaves the registry while staying on the table.
+    /// A falling stack raises the event once per cap it consisted of.
+    /// </summary>
+    public event System.Action<Cap> OnCapLeftField;
+
     struct CapTrail
     {
         public Vector3 PreviousPosition;
@@ -215,7 +223,11 @@ public sealed class CapFieldBoundary : MonoBehaviour
         // A stack falls apart cap by cap, otherwise the caps on top would hang in the air.
         List<Cap> stack = cap.ReleaseStack();
         for (int i = 0; i < stack.Count; i++)
+        {
+            // Announced before the fall starts, while the cap is still intact and readable.
+            OnCapLeftField?.Invoke(stack[i]);
             FallingCap.Begin(stack[i], this, settings);
+        }
     }
 
     internal void ReportFallingCapVanished(Vector3 position) => OnFallingCapVanished?.Invoke(position);

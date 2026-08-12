@@ -29,8 +29,11 @@ public class Cap : MonoBehaviour
     public Vector2 GroundPosition { get; private set; }
     public bool IsHeads { get; private set; } = true;
     public bool IsBusy => _state != CapState.Idle;
-    public bool IsThrowable => !_hasLeftGame && _state == CapState.Idle && _stackBase == null;
-    public bool CanFlip => !_hasLeftGame && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
+    public bool IsThrowable => !_hasLeftGame && !_isParked && _state == CapState.Idle && _stackBase == null;
+    public bool CanFlip => !_hasLeftGame && !_isParked && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
+
+    /// <summary>True while the cap waits at a thrower's spawn point instead of standing on the board.</summary>
+    public bool IsParked => _isParked;
     public CapState CurrentState => _state;
     public int ActivationDepthPlusOne => _activationDepth + 1;
     public int StackCount => _stackAbove.Count + 1;
@@ -38,6 +41,7 @@ public class Cap : MonoBehaviour
 
     private bool _isImmutable;
     private bool _hasLeftGame;
+    private bool _isParked;
     private CapFlipEffect[] _flipEffects;
     internal CapFlipEffect[] FlipEffects => _flipEffects;
 
@@ -102,6 +106,7 @@ public class Cap : MonoBehaviour
         _isPeeling = false;
         _pendingLandedCallback = null;
         _hasLeftGame = false;
+        _isParked = false;
         WasPeelOff = false;
         _overrideMaterial = null;
         _overrideMaterialTimer = 0f;
@@ -126,6 +131,20 @@ public class Cap : MonoBehaviour
     }
 
     public void SetImmutable(bool value) => _isImmutable = value;
+
+    /// <summary>
+    /// Parks the cap at its thrower's spawn point: it is waiting to be thrown, not standing on the
+    /// board. A parked cap keeps whatever transform its thrower gives it, and chains and effects skip
+    /// it. Without this the resolver would pin it to the table like any other idle cap, because
+    /// ApplyVisuals derives an idle cap's position from GroundPosition at height zero.
+    /// </summary>
+    public void SetParked(bool value)
+    {
+        if (_isParked == value) return;
+
+        _isParked = value;
+        ApplyVisuals();
+    }
 
     public void SetOwner(CapOwner owner)
     {
@@ -261,6 +280,12 @@ public class Cap : MonoBehaviour
         _stackAbove.Clear();
         return released;
     }
+
+    /// <summary>
+    /// Caps riding on top of this one. They are unregistered from CapRegistry while stacked, so this
+    /// is the only way to see them — code that asks "what is still on the table" has to look here too.
+    /// </summary>
+    public IReadOnlyList<Cap> StackedAbove => _stackAbove;
 
     public Cap GetStackTop()
     {
@@ -508,8 +533,15 @@ public class Cap : MonoBehaviour
         }
 
         if (!IsFinite(pos)) return;
-        transform.position = pos;
-        if (IsFinite(rot)) transform.rotation = rot;
+
+        // A parked cap is positioned by its thrower, so the simulation must not touch its transform.
+        // Materials still update, which is what keeps a waiting cap showing the right face.
+        bool ownedByThrower = _isParked && _stackBase == null && _state == CapState.Idle;
+        if (!ownedByThrower)
+        {
+            transform.position = pos;
+            if (IsFinite(rot)) transform.rotation = rot;
+        }
 
         if (_meshRenderer != null && _resolvedHeadsMat != null && _resolvedTailsMat != null)
         {

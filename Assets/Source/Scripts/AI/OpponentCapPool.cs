@@ -91,7 +91,12 @@ public sealed class OpponentCapPool : MonoBehaviour
         Vector3 spawnPosition = SpawnPosition;
         Cap cap = CapFactory.Create(prefab, CapMath.ToXZ(spawnPosition), isHeads: true, _owner);
         if (cap != null)
+        {
             cap.transform.position = spawnPosition;
+
+            // Waiting, not in play: the resolver must leave its transform alone and chains must miss it.
+            cap.SetParked(true);
+        }
 
         return cap;
     }

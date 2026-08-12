@@ -109,7 +109,7 @@ public sealed class AiMoveSearch
             for (int i = 0; i < _candidates.Count; i++)
             {
                 Vector2 point = _candidates[i];
-                _simulation.RunThrow(point, force, playerThrowPower, ref result);
+                _simulation.RunThrow(point, force, playerThrowPower, settings.MaxChainDepth, ref result);
 
                 float score = Evaluate(result, settings);
                 _ranked.Add(new AiMove(cap, point, score, result));

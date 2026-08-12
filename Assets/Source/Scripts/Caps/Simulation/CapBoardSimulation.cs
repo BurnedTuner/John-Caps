@@ -200,8 +200,15 @@ public sealed class CapBoardSimulation
     /// Replays one throw against a fresh copy of the captured board and reports what it leaves behind.
     /// <paramref name="playerThrowPower"/> is the force the opponent can bring to bear next turn and
     /// only feeds the danger metric.
+    /// <paramref name="maxChainDepth"/> limits how far the chain is followed: 0 runs it to the end,
+    /// 1 stops after the caps the throw hits directly, and so on.
     /// </summary>
-    public void RunThrow(Vector2 landingPoint, float force, float playerThrowPower, ref CapSimResult result)
+    public void RunThrow(
+        Vector2 landingPoint,
+        float force,
+        float playerThrowPower,
+        int maxChainDepth,
+        ref CapSimResult result)
     {
         if (_tuning == null)
         {
@@ -238,15 +245,20 @@ public sealed class CapBoardSimulation
             });
         }
 
-        ResolveQueue();
+        ResolveQueue(maxChainDepth);
         Tally(playerThrowPower, ref result);
     }
 
-    void ResolveQueue()
+    void ResolveQueue(int maxChainDepth)
     {
         while (_queue.Count > 0)
         {
             int generation = _queue.Peek().Generation;
+
+            // Generation 0 is the throw itself, so a depth of 1 resolves only the direct hits. The
+            // caps launched by the last resolved wave have already moved and may already be off the
+            // field — they are simply not followed any further.
+            if (maxChainDepth > 0 && generation >= maxChainDepth) break;
 
             _wave.Clear();
             while (_queue.Count > 0 && _queue.Peek().Generation == generation)
@@ -423,12 +435,24 @@ public sealed class CapBoardSimulation
                 continue;
             }
 
+            // A stacked cap is neutralised, not removed: it still rests on the table and still counts
+            // towards its side, so burying the last enemy cap does not win the match. Its danger is
+            // zero because nothing can hit it while it rides another cap.
             if (_runtime[i].IsStacked)
             {
                 switch (owner)
                 {
-                    case CapOwner.Player: result.PlayerStacked++; break;
-                    case CapOwner.Opponent: result.OpponentStacked++; break;
+                    case CapOwner.Player:
+                        result.PlayerStacked++;
+                        result.PlayerRemaining++;
+                        break;
+                    case CapOwner.Opponent:
+                        result.OpponentStacked++;
+                        result.OpponentRemaining++;
+                        break;
+                    default:
+                        result.NeutralRemaining++;
+                        break;
                 }
                 continue;
             }
