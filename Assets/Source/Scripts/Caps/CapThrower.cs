@@ -17,6 +17,7 @@ public sealed class CapThrower : MonoBehaviour
     public TrajectoryPreview TrajectoryPreview;
     [SerializeField] private CapTurnResolver _turnResolver;
     [SerializeField] private GameManager _gameManager;
+    [SerializeField] private CapHand _hand;
 
     [Header("Ownership")]
     public CapOwner ThrowOwner = CapOwner.Player;
@@ -24,9 +25,16 @@ public sealed class CapThrower : MonoBehaviour
     [Header("Layers")]
     [Tooltip("Layer for the cap while held in hand (renders above everything).")]
     public int PlayerHandLayer = 0; // Set this in inspector to your "PlayerHand" layer index
+
+    [Header("Cancel drag")]
+    [Tooltip("If the cursor returns within this screen-pixel distance of the held cap's " +
+             "original hand position, the drag is cancelled (cap returns to hand).")]
+    [Min(10f)] public float CancelDragRadiusPixels = 120f;
+
     public State CurrentState { get; private set; } = State.Idle;
     public bool TurnInputEnabled { get; private set; } = true;
     public CapTurnResolver TurnResolver => _turnResolver;
+    public CapHand Hand => _hand;
 
     private const int AimOverlapBufferSize = 32;
 
@@ -39,7 +47,9 @@ public sealed class CapThrower : MonoBehaviour
     private Vector2 _aimPoint;
     private bool _isDirectAimAllowed;
     private float _throwForce;
-    private Cap _waitingCap;
+    private Cap _heldCap;
+    private Vector3 _heldCapOriginalPos;
+    private bool _cursorLeftHandArea;
 
     void Awake()
     {
@@ -59,7 +69,8 @@ public sealed class CapThrower : MonoBehaviour
         if (_turnResolver == null)
             Debug.LogError("[CapThrower] CapTurnResolver is not assigned or present in the scene.", this);
 
-        SpawnWaitingCap();
+        if (_hand == null)
+            Debug.LogError("[CapThrower] CapHand is not assigned or present in the scene.", this);
     }
 
     void OnDisable()
@@ -77,6 +88,9 @@ public sealed class CapThrower : MonoBehaviour
 
         if (_gameManager == null)
             _gameManager = FindFirstObjectByType<GameManager>();
+
+        if (_hand == null)
+            _hand = FindFirstObjectByType<CapHand>();
     }
 
     void Subscribe()
@@ -101,24 +115,6 @@ public sealed class CapThrower : MonoBehaviour
 
         if (_gameManager != null)
             _gameManager.OnBoardReset -= HandleBoardReset;
-    }
-
-    void SpawnWaitingCap()
-    {
-        if (_waitingCap != null || CapPrefab == null || _tuning == null) return;
-
-        Vector3 spawnPosition = _tuning.SpawnPosition;
-        _waitingCap = CapFactory.Create(
-            CapPrefab,
-            CapMath.ToXZ(spawnPosition),
-            isHeads: true,
-            ThrowOwner);
-
-        if (_waitingCap != null)
-        {
-            _waitingCap.transform.position = spawnPosition;
-            SetCapLayerRecursive(_waitingCap.gameObject, PlayerHandLayer);
-        }
     }
 
     void Update()
@@ -181,7 +177,7 @@ public sealed class CapThrower : MonoBehaviour
         if (!foundField) return false;
 
         point = fieldHit.point;
-        float capRadius = _waitingCap != null ? _waitingCap.Parameters.Radius : 0.5f;
+        float capRadius = _heldCap != null ? _heldCap.Parameters.Radius : 0.5f;
         isDirectAimAllowed = !OverlapsAimBlockingZone(point, capRadius);
         return true;
     }
@@ -208,19 +204,15 @@ public sealed class CapThrower : MonoBehaviour
         return false;
     }
 
-    bool IsCursorOverWaitingCap()
+    /// <summary>
+    /// Find the hand cap under the cursor. Returns the cap, or null if no cap
+    /// is within CapGrabRadiusPixels of the cursor.
+    /// </summary>
+    Cap GetHandCapUnderCursor()
     {
-        if (_waitingCap == null || PlayerCamera == null || Mouse.current == null) return false;
-
-        Vector3 screenPosition = PlayerCamera.WorldToScreenPoint(_waitingCap.transform.position);
-        if (screenPosition.z < 0f) return false;
-
-        Vector2 mousePosition = Mouse.current.position.ReadValue();
-        float screenDistance = Vector2.Distance(
-            mousePosition,
-            new Vector2(screenPosition.x, screenPosition.y));
-
-        return screenDistance <= _tuning.CapGrabRadiusPixels;
+        if (_hand == null || PlayerCamera == null || Mouse.current == null) return null;
+        Vector2 mousePos = Mouse.current.position.ReadValue();
+        return _hand.GetCapUnderScreenPosition(mousePos, PlayerCamera);
     }
 
     void UpdateIdle()
@@ -231,25 +223,27 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        if (_waitingCap != null && _tuning.SpawnPoint != null)
-        {
-            _waitingCap.transform.position = _tuning.SpawnPosition;
-        }
-
         if (ClickedOnUI() || Mouse.current == null) return;
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
-        if (!IsCursorOverWaitingCap()) return;
 
-        _aimPoint = CapMath.ToXZ(_tuning.SpawnPosition);
+        Cap cap = GetHandCapUnderCursor();
+        if (cap == null) return;
+
+        // Start dragging this cap. Capture its original hand position so we can
+        // keep it there (raise in place) instead of teleporting to spawn center.
+        _heldCap = cap;
+        _heldCapOriginalPos = cap.transform.position;
+        _cursorLeftHandArea = false;
+        _aimPoint = CapMath.ToXZ(_heldCapOriginalPos);
         _isDirectAimAllowed = false;
         TrajectoryPreview?.Hide();
-        _waitingCap?.BeginHeld(_tuning.SpawnPosition);
+        cap.BeginHeld(_heldCapOriginalPos);
         CurrentState = State.Aiming;
     }
 
     void UpdateAiming()
     {
-        if (Mouse.current == null)
+        if (Mouse.current == null || _heldCap == null)
         {
             CancelAiming();
             return;
@@ -262,12 +256,10 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        if (_waitingCap != null && _tuning.SpawnPoint != null)
-        {
-            _waitingCap.UpdateHeldBasePosition(_tuning.SpawnPosition);
-        }
+        // Keep the held cap at its original hand position (raise in place).
+        _heldCap.UpdateHeldBasePosition(_heldCapOriginalPos);
 
-        _waitingCap?.StepSimulation(Time.deltaTime, null);
+        _heldCap.StepSimulation(Time.deltaTime, null);
 
         if (TryGetFieldPoint(out Vector3 point, out bool isDirectAimAllowed))
         {
@@ -279,14 +271,45 @@ public sealed class CapThrower : MonoBehaviour
             _isDirectAimAllowed = false;
         }
 
+        // Track whether the cursor has left the hand area since the drag started.
+        // We only cancel-on-return if the cursor actually left first — otherwise
+        // grabbing a cap that's near the spawn point would instantly cancel.
+        if (!_cursorLeftHandArea && !IsCursorNearHand())
+            _cursorLeftHandArea = true;
+
+        // Cancel drag if the cursor left the hand area and then returned.
+        if (_cursorLeftHandArea && IsCursorNearHand())
+        {
+            CancelAiming();
+            return;
+        }
+
         UpdateAimPreview();
 
         if (!Mouse.current.leftButton.isPressed)
             Fire();
     }
 
+    /// <summary>
+    /// Returns true if the cursor is near the held cap's original hand position
+    /// (within CancelDragRadiusPixels in screen space). Uses the cap's original
+    /// position — not the spawn point — because hand caps sit offset behind the
+    /// spawn point, so the spawn point is the wrong reference center.
+    /// </summary>
+    bool IsCursorNearHand()
+    {
+        if (_heldCap == null || PlayerCamera == null || Mouse.current == null) return false;
+
+        Vector3 handScreenPos = PlayerCamera.WorldToScreenPoint(_heldCapOriginalPos);
+        if (handScreenPos.z < 0f) return false; // behind camera
+
+        Vector2 mousePos = Mouse.current.position.ReadValue();
+        float dist = Vector2.Distance(mousePos, new Vector2(handScreenPos.x, handScreenPos.y));
+        return dist <= CancelDragRadiusPixels;
+    }
+
     float GetDragDistance() =>
-        Vector2.Distance(CapMath.ToXZ(_tuning.SpawnPosition), _aimPoint);
+        Vector2.Distance(CapMath.ToXZ(_heldCapOriginalPos), _aimPoint);
 
     void UpdateAimPreview()
     {
@@ -298,8 +321,8 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        _throwForce = _waitingCap != null ? _waitingCap.Parameters.ThrowPower : 5f;
-        float slammerRadius = _waitingCap != null ? _waitingCap.Parameters.Radius : 0.5f;
+        _throwForce = _heldCap != null ? _heldCap.Parameters.ThrowPower : 5f;
+        float slammerRadius = _heldCap != null ? _heldCap.Parameters.Radius : 0.5f;
 
         CollectDirectHitPredictions(_aimPoint, _throwForce, slammerRadius, _directHitSeeds);
 
@@ -314,7 +337,7 @@ public sealed class CapThrower : MonoBehaviour
             _predictionResults);
 
         TrajectoryPreview?.Show(
-            _tuning.SpawnPosition,
+            _heldCapOriginalPos,
             _aimPoint,
             slammerRadius,
             _tuning,
@@ -329,12 +352,17 @@ public sealed class CapThrower : MonoBehaviour
     {
         TrajectoryPreview?.Hide();
 
-        if (_waitingCap != null)
+        if (_heldCap != null)
         {
-            _waitingCap.EndHeldToIdle();
-            _waitingCap.transform.position = _tuning.SpawnPosition;
+            _heldCap.EndHeldToIdle();
+            // Immediately override the position EndHeldToIdle→ApplyVisuals set
+            // (it snaps to GroundPosition, which is stale for hand caps). Setting
+            // it here avoids a one-frame snap to the wrong position before
+            // CapHand.LayoutHand runs next frame.
+            _heldCap.transform.position = _heldCapOriginalPos;
         }
 
+        _heldCap = null;
         _isDirectAimAllowed = false;
         CurrentState = State.Idle;
     }
@@ -361,44 +389,42 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        TrajectoryPreview?.Hide();
-
-        Vector3 startPosition = _tuning.SpawnPosition;
-        Vector3 landingPosition = CapMath.FromXZ(_aimPoint, 0f);
-        Cap cap = _waitingCap;
-
+        Cap cap = _heldCap;
         if (cap == null)
         {
-            cap = CapFactory.Create(
-                CapPrefab,
-                CapMath.ToXZ(startPosition),
-                isHeads: true,
-                ThrowOwner);
-        }
-
-        if (cap == null)
-        {
-            Debug.LogError("[CapThrower] Failed to create a cap for the throw.", this);
+            Debug.LogError("[CapThrower] No held cap to throw.", this);
             CurrentState = State.Idle;
             return;
         }
 
+        TrajectoryPreview?.Hide();
+
+        Vector3 startPosition = _heldCapOriginalPos;
+        Vector3 landingPosition = CapMath.FromXZ(_aimPoint, 0f);
+
         // Reset layer back to Default (0) so it interacts with the world normally
         SetCapLayerRecursive(cap.gameObject, 0);
+
+        // Make the cap interactable again (re-register in CapRegistry, clear immutable).
+        // CapHand made it non-interactable when it was instantiated into the hand.
+        if (_hand != null) _hand.ReleaseCapForThrow(cap);
 
         float force = cap.Parameters.ThrowPower;
         var request = new CapThrowRequest(cap, startPosition, landingPosition, force);
 
         if (_turnResolver.TryStartThrow(request))
         {
-            _waitingCap = null;
+            // The cap has left the hand — clear its slot. The hand will
+            // draw a new cap from the deck on HandleTurnFinished.
+            if (_hand != null) _hand.ClearSlot(cap);
+            _heldCap = null;
             CurrentState = State.WaitingForResolution;
             return;
         }
 
-        _waitingCap = cap;
-        _waitingCap.EndHeldToIdle();
-        _waitingCap.transform.position = startPosition;
+        // Throw failed (e.g. resolver busy). Cap stays in hand.
+        cap.EndHeldToIdle();
+        _heldCap = null;
         CurrentState = State.Idle;
     }
 
@@ -413,7 +439,7 @@ public sealed class CapThrower : MonoBehaviour
         for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
         {
             Cap cap = CapRegistry.AllCaps[i];
-            if (cap == _waitingCap) continue;
+            if (cap == _heldCap) continue;
             if (!cap.CanFlip) continue;
 
             float combinedRadius = slammerRadius + cap.Parameters.Radius;
@@ -459,7 +485,8 @@ public sealed class CapThrower : MonoBehaviour
         if (resolver != _turnResolver || CurrentState != State.WaitingForResolution) return;
 
         CurrentState = State.Idle;
-        SpawnWaitingCap();
+        // Draw a new cap from the deck to refill the empty hand slot.
+        if (_hand != null) _hand.DrawFromDeck();
     }
 
     void RequestBoardReset()
@@ -477,11 +504,12 @@ public sealed class CapThrower : MonoBehaviour
 
         TrajectoryPreview?.Hide();
         TrajectoryPreview?.ClearGhosts(); // destroy pooled ghosts — caps are being recreated
-        _waitingCap = null;
         _directHitSeeds.Clear();
         _predictionResults.Clear();
         _isDirectAimAllowed = false;
         CurrentState = State.Idle;
-        SpawnWaitingCap();
+
+        // Reset the hand: destroy all hand caps, restore deck from template, refill.
+        if (_hand != null) _hand.ResetHand();
     }
 }
