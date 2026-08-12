@@ -27,7 +27,7 @@ public class Cap : MonoBehaviour
     public float GetContactFactor(float normalizedOffset) => _parameters.GetContactFactor(normalizedOffset);
 
     public Vector2 GroundPosition { get; private set; }
-    public bool IsHeads { get; private set; } = true;
+    public bool IsHeads { get; internal set; } = true;
     public bool IsBusy => _state != CapState.Idle;
     public bool IsThrowable => !_hasLeftGame && _state == CapState.Idle && _stackBase == null;
     public bool CanFlip => !_hasLeftGame && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
@@ -35,6 +35,37 @@ public class Cap : MonoBehaviour
     public int ActivationDepthPlusOne => _activationDepth + 1;
     public int StackCount => _stackAbove.Count + 1;
     public bool WasPeelOff { get; set; }
+
+    /// <summary>True after the cap has left the playing field (fell off, handed to physics).</summary>
+    public bool HasLeftGame => _hasLeftGame;
+
+    /// <summary>Caps stacked on top of this one (bottom-to-top order). Empty if this cap is not a stack base.</summary>
+    public IReadOnlyList<Cap> StackAbove => _stackAbove;
+
+    /// <summary>The cap this cap is stacked on top of, or null if this cap is a stack base / not stacked.</summary>
+    public Cap StackBase => _stackBase;
+
+    /// <summary>
+    /// Walks up to the base of this cap's stack. Returns this if not part of a stack.
+    /// Useful for aim prediction when you only have a stack member reference.
+    /// </summary>
+    public Cap FindStackBase()
+    {
+        Cap head = this;
+        while (head._stackBase != null) head = head._stackBase;
+        return head;
+    }
+
+    /// <summary>
+    /// Returns the resolved material for the side this cap will show after landing.
+    /// Mirrors the material selection in ApplyVisuals() but for an arbitrary
+    /// landing side — used by the ghost-preview system.
+    /// </summary>
+    public Material GetLandingMaterial(bool willLandHeads)
+    {
+        if (_resolvedHeadsMat == null || _resolvedTailsMat == null) ResolveMaterials();
+        return willLandHeads ? _resolvedHeadsMat : _resolvedTailsMat;
+    }
 
     private bool _isImmutable;
     private bool _hasLeftGame;
@@ -616,4 +647,4 @@ public static class CapRegistry
     public static void Clear() => _allCaps.Clear();
 
     internal static void RemoveAt(int index) => _allCaps.RemoveAt(index);
-}
+}

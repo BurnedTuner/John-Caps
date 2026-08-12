@@ -303,16 +303,15 @@ public sealed class CapThrower : MonoBehaviour
 
         CollectDirectHitPredictions(_aimPoint, _throwForce, slammerRadius, _directHitSeeds);
 
+        // Use StackPeelOffPredictor: ignores PredictionDepth (shows full chain),
+        // respects MaximumChainLength, and peels off stacks the same way the real
+        // sim does — so ghost previews match what will actually happen.
         _predictionResults.Clear();
-        if (_tuning.PredictionDepth > 0)
-        {
-            ChainPredictor.Predict(
-                CapRegistry.AllCaps,
-                _directHitSeeds,
-                _tuning,
-                _tuning.PredictionDepth,
-                _predictionResults);
-        }
+        StackPeelOffPredictor.Predict(
+            CapRegistry.AllCaps,
+            _directHitSeeds,
+            _tuning,
+            _predictionResults);
 
         TrajectoryPreview?.Show(
             _tuning.SpawnPosition,
@@ -321,6 +320,9 @@ public sealed class CapThrower : MonoBehaviour
             _tuning,
             _directHitSeeds,
             _predictionResults);
+
+        // Add transparent ghost-cap previews on top of the line-based trajectory.
+        TrajectoryPreview?.ShowGhosts(_predictionResults);
     }
 
     void CancelAiming()
@@ -437,7 +439,8 @@ public sealed class CapThrower : MonoBehaviour
                 cap.GroundPosition,
                 direction,
                 inheritedForce,
-                travelDistance));
+                travelDistance,
+                willLandHeads: !cap.IsHeads));
         }
     }
 
@@ -473,6 +476,7 @@ public sealed class CapThrower : MonoBehaviour
         if (gameManager != _gameManager) return;
 
         TrajectoryPreview?.Hide();
+        TrajectoryPreview?.ClearGhosts(); // destroy pooled ghosts — caps are being recreated
         _waitingCap = null;
         _directHitSeeds.Clear();
         _predictionResults.Clear();

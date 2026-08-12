@@ -208,6 +208,9 @@ MonoBehaviour:
   SettleDelay: 0.22
   PredictionDepth: 0
   ArcSamples: 24
+  GhostMaterial: {fileID: 2100000, guid: c1d495c1c9de15d4fb976690c694e48e, type: 2}
+  GhostAlpha: 0.35
+  GhostYOffset: 0.02
 --- !u!1 &7235197627595899799
 GameObject:
   m_ObjectHideFlags: 0

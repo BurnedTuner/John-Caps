@@ -30,6 +30,9 @@ public class TrajectoryPreview : MonoBehaviour
     private GameObject _runtimeContainer;
     private static Material _defaultLineMat;
 
+    private GhostCapPool _ghostPool;
+
+
     LineRenderer CreateLineRenderer(string name, Color color)
     {
         var obj = new GameObject(name);
@@ -146,6 +149,39 @@ public class TrajectoryPreview : MonoBehaviour
         if (_landingCircle != null) _landingCircle.enabled = false;
         foreach (var line in _predictionLines) line.enabled = false;
         foreach (var circle in _endCircles) circle.enabled = false;
+        _ghostPool?.HideAll();
+    }
+
+    /// <summary>
+    /// Show transparent ghost-cap previews at each predicted cap's landing position.
+    /// Each ghost shows the side (heads/tails) the cap will land on, using a
+    /// transparent clone of the cap's own material. Adds on top of the existing
+    /// line-based trajectory preview — call after Show().
+    /// </summary>
+    public void ShowGhosts(IReadOnlyList<CapPrediction> predictions)
+    {
+        // Lazy-init in case Awake didn't run (e.g., component added at runtime).
+        // Always create a fresh runtime container as the parent — never use
+        // `transform` directly because the TrajectoryPreview GameObject might
+        // be a prefab instance whose transform Unity treats as persistent,
+        // which would cause Instantiate to refuse the parent.
+        if (_ghostPool == null)
+        {
+            if (_lineParent == null || !_lineParent.gameObject.scene.IsValid())
+            {
+                _runtimeContainer = new GameObject("TrajectoryPreview_Ghosts");
+                _lineParent = _runtimeContainer.transform;
+            }
+            _ghostPool = new GhostCapPool();
+            _ghostPool.Initialize(_lineParent);
+        }
+        _ghostPool.ShowGhosts(predictions);
+    }
+
+    /// <summary>Clear all pooled ghost GameObjects and cloned materials. Call on board reset.</summary>
+    public void ClearGhosts()
+    {
+        _ghostPool?.Clear();
     }
 
     void DrawPrediction(CapPrediction prediction, int lineIndex)
@@ -188,18 +224,20 @@ public class TrajectoryPreview : MonoBehaviour
 
     void Awake()
     {
-        bool isInScene = gameObject.scene.IsValid();
-        if (isInScene)
-        {
-            _lineParent = transform;
-        }
-        else
-        {
-            _runtimeContainer = new GameObject("TrajectoryPreview_Lines");
-            _lineParent = _runtimeContainer.transform;
-        }
+        // Always create a runtime container for ghost/line parents. Even when
+        // TrajectoryPreview is in a scene, its transform can be treated as
+        // "persistent" by Instantiate in prefab-instance scenarios, which would
+        // cause ghost creation to fail with "Cannot instantiate objects with a
+        // parent which is persistent".
+        _runtimeContainer = new GameObject("TrajectoryPreview_Runtime");
+        _runtimeContainer.transform.SetParent(transform, false);
+        _lineParent = _runtimeContainer.transform;
 
         EnsureLineRenderers();
+
+        _ghostPool = new GhostCapPool();
+        _ghostPool.Initialize(_lineParent);
+
         Hide();
     }
 
@@ -207,5 +245,6 @@ public class TrajectoryPreview : MonoBehaviour
     {
         if (_runtimeContainer != null)
             Destroy(_runtimeContainer);
+        _ghostPool?.Clear();
     }
 }

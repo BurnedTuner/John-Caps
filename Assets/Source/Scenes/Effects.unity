@@ -1588,6 +1588,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: GhostShader
+      value: 
+      objectReference: {fileID: 4800000, guid: 650dd9526735d5b46b79224bc6e94025, type: 3}
+    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: GhostMaterial
+      value: 
+      objectReference: {fileID: 2100000, guid: c1d495c1c9de15d4fb976690c694e48e, type: 2}
     - target: {fileID: 1800930899156425945, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: _fieldBoundary
       value: 

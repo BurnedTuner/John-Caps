@@ -48,6 +48,16 @@ public class CapTuning : MonoBehaviour
     [Range(0, 16)] public int PredictionDepth = 4;
     [Range(8, 64)] public int ArcSamples = 24;
 
+    [Header("Ghost Preview (stack aim preview)")]
+    [Tooltip("Pre-made transparent material used as the template for ghost cap previews. Create a material in your project with Surface=Transparent (URP) or Rendering Mode=Fade (Standard), then assign it here. The system clones this material at runtime and copies the texture from each cap's own material. Using a material asset (instead of a shader) guarantees the transparent shader variant is compiled into the build — URP strips transparent variants at build time if no material asset uses them.")]
+    public Material GhostMaterial;
+
+    [Tooltip("Alpha (0-1) applied to ghost cap materials. Lower = more transparent.")]
+    [Range(0f, 1f)] public float GhostAlpha = 0.35f;
+
+    [Tooltip("Small Y offset to lift ghosts above the table and avoid z-fighting.")]
+    [Min(0f)] public float GhostYOffset = 0.02f;
+
     void Awake() => Instance = this;
 
     public Vector3 SpawnPosition => SpawnPoint != null ? SpawnPoint.position : new Vector3(0f, 0f, -8f);

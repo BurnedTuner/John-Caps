@@ -11,8 +11,16 @@ public readonly struct CapPrediction
     public readonly Vector2 Direction;
     public readonly float Force;
     public readonly float TravelDistance;
+    public readonly bool WillLandHeads;
 
-    public CapPrediction(Cap cap, int depth, Vector2 startPosition, Vector2 direction, float force, float travelDistance)
+    public CapPrediction(
+        Cap cap,
+        int depth,
+        Vector2 startPosition,
+        Vector2 direction,
+        float force,
+        float travelDistance,
+        bool willLandHeads = false)
     {
         Cap = cap;
         Depth = depth;
@@ -20,10 +28,11 @@ public readonly struct CapPrediction
         Direction = direction;
         Force = force;
         TravelDistance = Mathf.Max(0f, travelDistance);
+        WillLandHeads = willLandHeads;
     }
 
     public Vector2 EndPosition => StartPosition + Direction * TravelDistance;
 
     public CapPrediction WithTravelDistance(float travelDistance) =>
-        new CapPrediction(Cap, Depth, StartPosition, Direction, Force, travelDistance);
+        new CapPrediction(Cap, Depth, StartPosition, Direction, Force, travelDistance, WillLandHeads);
 }
