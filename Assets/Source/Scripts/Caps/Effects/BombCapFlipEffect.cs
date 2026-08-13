@@ -73,6 +73,17 @@ public sealed class BombCapFlipEffect : CapFlipEffect
         };
     }
 
+    /// <summary>
+    /// Describes this effect as a radial launch for the AI move search.
+    /// Returns the explosion radius and force without needing a live cap.
+    /// </summary>
+    public override bool TryGetRadialLaunch(out float radius, out float force)
+    {
+        radius = _radius;
+        force = _force;
+        return _radius > 0f && _force > 0f;
+    }
+
     void OnValidate()
     {
         _radius = Mathf.Max(0.01f, _radius);

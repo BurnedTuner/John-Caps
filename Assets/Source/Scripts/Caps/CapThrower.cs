@@ -38,6 +38,12 @@ public sealed class CapThrower : MonoBehaviour
     public CapHand Hand => _hand;
 
     /// <summary>
+    /// The cap currently held/grabbed by the player. Returns null if no cap is held.
+    /// Used by TurnController to check if a player has a cap waiting.
+    /// </summary>
+    public Cap WaitingCap => _heldCap;
+
+    /// <summary>
     /// The world-space position from which throws originate. Calculated by
     /// projecting the held cap's screen position (as seen by the HandCamera)
     /// onto the PlayerCamera's near plane. This gives a world position that
@@ -426,6 +432,22 @@ public sealed class CapThrower : MonoBehaviour
             CancelAiming();
     }
 
+    /// <summary>
+    /// Abort the current turn — cancel aiming, hide preview, return to idle.
+    /// Called by TurnController when the turn is forcibly ended.
+    /// </summary>
+    public void AbortTurn()
+    {
+        if (CurrentState == State.Aiming)
+            CancelAiming();
+
+        TrajectoryPreview?.Hide();
+        _directHitSeeds.Clear();
+        _predictionResults.Clear();
+        _isDirectAimAllowed = false;
+        CurrentState = State.Idle;
+    }
+
     void Fire()
     {
         if (!_isDirectAimAllowed || GetDragDistance() < _tuning.MinimumDragDistance)
@@ -505,22 +527,20 @@ public sealed class CapThrower : MonoBehaviour
             if (cap == _heldCap) continue;
             if (!cap.CanFlip) continue;
 
-            float combinedRadius = slammerRadius + cap.Parameters.Radius;
-            float distance = Vector2.Distance(landingPoint, cap.GroundPosition);
-            if (distance > combinedRadius) continue;
+            if (!CapImpact.TryResolveHit(
+                    slammerRadius,
+                    CapImpactTarget.From(cap.Parameters),
+                    landingPoint,
+                    cap.GroundPosition,
+                    throwForce,
+                    _tuning,
+                    out Vector2 direction,
+                    out float inheritedForce,
+                    out float travelDistance,
+                    out bool stacks))
+                continue;
 
-            float normalizedOffset = combinedRadius > 0f
-                ? Mathf.Clamp01(distance / combinedRadius)
-                : 0f;
-            float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float inheritedForce = throwForce * cap.Parameters.PowerConversion;
-            float travelDistance = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
-            if (travelDistance < _tuning.MinimumFlightLength) continue;
-
-            Vector2 direction = CapMath.VerticalImpactDirection(
-                landingPoint,
-                cap.GroundPosition,
-                Vector2.up);
+            if (stacks) continue;
 
             results.Add(new CapPrediction(
                 cap,

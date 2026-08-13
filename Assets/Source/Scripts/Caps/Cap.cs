@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 public class Cap : MonoBehaviour
 {
-    public enum CapState { Idle, Held, Throwing, Flying, Pushed }
+    public enum CapState { Idle, Held, Throwing, Flying, Pushed, Parked }
 
     [Header("Identity")]
     [SerializeField] private int _stableId;
@@ -35,9 +35,10 @@ public class Cap : MonoBehaviour
 
     public Vector2 GroundPosition { get; private set; }
     public bool IsHeads { get; internal set; } = true;
-    public bool IsBusy => _state != CapState.Idle;
+    public bool IsBusy => _state != CapState.Idle && _state != CapState.Parked;
     public bool IsThrowable => !_hasLeftGame && _state == CapState.Idle && _stackBase == null;
     public bool CanFlip => !_hasLeftGame && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
+    public bool IsParked => _state == CapState.Parked;
     public CapState CurrentState => _state;
     public int ActivationDepthPlusOne => _activationDepth + 1;
     public int StackCount => _stackAbove.Count + 1;
@@ -47,7 +48,7 @@ public class Cap : MonoBehaviour
     public bool HasLeftGame => _hasLeftGame;
 
     /// <summary>Caps stacked on top of this one (bottom-to-top order). Empty if this cap is not a stack base.</summary>
-    public IReadOnlyList<Cap> StackAbove => _stackAbove;
+    public IReadOnlyList<Cap> StackedAbove => _stackAbove;
 
     /// <summary>The cap this cap is stacked on top of, or null if this cap is a stack base / not stacked.</summary>
     public Cap StackBase => _stackBase;
@@ -185,6 +186,32 @@ public class Cap : MonoBehaviour
     public void EndHeldToIdle()
     {
         _state = CapState.Idle;
+        ApplyVisuals();
+    }
+
+    /// <summary>
+    /// Moves the cap between standing on the board and waiting at its thrower's spawn point.
+    /// A parked cap keeps whatever transform its thrower gives it, and chains and effects skip it.
+    /// </summary>
+    public void SetParked(bool value)
+    {
+        if (value)
+        {
+            if (_state != CapState.Idle) return;
+            _state = CapState.Parked;
+        }
+        else
+        {
+            if (_state != CapState.Parked) return;
+            _state = CapState.Idle;
+        }
+        ApplyVisuals();
+    }
+
+    /// <summary>Puts an aimed cap back into its thrower's hands. Returns to Parked rather than Idle.</summary>
+    public void EndHeldToParked()
+    {
+        _state = CapState.Parked;
         ApplyVisuals();
     }
 
@@ -536,6 +563,10 @@ public class Cap : MonoBehaviour
     void ApplyVisuals()
     {
         if (_tuning == null) _tuning = CapTuning.Instance;
+
+        // A parked cap is positioned by its thrower — don't touch its transform.
+        if (_state == CapState.Parked && _stackBase == null)
+            return;
 
         // Base rotation: identity if heads-up, 180° X-flip if tails-up.
         // This is applied to ALL non-flying states so the 3D model shows the

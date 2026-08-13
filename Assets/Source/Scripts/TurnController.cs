@@ -1,0 +1,546 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>Details of an extra turn earned by knocking enemy caps off the field.</summary>
+public readonly struct ExtraTurnInfo
+{
+    /// <summary>The side that keeps the turn.</summary>
+    public readonly CapOwner Owner;
+
+    /// <summary>How many enemy caps this turn drove off the field.</summary>
+    public readonly int CapsKnockedOff;
+
+    /// <summary>Length of the streak the extra turn continues, the upcoming turn included.</summary>
+    public readonly int ConsecutiveTurns;
+
+    public ExtraTurnInfo(CapOwner owner, int capsKnockedOff, int consecutiveTurns)
+    {
+        Owner = owner;
+        CapsKnockedOff = capsKnockedOff;
+        ConsecutiveTurns = consecutiveTurns;
+    }
+}
+
+/// <summary>
+/// Decides whose turn it is.
+///
+/// The core rule: a side that drives at least one enemy cap off the field during its turn keeps the
+/// turn and throws again. Only a turn that knocks nothing off hands the board over. That makes a run
+/// of knockouts the strongest thing either side can do, and the AI evaluation is weighted to match.
+///
+/// Turn ownership is derived from the board, not from the throwers: cap counts by owner are taken
+/// when the turn starts and compared once CapTurnResolver reports the board has settled.
+/// Runs after the throwers so their waiting caps already exist when the first turn begins.
+/// </summary>
+[DefaultExecutionOrder(100)]
+[DisallowMultipleComponent]
+public sealed class TurnController : MonoBehaviour
+{
+    public enum TurnPhase { Idle, PlayerTurn, OpponentTurn, MatchOver }
+
+    struct FieldCounts
+    {
+        public int Player;
+        public int Opponent;
+        public int Neutral;
+    }
+
+    [Header("References")]
+    [SerializeField] private CapTurnResolver _turnResolver;
+    [SerializeField] private CapThrower _playerThrower;
+    [SerializeField] private AiCapThrower _opponentThrower;
+    [SerializeField] private CapFieldBoundary _fieldBoundary;
+    [SerializeField] private GameManager _gameManager;
+
+    [Header("Rules")]
+    [Tooltip("Who throws first.")]
+    [SerializeField] private CapOwner _firstTurn = CapOwner.Player;
+
+    [Tooltip("Whether knocking a neutral cap off also earns another turn. Off: only enemy caps count.")]
+    [SerializeField] private bool _neutralGrantsExtraTurn;
+
+    [Tooltip("End the match once a side has no caps left on the field. " +
+             "Turn it off for a sandbox that never ends.")]
+    [SerializeField] private bool _endMatchWhenSideWipedOut = true;
+
+    [Tooltip("A cap buried under another one still counts as being on the field, so covering a side's " +
+             "last cap does not beat it. Turn it off to treat a buried cap as out of the game.")]
+    [SerializeField] private bool _stackedCapsCountAsOnField = true;
+
+    [Tooltip("Cap on how many turns in a row one side may take. 0 = unlimited, which is the rule as written.")]
+    [Min(0)][SerializeField] private int _maxConsecutiveTurns;
+
+    [Tooltip("Seconds a turn may take to settle before the board is reset as a recovery.")]
+    [Min(1f)][SerializeField] private float _turnTimeout = 15f;
+
+    [Header("Debug")]
+    [SerializeField] private bool _logTurns;
+
+    public CapOwner CurrentTurn { get; private set; } = CapOwner.Neutral;
+    public TurnPhase CurrentPhase { get; private set; } = TurnPhase.Idle;
+
+    /// <summary>Winner once the match is over. Neutral while it is still running or if nobody could throw.</summary>
+    public CapOwner Winner { get; private set; } = CapOwner.Neutral;
+
+    /// <summary>How many turns in a row the current side has taken, this one included.</summary>
+    public int ConsecutiveTurns { get; private set; }
+
+    public event System.Action<CapOwner> TurnStarted;
+    public event System.Action<CapOwner> MatchFinished;
+
+    /// <summary>
+    /// Raised just before an extra turn starts, i.e. when a side knocked enemy caps off and therefore
+    /// keeps the board. Fires only once the extra turn is certain — after the streak limit and the
+    /// "can this side still throw" checks have had their say.
+    /// </summary>
+    public event System.Action<ExtraTurnInfo> ExtraTurnEarned;
+
+    // Knockouts are tallied from CapFieldBoundary.OnCapLeftField as they happen, not by diffing cap
+    // counts before and after the turn. A diff cannot tell a knockout from a cap that merely landed
+    // in a stack, because Cap.AddToStack also removes it from CapRegistry.
+    private int _playerCapsLostThisTurn;
+    private int _opponentCapsLostThisTurn;
+    private int _neutralCapsLostThisTurn;
+
+    private float _turnElapsed;
+    private bool _restartRequested;
+
+    // The opponent is started from Update rather than from inside BeginTurn. AiCapThrower can decide
+    // it cannot act and raise TurnSkipped straight away, which comes back here as another BeginTurn;
+    // going through Update keeps that from happening while the first one is still on the stack.
+    private bool _opponentTurnPending;
+
+    // A side can only be wiped out if it ever had caps on the field. Tracked as it happens rather than
+    // snapshotted at the first turn, because a side may start empty and put its first cap down later.
+    private bool _playerEverHadCaps;
+    private bool _opponentEverHadCaps;
+
+    void Awake()
+    {
+        ResolveReferences();
+    }
+
+    void OnEnable()
+    {
+        ResolveReferences();
+        Subscribe();
+    }
+
+    void Start()
+    {
+        ResolveReferences();
+
+        if (_turnResolver == null)
+            Debug.LogError("[TurnController] CapTurnResolver is not assigned or present in the scene.", this);
+
+        if (_fieldBoundary == null)
+        {
+            Debug.LogError("[TurnController] CapFieldBoundary is not assigned or present in the scene. " +
+                           "Without it no knockout can be detected, so turns will never repeat.", this);
+        }
+
+        BeginTurn(_firstTurn, isRepeat: false);
+    }
+
+    /// <summary>
+    /// The AI weighs a move by how the rules reward it, so it has to be told what they are. Anything
+    /// it is not told, it assumes, and then it plays a different game than the one on screen.
+    /// Refreshed every turn so that flipping a rule in the inspector mid-play takes effect.
+    /// </summary>
+    void PushRulesToOpponent() =>
+        _opponentThrower?.ApplyTurnRules(_neutralGrantsExtraTurn, _stackedCapsCountAsOnField);
+
+    void OnDisable()
+    {
+        Unsubscribe();
+    }
+
+    void ResolveReferences()
+    {
+        if (_turnResolver == null) _turnResolver = FindFirstObjectByType<CapTurnResolver>();
+        if (_playerThrower == null) _playerThrower = FindFirstObjectByType<CapThrower>();
+        if (_opponentThrower == null) _opponentThrower = FindFirstObjectByType<AiCapThrower>();
+        if (_fieldBoundary == null) _fieldBoundary = FindFirstObjectByType<CapFieldBoundary>();
+        if (_gameManager == null) _gameManager = FindFirstObjectByType<GameManager>();
+    }
+
+    void Subscribe()
+    {
+        if (_turnResolver != null)
+        {
+            _turnResolver.OnTurnFinished -= HandleTurnFinished;
+            _turnResolver.OnTurnFinished += HandleTurnFinished;
+        }
+
+        if (_gameManager != null)
+        {
+            _gameManager.OnBoardReset -= HandleBoardReset;
+            _gameManager.OnBoardReset += HandleBoardReset;
+        }
+
+        if (_opponentThrower != null)
+        {
+            _opponentThrower.TurnSkipped -= HandleOpponentSkipped;
+            _opponentThrower.TurnSkipped += HandleOpponentSkipped;
+        }
+
+        if (_fieldBoundary != null)
+        {
+            _fieldBoundary.OnCapLeftField -= HandleCapLeftField;
+            _fieldBoundary.OnCapLeftField += HandleCapLeftField;
+        }
+    }
+
+    void Unsubscribe()
+    {
+        if (_turnResolver != null)
+            _turnResolver.OnTurnFinished -= HandleTurnFinished;
+
+        if (_gameManager != null)
+            _gameManager.OnBoardReset -= HandleBoardReset;
+
+        if (_opponentThrower != null)
+            _opponentThrower.TurnSkipped -= HandleOpponentSkipped;
+
+        if (_fieldBoundary != null)
+            _fieldBoundary.OnCapLeftField -= HandleCapLeftField;
+    }
+
+    void Update()
+    {
+        // The restart is deferred out of the OnBoardReset callback so it does not depend on whether
+        // the throwers happened to be notified before or after this component.
+        if (_restartRequested)
+        {
+            _restartRequested = false;
+            _opponentTurnPending = false;
+            BeginTurn(_firstTurn, isRepeat: false);
+            return;
+        }
+
+        if (_opponentTurnPending)
+        {
+            _opponentTurnPending = false;
+            if (CurrentPhase == TurnPhase.OpponentTurn)
+                _opponentThrower?.BeginTurn();
+        }
+
+        UpdateWatchdog();
+    }
+
+    /// <summary>
+    /// Starts a turn for a side. <paramref name="isRepeat"/> marks the extra turn earned by a knockout;
+    /// <paramref name="capsKnockedOff"/> is how many enemy caps earned it, and both only travel as far
+    /// as the streak counter and the ExtraTurnEarned event.
+    /// </summary>
+    void BeginTurn(CapOwner owner, bool isRepeat, int capsKnockedOff = 0)
+    {
+        if (CurrentPhase == TurnPhase.MatchOver) return;
+
+        if (isRepeat && _maxConsecutiveTurns > 0 && ConsecutiveTurns >= _maxConsecutiveTurns)
+        {
+            owner = Other(owner);
+            isRepeat = false;
+        }
+
+        if (IsMatch)
+        {
+            // A side that has run out of caps to throw cannot come back, and letting the other one
+            // throw alone for the rest of the match is not a game — every turn would simply be passed
+            // back to it. What is standing on the table decides it instead.
+            if (!CanThrow(owner) || !CanThrow(Other(owner)))
+            {
+                FinishMatch(WinnerByCapCount());
+                return;
+            }
+        }
+        else if (!CanThrow(owner))
+        {
+            // Only one side is played at all, which is a sandbox rather than a match: the board simply
+            // goes to whoever is there to throw.
+            CapOwner other = Other(owner);
+            if (!CanThrow(other))
+            {
+                FinishMatch(CapOwner.Neutral);
+                return;
+            }
+
+            owner = other;
+            isRepeat = false;
+        }
+
+        PushRulesToOpponent();
+
+        ConsecutiveTurns = isRepeat ? ConsecutiveTurns + 1 : 1;
+        CurrentTurn = owner;
+        _turnElapsed = 0f;
+
+        _playerCapsLostThisTurn = 0;
+        _opponentCapsLostThisTurn = 0;
+        _neutralCapsLostThisTurn = 0;
+
+        // Marks both sides as being in the game so an empty board can be told from one not yet played on.
+        MarkSidesInPlay();
+
+        if (owner == CapOwner.Player)
+        {
+            CurrentPhase = TurnPhase.PlayerTurn;
+            _playerThrower?.SetTurnInputEnabled(true);
+        }
+        else
+        {
+            CurrentPhase = TurnPhase.OpponentTurn;
+            _playerThrower?.SetTurnInputEnabled(false);
+        }
+
+        if (_logTurns)
+            Debug.Log($"[TurnController] {owner} turn #{ConsecutiveTurns} in a row.", this);
+
+        // Announced before the turn itself, so a listener can explain why the board is not changing hands.
+        if (isRepeat)
+            ExtraTurnEarned?.Invoke(new ExtraTurnInfo(owner, capsKnockedOff, ConsecutiveTurns));
+
+        TurnStarted?.Invoke(owner);
+
+        // Deferred to Update rather than started here: AiCapThrower can refuse the turn synchronously,
+        // which lands back in BeginTurn through HandleOpponentSkipped.
+        _opponentTurnPending = owner == CapOwner.Opponent;
+    }
+
+    void HandleTurnFinished(CapTurnResolver resolver)
+    {
+        if (resolver != _turnResolver) return;
+        if (CurrentPhase != TurnPhase.PlayerTurn && CurrentPhase != TurnPhase.OpponentTurn) return;
+
+        FieldCounts counts = CountCapsOnField();
+
+        int enemyRemoved = CurrentTurn == CapOwner.Player
+            ? _opponentCapsLostThisTurn
+            : _playerCapsLostThisTurn;
+
+        if (_neutralGrantsExtraTurn)
+            enemyRemoved += _neutralCapsLostThisTurn;
+
+        if (TryFinishMatch(counts)) return;
+
+        bool keepsTurn = enemyRemoved > 0;
+        BeginTurn(keepsTurn ? CurrentTurn : Other(CurrentTurn), keepsTurn, enemyRemoved);
+    }
+
+    void HandleCapLeftField(Cap cap)
+    {
+        if (cap == null) return;
+
+        switch (cap.Owner)
+        {
+            case CapOwner.Player: _playerCapsLostThisTurn++; break;
+            case CapOwner.Opponent: _opponentCapsLostThisTurn++; break;
+            default: _neutralCapsLostThisTurn++; break;
+        }
+    }
+
+    void HandleOpponentSkipped(AiCapThrower thrower)
+    {
+        if (thrower != _opponentThrower || CurrentPhase != TurnPhase.OpponentTurn) return;
+
+        // The opponent cannot act, so the board never changes and there is no extra turn to earn.
+        BeginTurn(CapOwner.Player, isRepeat: false);
+    }
+
+    void HandleBoardReset(GameManager gameManager)
+    {
+        if (gameManager != _gameManager) return;
+
+        CurrentPhase = TurnPhase.Idle;
+        CurrentTurn = CapOwner.Neutral;
+        Winner = CapOwner.Neutral;
+        ConsecutiveTurns = 0;
+        _playerEverHadCaps = false;
+        _opponentEverHadCaps = false;
+        _playerCapsLostThisTurn = 0;
+        _opponentCapsLostThisTurn = 0;
+        _neutralCapsLostThisTurn = 0;
+        _turnElapsed = 0f;
+        _opponentTurnPending = false;
+        _restartRequested = true;
+    }
+
+    /// <summary>
+    /// Who is ahead on the table right now. Used when the match ends because a side has nothing left
+    /// to throw rather than because it was wiped out.
+    /// </summary>
+    CapOwner WinnerByCapCount()
+    {
+        FieldCounts counts = CountCapsOnField();
+
+        if (counts.Player > counts.Opponent) return CapOwner.Player;
+        if (counts.Opponent > counts.Player) return CapOwner.Opponent;
+        return CapOwner.Neutral;
+    }
+
+    bool TryFinishMatch(in FieldCounts counts)
+    {
+        if (!_endMatchWhenSideWipedOut) return false;
+
+        if (IsWipedOut(CapOwner.Player, counts.Player))
+        {
+            FinishMatch(CapOwner.Opponent);
+            return true;
+        }
+
+        if (IsWipedOut(CapOwner.Opponent, counts.Opponent))
+        {
+            FinishMatch(CapOwner.Player);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A side is beaten the moment its last cap leaves the field, whatever it still has in reserve.
+    /// The one exception is a side that has never put a cap down: it has not started, not lost, which
+    /// is what keeps a sandbox board of neutral caps from ending the match on the first throw.
+    /// </summary>
+    bool IsWipedOut(CapOwner owner, int capsOnField)
+    {
+        if (capsOnField > 0) return false;
+
+        return owner == CapOwner.Player ? _playerEverHadCaps : _opponentEverHadCaps;
+    }
+
+    void FinishMatch(CapOwner winner)
+    {
+        Winner = winner;
+        CurrentPhase = TurnPhase.MatchOver;
+        _playerThrower?.SetTurnInputEnabled(false);
+
+        Debug.Log($"[TurnController] Match over. Winner: {winner}. Press R to reset the board.", this);
+        MatchFinished?.Invoke(winner);
+    }
+
+    /// <summary>
+    /// Counts the caps standing on the field per owner. Caps waiting at a spawn point are registered
+    /// like any other but are not in play, so both throwers' waiting caps are skipped, and so is
+    /// anything sitting outside the field.
+    /// </summary>
+    FieldCounts CountCapsOnField()
+    {
+        var counts = new FieldCounts();
+
+        Cap playerWaiting = _playerThrower != null ? _playerThrower.WaitingCap : null;
+        Cap opponentWaiting = _opponentThrower != null ? _opponentThrower.WaitingCap : null;
+
+        IReadOnlyList<Cap> caps = CapRegistry.AllCaps;
+        for (int i = 0; i < caps.Count; i++)
+        {
+            Cap cap = caps[i];
+            if (cap == null || cap == playerWaiting || cap == opponentWaiting) continue;
+            if (cap.IsParked) continue;
+            if (_fieldBoundary != null && !_fieldBoundary.Supports(cap.GroundPosition, 0f)) continue;
+
+            Count(cap, ref counts);
+
+            // Caps riding in a stack are unregistered but still very much on the table, so by default
+            // a side whose last cap got covered has not lost.
+            if (!_stackedCapsCountAsOnField) continue;
+
+            IReadOnlyList<Cap> stacked = cap.StackedAbove;
+            for (int s = 0; s < stacked.Count; s++)
+                Count(stacked[s], ref counts);
+        }
+
+        _playerEverHadCaps |= counts.Player > 0;
+        _opponentEverHadCaps |= counts.Opponent > 0;
+
+        return counts;
+    }
+
+    /// <summary>
+    /// Runs the count purely for its side effect on _playerEverHadCaps / _opponentEverHadCaps, which
+    /// is what tells a side that has lost its last cap apart from one that has not played yet.
+    /// </summary>
+    void MarkSidesInPlay() => CountCapsOnField();
+
+    static void Count(Cap cap, ref FieldCounts counts)
+    {
+        if (cap == null) return;
+
+        switch (cap.Owner)
+        {
+            case CapOwner.Player: counts.Player++; break;
+            case CapOwner.Opponent: counts.Opponent++; break;
+            default: counts.Neutral++; break;
+        }
+    }
+
+    /// <summary>
+    /// True when both sides are actually played. A scene with only one thrower is a sandbox, and
+    /// running out of caps there must not be read as losing.
+    /// </summary>
+    bool IsMatch => _playerThrower != null && _opponentThrower != null;
+
+    bool CanThrow(CapOwner owner) => owner == CapOwner.Player
+        ? _playerThrower != null
+        : _opponentThrower != null && _opponentThrower.HasCapToThrow;
+
+    /// <summary>
+    /// Recovers from a turn that goes nowhere. Resetting the board is the one path that already puts
+    /// the resolver, both throwers and the registry back into a known state.
+    /// </summary>
+    void UpdateWatchdog()
+    {
+        if (CurrentPhase != TurnPhase.PlayerTurn && CurrentPhase != TurnPhase.OpponentTurn) return;
+
+        if (!IsTurnStalled())
+        {
+            _turnElapsed = 0f;
+            return;
+        }
+
+        _turnElapsed += Time.deltaTime;
+        if (_turnElapsed < _turnTimeout) return;
+
+        _turnElapsed = 0f;
+        Debug.LogWarning($"[TurnController] The {CurrentTurn} turn made no progress within " +
+                         $"{_turnTimeout} s. Recovering.", this);
+
+        if (_gameManager != null)
+        {
+            _gameManager.ResetBoard();
+            return;
+        }
+
+        // ResetSimulation puts the resolver back to idle without raising OnTurnFinished, so nobody
+        // else would ever pick the loop back up — the throwers and this controller have to be told.
+        _turnResolver?.ResetSimulation();
+        RestartTurnAfterRecovery();
+    }
+
+    /// <summary>
+    /// A turn is stalled when it is nobody's move to make: the resolver has been chewing on the same
+    /// throw for too long, or it is the opponent's turn and the opponent is not acting on it.
+    /// The player's turn is never stalled on its own — it waits for input, for as long as it likes.
+    /// </summary>
+    bool IsTurnStalled()
+    {
+        if (_turnResolver != null && _turnResolver.IsBusy) return true;
+        if (CurrentPhase != TurnPhase.OpponentTurn) return false;
+
+        return !_opponentTurnPending
+            && (_opponentThrower == null || _opponentThrower.CurrentState == AiCapThrower.State.Idle);
+    }
+
+    void RestartTurnAfterRecovery()
+    {
+        _playerThrower?.AbortTurn();
+        _opponentThrower?.AbortTurn();
+
+        _opponentTurnPending = false;
+        CurrentPhase = TurnPhase.Idle;
+        BeginTurn(CurrentTurn, isRepeat: false);
+    }
+
+    static CapOwner Other(CapOwner owner) =>
+        owner == CapOwner.Player ? CapOwner.Opponent : CapOwner.Player;
+}

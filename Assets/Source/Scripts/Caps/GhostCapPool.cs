@@ -48,7 +48,7 @@ public class GhostCapPool
     /// are hidden. Creates ghosts and transparent materials on demand (cached).
     /// Safe to call every frame.
     ///
-    /// Only caps that are part of a stack (StackBase != null OR StackAbove.Count > 0)
+    /// Only caps that are part of a stack (StackBase != null OR StackedAbove.Count > 0)
     /// get ghosts. Single caps only get the trajectory line + end circle.
     /// </summary>
     public void ShowGhosts(IReadOnlyList<CapPrediction> predictions)
@@ -68,9 +68,9 @@ public class GhostCapPool
 
             // Only show ghosts for caps that are part of a stack — either this cap
             // is stacked on top of another (StackBase != null) or it has caps
-            // stacked on top of it (StackAbove.Count > 0). Single caps (no stack)
+            // stacked on top of it (StackedAbove.Count > 0). Single caps (no stack)
             // only get the trajectory line + end circle, no ghost.
-            bool isStackCap = pred.Cap.StackBase != null || pred.Cap.StackAbove.Count > 0;
+            bool isStackCap = pred.Cap.StackBase != null || pred.Cap.StackedAbove.Count > 0;
             if (!isStackCap) continue;
 
             GameObject ghost = GetOrCreateGhost(pred.Cap);

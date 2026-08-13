@@ -90,10 +90,10 @@ public static class StackPeelOffPredictor
         Cap baseCap = cap.FindStackBase();
         Vector2 basePos = simPositions.TryGetValue(baseCap, out Vector2 p) ? p : baseCap.GroundPosition;
 
-        // Build the full stack bottom-to-top: [base, ...StackAbove]
-        // (StackAbove returns bottom-to-top per Cap.cs).
+        // Build the full stack bottom-to-top: [base, ...StackedAbove]
+        // (StackedAbove returns bottom-to-top per Cap.cs).
         var stack = new List<Cap> { baseCap };
-        IReadOnlyList<Cap> above = baseCap.StackAbove;
+        IReadOnlyList<Cap> above = baseCap.StackedAbove;
         for (int i = 0; i < above.Count; i++)
             stack.Add(above[i]);
 

@@ -62,17 +62,20 @@ public static class ChainPredictor
             if (!cap.CanFlip) continue;
             if (!positions.TryGetValue(cap, out Vector2 capPos)) continue;
 
-            float combined = slammerRadius + cap.Parameters.Radius;
-            float dist = Vector2.Distance(landingPos, capPos);
-            if (dist > combined) continue;
+            if (!CapImpact.TryResolveHit(
+                    slammerRadius,
+                    CapImpactTarget.From(cap.Parameters),
+                    landingPos,
+                    capPos,
+                    force,
+                    tuning,
+                    out Vector2 direction,
+                    out float transferForce,
+                    out float travel,
+                    out bool stacks))
+                continue;
 
-            float normalizedOffset = combined > 0f ? Mathf.Clamp01(dist / combined) : 0f;
-            float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float transferForce = force * cap.Parameters.PowerConversion;
-            float travel = transferForce * contactFactor * tuning.ForceToTravelDistance;
-            if (travel < tuning.MinimumFlightLength) continue;
-
-            Vector2 direction = CapMath.VerticalImpactDirection(landingPos, capPos, Vector2.up);
+            if (stacks) continue;
 
             results.Add(new CapPrediction(cap, depth, capPos, direction, transferForce, travel));
 

@@ -24,13 +24,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2205132263773953000}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: -0, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: -7.330001, z: 15}
+  m_LocalRotation: {x: -0.49999917, y: -0, z: -0, w: 0.86602587}
+  m_LocalPosition: {x: 0, y: -4.75, z: 10.34}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 408316241298384825}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -60, y: 0, z: 0}
 --- !u!1 &2424321975559345017
 GameObject:
   m_ObjectHideFlags: 0
@@ -475,6 +475,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3813d43b9bb32c14ea811898f80352cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  HeadsMaterial: {fileID: 0}
+  TailsMaterial: {fileID: 0}
   CapThickness: 0.05
   SpawnPoint: {fileID: 4105249724942728188}
   MinimumDragDistance: 0.5
@@ -894,10 +896,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Field: {fileID: 5179878750837385394}
   CapPrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-  AmbientCapPrefabs: []
-  InitialCapCount: 3
-  InitialPlayerCapCount: 0
-  InitialOpponentCapCount: 0
+  AmbientCapPrefabs:
+  - {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+  - {fileID: 8693585558862005274, guid: 21a3a79e2bc267242995580d2798209e, type: 3}
+  InitialCapCount: 6
+  InitialPlayerCapCount: 3
+  InitialOpponentCapCount: 3
   ScatterRadius: 4.5
   FieldMask:
     serializedVersion: 2
@@ -913,6 +917,7 @@ GameObject:
   m_Component:
   - component: {fileID: 323295386894909668}
   - component: {fileID: 5175839692357260753}
+  - component: {fileID: 1573795055034367174}
   m_Layer: 0
   m_Name: CapThrower
   m_TagString: Untagged
@@ -948,7 +953,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   PlayerCamera: {fileID: 3790606329344974558}
-  HandCamera: {fileID: 0}
+  HandCamera: {fileID: 3037818553459505959}
   FieldMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -960,6 +965,28 @@ MonoBehaviour:
   ThrowOwner: 1
   PlayerHandLayer: 3
   CancelDragRadiusPixels: 120
+--- !u!114 &1573795055034367174
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8040522906611828531}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 714484331e5560f4a8dcf452aa91fa3f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  DeckTemplate: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
+  HandCamera: {fileID: 3037818553459505959}
+  HandAnchor: {fileID: 4105249724942728188}
+  HandSize: 3
+  SlotSpacing: 3
+  HandDepth: 0
+  HandVerticalOffset: 0
+  CapGrabRadiusPixels: 80
+  Owner: 1
+  PlayerHandLayer: 3
 --- !u!1 &8820745022546498305
 GameObject:
   m_ObjectHideFlags: 0

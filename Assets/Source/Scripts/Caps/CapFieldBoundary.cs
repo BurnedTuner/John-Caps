@@ -29,6 +29,14 @@ public sealed class CapFieldBoundary : MonoBehaviour
     /// <summary>Raised when a falling cap drops below the vanish height and is removed.</summary>
     public event System.Action<Vector3> OnFallingCapVanished;
 
+    /// <summary>
+    /// Raised for every cap the moment it leaves the field, before it is handed over to physics.
+    /// This is the authoritative "a cap is out of the game" signal: counting registry membership is
+    /// not equivalent, because a stacked cap also leaves the registry while staying on the table.
+    /// A falling stack raises the event once per cap it consisted of.
+    /// </summary>
+    public event System.Action<Cap> OnCapLeftField;
+
     struct CapTrail
     {
         public Vector3 PreviousPosition;
@@ -80,6 +88,78 @@ public sealed class CapFieldBoundary : MonoBehaviour
         return Vector2.Distance(groundPoint, CapMath.ToXZ(nearestFieldPoint)) <= radius;
     }
 
+    /// <summary>
+    /// Distance in world units from a ground point to the nearest field edge.
+    /// Positive inside the field, zero outside it. A cap standing this far from the edge needs at
+    /// least this much travel to be knocked off, which is what makes the value useful as a measure
+    /// of how exposed the cap is.
+    /// </summary>
+    public float DistanceToEdge(Vector2 groundPoint) => DistanceToEdge(groundPoint, out _);
+
+    /// <summary>World-space bounds of the field, used to sweep candidate landing points.</summary>
+    public Bounds FieldWorldBounds => _fieldCollider != null ? _fieldCollider.bounds : new Bounds();
+
+    /// <summary>
+    /// As <see cref="DistanceToEdge(Vector2)"/>, and also reports the point on the edge that is
+    /// nearest. The direction towards it is the shortest way to shove a cap off the table.
+    /// </summary>
+    public float DistanceToEdge(Vector2 groundPoint, out Vector2 nearestEdgePoint)
+    {
+        nearestEdgePoint = groundPoint;
+        if (_fieldCollider == null) return 0f;
+
+        Transform fieldTransform = _fieldCollider.transform;
+        Vector3 fieldCenter = fieldTransform.TransformPoint(_fieldCollider.center);
+        Vector3 localPoint = fieldTransform.InverseTransformPoint(
+            new Vector3(groundPoint.x, fieldCenter.y, groundPoint.y));
+
+        Vector3 halfSize = _fieldCollider.size * 0.5f;
+        Vector3 center = _fieldCollider.center;
+        float minX = center.x - halfSize.x;
+        float maxX = center.x + halfSize.x;
+        float minZ = center.z - halfSize.z;
+        float maxZ = center.z + halfSize.z;
+
+        if (localPoint.x < minX || localPoint.x > maxX || localPoint.z < minZ || localPoint.z > maxZ)
+        {
+            float clampedX = Mathf.Clamp(localPoint.x, minX, maxX);
+            float clampedZ = Mathf.Clamp(localPoint.z, minZ, maxZ);
+            nearestEdgePoint = CapMath.ToXZ(fieldTransform.TransformPoint(
+                new Vector3(clampedX, localPoint.y, clampedZ)));
+            return 0f;
+        }
+
+        // Nearest point on the border: push the point out to whichever of the four sides is closest.
+        // The distance is then measured in world space so field scale and rotation are respected.
+        float toMinX = localPoint.x - minX;
+        float toMaxX = maxX - localPoint.x;
+        float toMinZ = localPoint.z - minZ;
+        float toMaxZ = maxZ - localPoint.z;
+
+        float nearest = toMinX;
+        Vector3 borderPoint = new Vector3(minX, localPoint.y, localPoint.z);
+
+        if (toMaxX < nearest)
+        {
+            nearest = toMaxX;
+            borderPoint = new Vector3(maxX, localPoint.y, localPoint.z);
+        }
+
+        if (toMinZ < nearest)
+        {
+            nearest = toMinZ;
+            borderPoint = new Vector3(localPoint.x, localPoint.y, minZ);
+        }
+
+        if (toMaxZ < nearest)
+        {
+            borderPoint = new Vector3(localPoint.x, localPoint.y, maxZ);
+        }
+
+        nearestEdgePoint = CapMath.ToXZ(fieldTransform.TransformPoint(borderPoint));
+        return Vector2.Distance(groundPoint, nearestEdgePoint);
+    }
+
     void LateUpdate()
     {
         if (_fieldCollider == null || !_fieldCollider.enabled) return;
@@ -95,6 +175,11 @@ public sealed class CapFieldBoundary : MonoBehaviour
                 CapRegistry.RemoveAt(i);
                 continue;
             }
+
+            // A parked cap waits at a thrower's spawn point rather than standing on the field, and its
+            // GroundPosition is not even kept in sync with where it is drawn — so it must not be judged
+            // by it. Said outright instead of relying on such a cap never having reached the field.
+            if (cap.IsParked) continue;
 
             _trails.TryGetValue(cap, out CapTrail trail);
             Vector3 currentPosition = cap.transform.position;
@@ -143,7 +228,11 @@ public sealed class CapFieldBoundary : MonoBehaviour
         // A stack falls apart cap by cap, otherwise the caps on top would hang in the air.
         List<Cap> stack = cap.ReleaseStack();
         for (int i = 0; i < stack.Count; i++)
+        {
+            // Announced before the fall starts, while the cap is still intact and readable.
+            OnCapLeftField?.Invoke(stack[i]);
             FallingCap.Begin(stack[i], this, settings);
+        }
     }
 
     internal void ReportFallingCapVanished(Vector3 position) => OnFallingCapVanished?.Invoke(position);

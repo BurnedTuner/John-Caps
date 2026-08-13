@@ -253,10 +253,13 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     {
         if (source == null || target == null || _tuning == null) return false;
 
-        float force = rawForce * target.Parameters.PowerConversion;
-        float travelDistance = force * _tuning.ForceToTravelDistance;
-        if (!float.IsFinite(force) || !float.IsFinite(travelDistance)) return false;
-        if (travelDistance < _tuning.MinimumFlightLength) return false;
+        if (!CapImpact.TryResolveLaunch(
+                CapImpactTarget.From(target.Parameters),
+                rawForce,
+                _tuning,
+                out float force,
+                out float travelDistance))
+            return false;
 
         return TryActivateCap(
             target,
@@ -280,23 +283,20 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             Cap cap = CapRegistry.AllCaps[i];
             if (cap == landedCap || !cap.CanFlip) continue;
 
-            float combinedRadius = slammerRadius + cap.Parameters.Radius;
-            float distance = Vector2.Distance(landingPosition, cap.GroundPosition);
-            if (distance > combinedRadius) continue;
+            if (!CapImpact.TryResolveHit(
+                    slammerRadius,
+                    CapImpactTarget.From(cap.Parameters),
+                    landingPosition,
+                    cap.GroundPosition,
+                    landingForce,
+                    _tuning,
+                    out Vector2 direction,
+                    out float inheritedForce,
+                    out float travelDistance,
+                    out bool stacks))
+                continue;
 
-            float normalizedOffset = combinedRadius > 0f
-                ? Mathf.Clamp01(distance / combinedRadius)
-                : 0f;
-            float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float inheritedForce = landingForce * cap.Parameters.PowerConversion;
-            float travelDistance = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
-
-            Vector2 direction = CapMath.VerticalImpactDirection(
-                landingPosition,
-                cap.GroundPosition,
-                Vector2.up);
-
-            if (travelDistance < _tuning.MinimumFlightLength)
+            if (stacks)
             {
                 _stackTargets.Add(cap);
                 continue;
