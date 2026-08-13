@@ -15,7 +15,7 @@ public sealed class AiCapThrower : MonoBehaviour
     [SerializeField] private CapTurnResolver _turnResolver;
     [SerializeField] private CapFieldBoundary _fieldBoundary;
     [SerializeField] private OpponentCapPool _pool;
-    [Tooltip("The player's thrower. Used to skip its waiting cap and to read its throw power.")]
+    [Tooltip("The player's thrower. Used to read its throw power for the danger metric.")]
     [SerializeField] private CapThrower _playerThrower;
     [SerializeField] private GameManager _gameManager;
 
@@ -24,6 +24,12 @@ public sealed class AiCapThrower : MonoBehaviour
     [Min(0f)][SerializeField] private float _thinkDelay = 0.6f;
 
     [SerializeField] private AiSearchSettings _search = new();
+
+    [Header("Debug")]
+    [Tooltip("After every AI turn, recount the board and compare it with what the search predicted. " +
+             "CapBoardSimulation is a hand-written copy of the throw rules, and this is the only thing " +
+             "that notices when it drifts away from CapTurnResolver.")]
+    [SerializeField] private bool _verifyPrediction;
 
     public State CurrentState { get; private set; } = State.Idle;
 
@@ -44,6 +50,9 @@ public sealed class AiCapThrower : MonoBehaviour
     private float _thinkTimer;
     private AiMove _lastMove;
     private bool _hasLastMove;
+    private string _lastSkipReason;
+
+    private CapBoardSimulation _predictionCheck;
 
     void Awake()
     {
@@ -77,6 +86,18 @@ public sealed class AiCapThrower : MonoBehaviour
     void OnDisable()
     {
         Unsubscribe();
+    }
+
+    /// <summary>
+    /// Hands the search the rules the match is actually being played by. TurnController owns them, and
+    /// a search that optimises a different rulebook picks the wrong move — see AiSearchSettings.
+    /// </summary>
+    public void ApplyTurnRules(bool neutralGrantsExtraTurn, bool stackedCapsCountAsOnField)
+    {
+        if (_search == null) return;
+
+        _search.NeutralGrantsExtraTurn = neutralGrantsExtraTurn;
+        _search.StackedCapsCountAsOnField = stackedCapsCountAsOnField;
     }
 
     void ResolveReferences()
@@ -117,13 +138,20 @@ public sealed class AiCapThrower : MonoBehaviour
     /// <summary>Starts the opponent's turn. Raises TurnSkipped instead when there is nothing to throw.</summary>
     public void BeginTurn()
     {
-        if (CurrentState != State.Idle) return;
+        // Passing the turn back is the only safe answer here. Returning quietly would leave the turn
+        // controller waiting for a throw that is never coming, with the resolver idle and its watchdog
+        // therefore never counting — the match would simply stop.
+        if (CurrentState != State.Idle)
+        {
+            SkipTurn($"a turn started while the previous one was still in {CurrentState}");
+            return;
+        }
 
         EnsureWaitingCap();
 
         if (_waitingCap == null)
         {
-            TurnSkipped?.Invoke(this);
+            SkipTurn("the deck is empty");
             return;
         }
 
@@ -131,11 +159,25 @@ public sealed class AiCapThrower : MonoBehaviour
         CurrentState = State.Thinking;
     }
 
+    /// <summary>
+    /// Drops whatever the opponent was in the middle of, so a new turn can be started. Used by
+    /// TurnController's watchdog; the cap already taken out of the deck is not given back, because
+    /// the throw it was taken for may well have happened.
+    /// </summary>
+    public void AbortTurn()
+    {
+        _hasLastMove = false;
+        _lastSkipReason = null;
+        CurrentState = State.Idle;
+    }
+
     void Update()
     {
         if (CurrentState != State.Thinking) return;
 
-        _thinkTimer -= Time.deltaTime;
+        // Unscaled, because ImpactFeedback drives Time.timeScale for its hit-stop and the opponent
+        // should not appear to hesitate longer just because the previous throw landed hard.
+        _thinkTimer -= Time.unscaledDeltaTime;
         if (_thinkTimer > 0f) return;
 
         Throw();
@@ -154,14 +196,11 @@ public sealed class AiCapThrower : MonoBehaviour
         _candidateCaps.Clear();
         _candidateCaps.Add(_waitingCap);
 
-        Cap playerWaitingCap = _playerThrower != null ? _playerThrower.WaitingCap : null;
-
         bool found = _moveSearch.TryFindBestMove(
             _tuning,
             _fieldBoundary,
             _search,
             _candidateCaps,
-            playerWaitingCap,
             ResolvePlayerThrowPower(),
             out AiMove move);
 
@@ -183,7 +222,11 @@ public sealed class AiCapThrower : MonoBehaviour
 
         if (!_turnResolver.TryStartThrow(request))
         {
+            // Put the cap back exactly as it was: leaving parking already snapped its transform down
+            // to the ground plane, and parking again does not undo that on its own.
             move.Cap.SetParked(true);
+            move.Cap.transform.position = _pool.SpawnPosition;
+            _hasLastMove = false;
             SkipTurn("CapTurnResolver refused the throw");
             return;
         }
@@ -195,7 +238,14 @@ public sealed class AiCapThrower : MonoBehaviour
 
     void SkipTurn(string reason)
     {
-        Debug.LogWarning($"[AiCapThrower] Skipping the turn: {reason}.", this);
+        // Only the first of a run of identical skips is worth a line in the console: a side that
+        // cannot act usually cannot act next turn either.
+        if (reason != _lastSkipReason)
+        {
+            _lastSkipReason = reason;
+            Debug.LogWarning($"[AiCapThrower] Skipping the turn: {reason}.", this);
+        }
+
         CurrentState = State.Idle;
         TurnSkipped?.Invoke(this);
     }
@@ -224,7 +274,54 @@ public sealed class AiCapThrower : MonoBehaviour
     void HandleTurnFinished(CapTurnResolver resolver)
     {
         if (resolver != _turnResolver || CurrentState != State.WaitingForResolution) return;
+
         CurrentState = State.Idle;
+        _lastSkipReason = null;
+
+        if (_verifyPrediction && _hasLastMove)
+            VerifyPrediction();
+
+        _hasLastMove = false;
+    }
+
+    /// <summary>
+    /// Compares the board the search promised against the one the engine actually produced.
+    /// A mismatch means CapBoardSimulation and CapTurnResolver no longer agree on the rules, which is
+    /// otherwise completely silent — the AI just starts playing badly for no visible reason.
+    /// </summary>
+    void VerifyPrediction()
+    {
+        if (_tuning == null) return;
+
+        _predictionCheck ??= new CapBoardSimulation();
+
+        var actual = new CapSimResult();
+        _predictionCheck.CaptureAndTally(
+            _tuning,
+            _fieldBoundary,
+            CapRegistry.AllCaps,
+            _search.StackedCapsCountAsOnField,
+            ResolvePlayerThrowPower(),
+            ref actual);
+
+        CapSimResult predicted = _lastMove.Result;
+
+        if (predicted.PlayerRemaining == actual.PlayerRemaining
+            && predicted.OpponentRemaining == actual.OpponentRemaining
+            && predicted.NeutralRemaining == actual.NeutralRemaining
+            && predicted.PlayerStacked == actual.PlayerStacked
+            && predicted.OpponentStacked == actual.OpponentStacked)
+            return;
+
+        Debug.LogWarning(
+            $"[AiCapThrower] The simulation and the engine disagree about the throw at " +
+            $"{_lastMove.LandingPoint}.\n" +
+            $"  predicted: player {predicted.PlayerRemaining} (stacked {predicted.PlayerStacked}), " +
+            $"opponent {predicted.OpponentRemaining} (stacked {predicted.OpponentStacked}), " +
+            $"neutral {predicted.NeutralRemaining}\n" +
+            $"  actual:    player {actual.PlayerRemaining} (stacked {actual.PlayerStacked}), " +
+            $"opponent {actual.OpponentRemaining} (stacked {actual.OpponentStacked}), " +
+            $"neutral {actual.NeutralRemaining}", this);
     }
 
     void HandleBoardReset(GameManager gameManager)
@@ -234,6 +331,7 @@ public sealed class AiCapThrower : MonoBehaviour
         // ResetBoard destroys every registered cap, the waiting one included.
         _waitingCap = null;
         _hasLastMove = false;
+        _lastSkipReason = null;
         CurrentState = State.Idle;
         _pool?.Rebuild();
     }

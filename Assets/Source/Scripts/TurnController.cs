@@ -63,6 +63,10 @@ public sealed class TurnController : MonoBehaviour
              "Turn it off for a sandbox that never ends.")]
     [SerializeField] private bool _endMatchWhenSideWipedOut = true;
 
+    [Tooltip("A cap buried under another one still counts as being on the field, so covering a side's " +
+             "last cap does not beat it. Turn it off to treat a buried cap as out of the game.")]
+    [SerializeField] private bool _stackedCapsCountAsOnField = true;
+
     [Tooltip("Cap on how many turns in a row one side may take. 0 = unlimited, which is the rule as written.")]
     [Min(0)][SerializeField] private int _maxConsecutiveTurns;
 
@@ -101,6 +105,11 @@ public sealed class TurnController : MonoBehaviour
     private float _turnElapsed;
     private bool _restartRequested;
 
+    // The opponent is started from Update rather than from inside BeginTurn. AiCapThrower can decide
+    // it cannot act and raise TurnSkipped straight away, which comes back here as another BeginTurn;
+    // going through Update keeps that from happening while the first one is still on the stack.
+    private bool _opponentTurnPending;
+
     // A side can only be wiped out if it ever had caps on the field. Tracked as it happens rather than
     // snapshotted at the first turn, because a side may start empty and put its first cap down later.
     private bool _playerEverHadCaps;
@@ -132,6 +141,14 @@ public sealed class TurnController : MonoBehaviour
 
         BeginTurn(_firstTurn, isRepeat: false);
     }
+
+    /// <summary>
+    /// The AI weighs a move by how the rules reward it, so it has to be told what they are. Anything
+    /// it is not told, it assumes, and then it plays a different game than the one on screen.
+    /// Refreshed every turn so that flipping a rule in the inspector mid-play takes effect.
+    /// </summary>
+    void PushRulesToOpponent() =>
+        _opponentThrower?.ApplyTurnRules(_neutralGrantsExtraTurn, _stackedCapsCountAsOnField);
 
     void OnDisable()
     {
@@ -196,8 +213,16 @@ public sealed class TurnController : MonoBehaviour
         if (_restartRequested)
         {
             _restartRequested = false;
+            _opponentTurnPending = false;
             BeginTurn(_firstTurn, isRepeat: false);
             return;
+        }
+
+        if (_opponentTurnPending)
+        {
+            _opponentTurnPending = false;
+            if (CurrentPhase == TurnPhase.OpponentTurn)
+                _opponentThrower?.BeginTurn();
         }
 
         UpdateWatchdog();
@@ -218,8 +243,21 @@ public sealed class TurnController : MonoBehaviour
             isRepeat = false;
         }
 
-        if (!CanThrow(owner))
+        if (IsMatch)
         {
+            // A side that has run out of caps to throw cannot come back, and letting the other one
+            // throw alone for the rest of the match is not a game — every turn would simply be passed
+            // back to it. What is standing on the table decides it instead.
+            if (!CanThrow(owner) || !CanThrow(Other(owner)))
+            {
+                FinishMatch(WinnerByCapCount());
+                return;
+            }
+        }
+        else if (!CanThrow(owner))
+        {
+            // Only one side is played at all, which is a sandbox rather than a match: the board simply
+            // goes to whoever is there to throw.
             CapOwner other = Other(owner);
             if (!CanThrow(other))
             {
@@ -231,6 +269,8 @@ public sealed class TurnController : MonoBehaviour
             isRepeat = false;
         }
 
+        PushRulesToOpponent();
+
         ConsecutiveTurns = isRepeat ? ConsecutiveTurns + 1 : 1;
         CurrentTurn = owner;
         _turnElapsed = 0f;
@@ -240,7 +280,7 @@ public sealed class TurnController : MonoBehaviour
         _neutralCapsLostThisTurn = 0;
 
         // Marks both sides as being in the game so an empty board can be told from one not yet played on.
-        CountCapsOnField();
+        MarkSidesInPlay();
 
         if (owner == CapOwner.Player)
         {
@@ -262,9 +302,9 @@ public sealed class TurnController : MonoBehaviour
 
         TurnStarted?.Invoke(owner);
 
-        // Started last so a listener sees a consistent state, and so an immediate skip unwinds cleanly.
-        if (owner == CapOwner.Opponent)
-            _opponentThrower?.BeginTurn();
+        // Deferred to Update rather than started here: AiCapThrower can refuse the turn synchronously,
+        // which lands back in BeginTurn through HandleOpponentSkipped.
+        _opponentTurnPending = owner == CapOwner.Opponent;
     }
 
     void HandleTurnFinished(CapTurnResolver resolver)
@@ -321,7 +361,21 @@ public sealed class TurnController : MonoBehaviour
         _opponentCapsLostThisTurn = 0;
         _neutralCapsLostThisTurn = 0;
         _turnElapsed = 0f;
+        _opponentTurnPending = false;
         _restartRequested = true;
+    }
+
+    /// <summary>
+    /// Who is ahead on the table right now. Used when the match ends because a side has nothing left
+    /// to throw rather than because it was wiped out.
+    /// </summary>
+    CapOwner WinnerByCapCount()
+    {
+        FieldCounts counts = CountCapsOnField();
+
+        if (counts.Player > counts.Opponent) return CapOwner.Player;
+        if (counts.Opponent > counts.Player) return CapOwner.Opponent;
+        return CapOwner.Neutral;
     }
 
     bool TryFinishMatch(in FieldCounts counts)
@@ -387,8 +441,10 @@ public sealed class TurnController : MonoBehaviour
 
             Count(cap, ref counts);
 
-            // Caps riding in a stack are unregistered but still very much on the table, so a side
-            // whose last cap got covered has not lost.
+            // Caps riding in a stack are unregistered but still very much on the table, so by default
+            // a side whose last cap got covered has not lost.
+            if (!_stackedCapsCountAsOnField) continue;
+
             IReadOnlyList<Cap> stacked = cap.StackedAbove;
             for (int s = 0; s < stacked.Count; s++)
                 Count(stacked[s], ref counts);
@@ -399,6 +455,12 @@ public sealed class TurnController : MonoBehaviour
 
         return counts;
     }
+
+    /// <summary>
+    /// Runs the count purely for its side effect on _playerEverHadCaps / _opponentEverHadCaps, which
+    /// is what tells a side that has lost its last cap apart from one that has not played yet.
+    /// </summary>
+    void MarkSidesInPlay() => CountCapsOnField();
 
     static void Count(Cap cap, ref FieldCounts counts)
     {
@@ -412,19 +474,25 @@ public sealed class TurnController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// True when both sides are actually played. A scene with only one thrower is a sandbox, and
+    /// running out of caps there must not be read as losing.
+    /// </summary>
+    bool IsMatch => _playerThrower != null && _opponentThrower != null;
+
     bool CanThrow(CapOwner owner) => owner == CapOwner.Player
         ? _playerThrower != null
         : _opponentThrower != null && _opponentThrower.HasCapToThrow;
 
     /// <summary>
-    /// Recovers from a turn that never settles. Resetting the board is the one path that already puts
+    /// Recovers from a turn that goes nowhere. Resetting the board is the one path that already puts
     /// the resolver, both throwers and the registry back into a known state.
     /// </summary>
     void UpdateWatchdog()
     {
         if (CurrentPhase != TurnPhase.PlayerTurn && CurrentPhase != TurnPhase.OpponentTurn) return;
 
-        if (_turnResolver == null || !_turnResolver.IsBusy)
+        if (!IsTurnStalled())
         {
             _turnElapsed = 0f;
             return;
@@ -434,13 +502,43 @@ public sealed class TurnController : MonoBehaviour
         if (_turnElapsed < _turnTimeout) return;
 
         _turnElapsed = 0f;
-        Debug.LogWarning($"[TurnController] The {CurrentTurn} turn did not settle within " +
-                         $"{_turnTimeout} s. Resetting the board.", this);
+        Debug.LogWarning($"[TurnController] The {CurrentTurn} turn made no progress within " +
+                         $"{_turnTimeout} s. Recovering.", this);
 
         if (_gameManager != null)
+        {
             _gameManager.ResetBoard();
-        else
-            _turnResolver.ResetSimulation();
+            return;
+        }
+
+        // ResetSimulation puts the resolver back to idle without raising OnTurnFinished, so nobody
+        // else would ever pick the loop back up — the throwers and this controller have to be told.
+        _turnResolver?.ResetSimulation();
+        RestartTurnAfterRecovery();
+    }
+
+    /// <summary>
+    /// A turn is stalled when it is nobody's move to make: the resolver has been chewing on the same
+    /// throw for too long, or it is the opponent's turn and the opponent is not acting on it.
+    /// The player's turn is never stalled on its own — it waits for input, for as long as it likes.
+    /// </summary>
+    bool IsTurnStalled()
+    {
+        if (_turnResolver != null && _turnResolver.IsBusy) return true;
+        if (CurrentPhase != TurnPhase.OpponentTurn) return false;
+
+        return !_opponentTurnPending
+            && (_opponentThrower == null || _opponentThrower.CurrentState == AiCapThrower.State.Idle);
+    }
+
+    void RestartTurnAfterRecovery()
+    {
+        _playerThrower?.AbortTurn();
+        _opponentThrower?.AbortTurn();
+
+        _opponentTurnPending = false;
+        CurrentPhase = TurnPhase.Idle;
+        BeginTurn(CurrentTurn, isRepeat: false);
     }
 
     static CapOwner Other(CapOwner owner) =>

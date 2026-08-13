@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// Outcome of simulating a single throw on a captured board.
 /// Removed = the cap ended up off the field. Stacked = the cap landed too softly and was absorbed
-/// into another one, which the engine treats as leaving the registry.
+/// into another one, or it was already riding one when the board was captured.
 /// Danger is the summed exposure of the caps still standing (see CapBoardSimulation.ComputeDanger).
 /// </summary>
 public struct CapSimResult
@@ -32,20 +32,24 @@ public struct CapSimResult
 /// The board is captured once per turn into flat arrays, then RunThrow replays a candidate throw
 /// against a scratch copy. Capture/RunThrow allocate nothing once the arrays are large enough.
 ///
-/// The formulas here MUST stay identical to CapTurnResolver.ResolveLanding and
-/// CapEffectResolver.ExecuteRadialLaunch — those are the authority, this is the mirror.
+/// The impact formulas themselves live in CapImpact and are shared with CapTurnResolver, which is
+/// what keeps this mirror from drifting away from the engine it mirrors. Everything below is about
+/// ordering and bookkeeping, not about the feel of a hit.
 ///
 /// Modelled faithfully:
-/// - the impact formula (combined radius, contact factor, power conversion, minimum flight length);
 /// - chain propagation wave by wave, matching the engine's ChainContactDelay ordering;
 /// - caps leaving the field: they stop being valid targets but their own queued landing still resolves,
 ///   exactly like the engine, which unregisters the cap yet keeps the pending landing alive;
 /// - caps that are mid-flight cannot be hit (Cap.CanFlip is false while Flying), tracked per wave;
 /// - radial flip effects such as the bomb, read straight off the prefab via
-///   CapFlipEffect.TryGetRadialLaunch, firing before the landings of the same wave.
+///   CapFlipEffect.TryGetRadialLaunch, firing before the landings of the same wave;
+/// - caps riding in a stack: they are unregistered from CapRegistry, so Cap.StackedAbove is the only
+///   way to see them, and they still belong to their side. They are never targets and never fly.
 ///
 /// Deliberately not modelled:
-/// - stacks beyond "the cap is absorbed and out of play", since stacks are out of scope for now;
+/// - stack peel-off (Cap.HandleStackPeelOff). Once the base of a tower is launched the engine takes
+///   the tower apart cap by cap; the simulation leaves its riders in play rather than guess, so the
+///   search never claims a win it cannot deliver;
 /// - Cap.BeginPush, the soft shove applied to near misses (PushRadius is 0 on every current prefab);
 /// - the exact frame on which two simultaneous landings resolve.
 /// </summary>
@@ -62,6 +66,9 @@ public sealed class CapBoardSimulation
         public bool HasRadialEffect;
         public float EffectRadius;
         public float EffectForce;
+
+        /// <summary>Index of the cap this one rides on, or -1 when it stands on the table itself.</summary>
+        public int BaseIndex;
     }
 
     /// <summary>Per-cap state that a candidate throw mutates.</summary>
@@ -99,6 +106,7 @@ public sealed class CapBoardSimulation
 
     private CapTuning _tuning;
     private CapFieldBoundary _boundary;
+    private bool _stackedCapsCountAsOnField = true;
 
     private CapProfile[] _profiles = new CapProfile[64];
     private CapRuntime[] _baseline = new CapRuntime[64];
@@ -107,7 +115,6 @@ public sealed class CapBoardSimulation
     private readonly Queue<Landing> _queue = new();
     private readonly List<Landing> _wave = new();
     private readonly List<Hit> _hits = new();
-    private readonly List<int> _stackTargets = new();
 
     private int _boardCount;
     private int _slammerIndex = -1;
@@ -123,6 +130,9 @@ public sealed class CapBoardSimulation
     public CapOwner GetOwner(int index) => _profiles[index].Owner;
     public float GetRadius(int index) => _profiles[index].Radius;
     public bool HasRadialEffect(int index) => _profiles[index].HasRadialEffect;
+
+    /// <summary>True for a cap that rides on top of another one and therefore cannot be aimed at.</summary>
+    public bool IsRider(int index) => _profiles[index].BaseIndex >= 0;
 
     /// <summary>Position the cap had when the board was captured, before any candidate throw.</summary>
     public Vector2 GetCapturedPosition(int index) => _baseline[index].Position;
@@ -143,45 +153,74 @@ public sealed class CapBoardSimulation
     }
 
     /// <summary>
-    /// Snapshots every cap that is actually in play. Caps that are busy, stacked or sitting outside
-    /// the field are skipped — that last rule is what keeps the throwers' waiting caps, which are
-    /// registered but parked at a spawn point, out of the simulation.
+    /// Snapshots every cap that is actually in play, riders in stacks included.
+    /// Parked caps are skipped: they are registered like any other cap but are waiting at a thrower's
+    /// spawn point rather than standing on the board, which is also why the cap about to be thrown
+    /// must be parked when this runs — otherwise SetSlammer would add it a second time.
+    /// <paramref name="stackedCapsCountAsOnField"/> must mirror the matching TurnController setting,
+    /// or the search will disagree with the game about who has already lost. It decides both whether
+    /// riders are taken onto the board at all and how a cap buried during the throw is counted.
     /// </summary>
     public void Capture(
         CapTuning tuning,
         CapFieldBoundary boundary,
         IReadOnlyList<Cap> caps,
-        Cap ignoredA,
-        Cap ignoredB)
+        bool stackedCapsCountAsOnField)
     {
         _tuning = tuning;
         _boundary = boundary;
+        _stackedCapsCountAsOnField = stackedCapsCountAsOnField;
         _boardCount = 0;
         _slammerIndex = -1;
 
-        if (caps == null) return;
+        if (caps == null)
+        {
+            _activeCount = 0;
+            return;
+        }
 
         for (int i = 0; i < caps.Count; i++)
         {
             Cap cap = caps[i];
-            if (cap == null || cap == ignoredA || cap == ignoredB) continue;
+            if (cap == null || cap.IsParked) continue;
             if (!cap.CanFlip) continue;
-            if (boundary != null && !boundary.Supports(cap.GroundPosition, 0f)) continue;
 
-            EnsureCapacity(_boardCount + 2);
-            _profiles[_boardCount] = BuildProfile(cap.Owner, cap.Parameters, cap.FlipEffects);
-            _baseline[_boardCount] = new CapRuntime
+            int baseIndex = _boardCount;
+            AddCap(cap, cap.GroundPosition, -1);
+
+            // With the rule turned off a buried cap is out of the game, and a cap that was already
+            // buried before this turn was already out — taking it onto the board would make every
+            // candidate throw look as though it had knocked it off.
+            if (!stackedCapsCountAsOnField) continue;
+
+            // Riders are unregistered from CapRegistry while stacked, so this list is the only way to
+            // see them. Their position is only ever used for counting, never for a hit test, so the
+            // base's position is a good enough stand-in.
+            IReadOnlyList<Cap> riders = cap.StackedAbove;
+            for (int s = 0; s < riders.Count; s++)
             {
-                Position = cap.GroundPosition,
-                IsHeads = cap.IsHeads,
-                IsOnField = true,
-                IsStacked = false,
-                LaunchedGeneration = -1
-            };
-            _boardCount++;
+                if (riders[s] == null) continue;
+                AddCap(riders[s], cap.GroundPosition, baseIndex);
+            }
         }
 
         _activeCount = _boardCount;
+    }
+
+    void AddCap(Cap cap, Vector2 position, int baseIndex)
+    {
+        EnsureCapacity(_boardCount + 2);
+
+        _profiles[_boardCount] = BuildProfile(cap.Owner, cap.Parameters, cap.FlipEffects, baseIndex);
+        _baseline[_boardCount] = new CapRuntime
+        {
+            Position = position,
+            IsHeads = cap.IsHeads,
+            IsOnField = true,
+            IsStacked = baseIndex >= 0,
+            LaunchedGeneration = -1
+        };
+        _boardCount++;
     }
 
     /// <summary>
@@ -192,8 +231,39 @@ public sealed class CapBoardSimulation
     {
         EnsureCapacity(_boardCount + 1);
         _slammerIndex = _boardCount;
-        _profiles[_slammerIndex] = BuildProfile(owner, parameters, effects);
+        _profiles[_slammerIndex] = BuildProfile(owner, parameters, effects, -1);
+
+        // RunThrow fills this in properly once it knows where the cap is aimed. Written here so the
+        // entry can never be read back as leftovers from an earlier turn.
+        _baseline[_slammerIndex] = new CapRuntime
+        {
+            IsHeads = true,
+            IsOnField = true,
+            LaunchedGeneration = -1
+        };
+
         _activeCount = _boardCount + 1;
+    }
+
+    /// <summary>
+    /// Counts the board as it actually stands right now, using the same rules RunThrow reports with.
+    /// Comparing this against the result the search predicted is the only way to notice that the
+    /// mirror has drifted away from CapTurnResolver.
+    /// </summary>
+    public void CaptureAndTally(
+        CapTuning tuning,
+        CapFieldBoundary boundary,
+        IReadOnlyList<Cap> caps,
+        bool stackedCapsCountAsOnField,
+        float playerThrowPower,
+        ref CapSimResult result)
+    {
+        Capture(tuning, boundary, caps, stackedCapsCountAsOnField);
+
+        for (int i = 0; i < _boardCount; i++)
+            _runtime[i] = _baseline[i];
+
+        Tally(playerThrowPower, ref result);
     }
 
     /// <summary>
@@ -285,37 +355,31 @@ public sealed class CapBoardSimulation
     {
         int source = landing.Index;
         float slammerRadius = _profiles[source].Radius;
+        bool absorbed = false;
 
         _hits.Clear();
-        _stackTargets.Clear();
 
         for (int i = 0; i < _activeCount; i++)
         {
             if (i == source) continue;
             if (!CanBeHit(i, landing.Generation)) continue;
 
-            float combinedRadius = slammerRadius + _profiles[i].Radius;
-            float distance = Vector2.Distance(landing.Position, _runtime[i].Position);
-            if (distance > combinedRadius) continue;
+            if (!CapImpact.TryResolveHit(
+                    slammerRadius,
+                    ToImpactTarget(i),
+                    landing.Position,
+                    _runtime[i].Position,
+                    landing.Force,
+                    _tuning,
+                    out Vector2 direction,
+                    out float inheritedForce,
+                    out float travelDistance,
+                    out bool stacks))
+                continue;
 
-            float normalizedOffset = combinedRadius > 0f
-                ? Mathf.Clamp01(distance / combinedRadius)
-                : 0f;
-            float contactFactor = Mathf.Lerp(
-                _profiles[i].CenterContactFactor,
-                _profiles[i].EdgeContactFactor,
-                normalizedOffset);
-            float inheritedForce = landing.Force * _profiles[i].PowerConversion;
-            float travelDistance = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
-
-            Vector2 direction = CapMath.VerticalImpactDirection(
-                landing.Position,
-                _runtime[i].Position,
-                Vector2.up);
-
-            if (travelDistance < _tuning.MinimumFlightLength)
+            if (stacks)
             {
-                _stackTargets.Add(i);
+                absorbed = true;
                 continue;
             }
 
@@ -336,7 +400,7 @@ public sealed class CapBoardSimulation
 
         // Cap.AddToStack puts the cap that just landed on top of the target and unregisters it,
         // so it is the landed cap that leaves play, not the one it landed on.
-        if (_stackTargets.Count > 0)
+        if (absorbed)
             _runtime[source].IsStacked = true;
     }
 
@@ -360,18 +424,18 @@ public sealed class CapBoardSimulation
             Vector2 offset = _runtime[i].Position - landing.Position;
             if (offset.sqrMagnitude >= radiusSquared) continue;
 
-            Vector2 direction = offset.sqrMagnitude > 0.000001f
-                ? offset.normalized
-                : Vector2.right;
-
-            float force = effectForce * _profiles[i].PowerConversion;
-            float travelDistance = force * _tuning.ForceToTravelDistance;
-            if (travelDistance < _tuning.MinimumFlightLength) continue;
+            if (!CapImpact.TryResolveLaunch(
+                    ToImpactTarget(i),
+                    effectForce,
+                    _tuning,
+                    out float force,
+                    out float travelDistance))
+                continue;
 
             _hits.Add(new Hit
             {
                 Index = i,
-                Direction = direction,
+                Direction = CapImpact.RadialDirection(landing.Position, _runtime[i].Position),
                 Force = force,
                 TravelDistance = travelDistance
             });
@@ -412,9 +476,16 @@ public sealed class CapBoardSimulation
     }
 
     bool CanBeHit(int index, int generation) =>
+        _profiles[index].BaseIndex < 0 &&
         _runtime[index].IsOnField &&
         !_runtime[index].IsStacked &&
         _runtime[index].LaunchedGeneration <= generation;
+
+    CapImpactTarget ToImpactTarget(int index) => new CapImpactTarget(
+        _profiles[index].Radius,
+        _profiles[index].PowerConversion,
+        _profiles[index].CenterContactFactor,
+        _profiles[index].EdgeContactFactor);
 
     void Tally(float playerThrowPower, ref CapSimResult result)
     {
@@ -424,22 +495,24 @@ public sealed class CapBoardSimulation
         {
             CapOwner owner = _profiles[i].Owner;
 
-            if (!_runtime[i].IsOnField)
+            if (!IsStillOnField(i))
             {
-                switch (owner)
-                {
-                    case CapOwner.Player: result.PlayerRemoved++; break;
-                    case CapOwner.Opponent: result.OpponentRemoved++; break;
-                    default: result.NeutralRemoved++; break;
-                }
+                AddRemoved(owner, ref result);
                 continue;
             }
 
-            // A stacked cap is neutralised, not removed: it still rests on the table and still counts
-            // towards its side, so burying the last enemy cap does not win the match. Its danger is
-            // zero because nothing can hit it while it rides another cap.
             if (_runtime[i].IsStacked)
             {
+                // A stacked cap still rests on the table, but whether it still counts for its side is
+                // a rule TurnController owns — the search mirrors whatever it is set to, otherwise the
+                // two disagree about who has already lost. Its danger is zero because nothing can hit
+                // it while it rides another cap.
+                if (!_stackedCapsCountAsOnField)
+                {
+                    AddRemoved(owner, ref result);
+                    continue;
+                }
+
                 switch (owner)
                 {
                     case CapOwner.Player:
@@ -477,6 +550,33 @@ public sealed class CapBoardSimulation
     }
 
     /// <summary>
+    /// An untouched tower falls as a unit — CapFieldBoundary.DropCap breaks it apart and announces
+    /// every cap it consisted of — so a rider shares the fate of the cap under it.
+    /// Once that cap has been launched the engine peels the tower apart instead (Cap.HandleStackPeelOff),
+    /// which is not modelled, and the riders are left in play rather than guessed at.
+    /// </summary>
+    bool IsStillOnField(int index)
+    {
+        if (!_runtime[index].IsOnField) return false;
+
+        int baseIndex = _profiles[index].BaseIndex;
+        if (baseIndex < 0) return true;
+        if (_runtime[baseIndex].LaunchedGeneration >= 0) return true;
+
+        return _runtime[baseIndex].IsOnField;
+    }
+
+    static void AddRemoved(CapOwner owner, ref CapSimResult result)
+    {
+        switch (owner)
+        {
+            case CapOwner.Player: result.PlayerRemoved++; break;
+            case CapOwner.Opponent: result.OpponentRemoved++; break;
+            default: result.NeutralRemoved++; break;
+        }
+    }
+
+    /// <summary>
     /// How exposed a cap is, from 0 (safe) to 1 (knocked off by a single hit).
     ///
     /// A throw flies over the board in an arc and lands wherever the thrower aims, so every cap is
@@ -494,7 +594,11 @@ public sealed class CapBoardSimulation
         return Mathf.Clamp01(1f - edgeDistance / maxKnock);
     }
 
-    static CapProfile BuildProfile(CapOwner owner, CapParameters parameters, CapFlipEffect[] effects)
+    static CapProfile BuildProfile(
+        CapOwner owner,
+        CapParameters parameters,
+        CapFlipEffect[] effects,
+        int baseIndex)
     {
         var profile = new CapProfile
         {
@@ -502,7 +606,8 @@ public sealed class CapBoardSimulation
             Radius = parameters != null ? parameters.Radius : 0.5f,
             PowerConversion = parameters != null ? parameters.PowerConversion : 1f,
             CenterContactFactor = parameters != null ? parameters.CenterContactFactor : 0f,
-            EdgeContactFactor = parameters != null ? parameters.EdgeContactFactor : 1f
+            EdgeContactFactor = parameters != null ? parameters.EdgeContactFactor : 1f,
+            BaseIndex = baseIndex
         };
 
         if (effects == null) return profile;

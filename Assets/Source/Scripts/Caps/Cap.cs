@@ -6,7 +6,21 @@ using System.Collections.Generic;
 [RequireComponent(typeof(MeshRenderer))]
 public class Cap : MonoBehaviour
 {
-    public enum CapState { Idle, Held, Throwing, Flying, Pushed }
+    public enum CapState
+    {
+        Idle,
+        Held,
+        Throwing,
+        Flying,
+        Pushed,
+
+        /// <summary>
+        /// Waiting at a thrower's spawn point instead of standing on the board. The thrower owns the
+        /// transform, so GroundPosition is NOT kept in sync with it — a parked cap has no meaningful
+        /// place on the field, and nothing may treat it as if it had one.
+        /// </summary>
+        Parked
+    }
 
     [Header("Identity")]
     [SerializeField] private int _stableId;
@@ -28,12 +42,16 @@ public class Cap : MonoBehaviour
 
     public Vector2 GroundPosition { get; private set; }
     public bool IsHeads { get; private set; } = true;
-    public bool IsBusy => _state != CapState.Idle;
-    public bool IsThrowable => !_hasLeftGame && !_isParked && _state == CapState.Idle && _stackBase == null;
-    public bool CanFlip => !_hasLeftGame && !_isParked && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
+    /// <summary>
+    /// True while the cap is animating. A parked cap is not busy: it waits at a spawn point, and
+    /// CapTurnResolver must not hold the turn open waiting for it to settle.
+    /// </summary>
+    public bool IsBusy => _state != CapState.Idle && _state != CapState.Parked;
+    public bool IsThrowable => !_hasLeftGame && _state == CapState.Idle && _stackBase == null;
+    public bool CanFlip => !_hasLeftGame && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
 
     /// <summary>True while the cap waits at a thrower's spawn point instead of standing on the board.</summary>
-    public bool IsParked => _isParked;
+    public bool IsParked => _state == CapState.Parked;
     public CapState CurrentState => _state;
     public int ActivationDepthPlusOne => _activationDepth + 1;
     public int StackCount => _stackAbove.Count + 1;
@@ -41,7 +59,6 @@ public class Cap : MonoBehaviour
 
     private bool _isImmutable;
     private bool _hasLeftGame;
-    private bool _isParked;
     private CapFlipEffect[] _flipEffects;
     internal CapFlipEffect[] FlipEffects => _flipEffects;
 
@@ -106,7 +123,6 @@ public class Cap : MonoBehaviour
         _isPeeling = false;
         _pendingLandedCallback = null;
         _hasLeftGame = false;
-        _isParked = false;
         WasPeelOff = false;
         _overrideMaterial = null;
         _overrideMaterialTimer = 0f;
@@ -133,16 +149,27 @@ public class Cap : MonoBehaviour
     public void SetImmutable(bool value) => _isImmutable = value;
 
     /// <summary>
-    /// Parks the cap at its thrower's spawn point: it is waiting to be thrown, not standing on the
-    /// board. A parked cap keeps whatever transform its thrower gives it, and chains and effects skip
-    /// it. Without this the resolver would pin it to the table like any other idle cap, because
+    /// Moves the cap between standing on the board and waiting at its thrower's spawn point.
+    /// A parked cap keeps whatever transform its thrower gives it, and chains and effects skip it.
+    /// Without this the resolver would pin it to the table like any other idle cap, because
     /// ApplyVisuals derives an idle cap's position from GroundPosition at height zero.
+    ///
+    /// Only an idle cap can be parked and only a parked cap can be released; a cap that is being
+    /// aimed goes back to the spawn point through <see cref="EndHeldToParked"/> instead.
     /// </summary>
     public void SetParked(bool value)
     {
-        if (_isParked == value) return;
+        if (value)
+        {
+            if (_state != CapState.Idle) return;
+            _state = CapState.Parked;
+        }
+        else
+        {
+            if (_state != CapState.Parked) return;
+            _state = CapState.Idle;
+        }
 
-        _isParked = value;
         ApplyVisuals();
     }
 
@@ -168,9 +195,13 @@ public class Cap : MonoBehaviour
         }
     }
 
-    public void EndHeldToIdle()
+    /// <summary>
+    /// Puts an aimed cap back into its thrower's hands. It returns to Parked rather than Idle, so the
+    /// board never sees it as a cap standing on the table between two throws.
+    /// </summary>
+    public void EndHeldToParked()
     {
-        _state = CapState.Idle;
+        _state = CapState.Parked;
         ApplyVisuals();
     }
 
@@ -489,6 +520,10 @@ public class Cap : MonoBehaviour
         Vector3 pos;
         Quaternion rot = Quaternion.identity;
 
+        // A parked cap is positioned by its thrower, so the simulation must not touch its transform.
+        // Materials still update below, which is what keeps a waiting cap showing the right face.
+        bool ownedByThrower = _state == CapState.Parked && _stackBase == null;
+
         if (_stackBase != null)
         {
             float yOff = _tuning != null ? _tuning.CapThickness : 0.1f;
@@ -534,9 +569,6 @@ public class Cap : MonoBehaviour
 
         if (!IsFinite(pos)) return;
 
-        // A parked cap is positioned by its thrower, so the simulation must not touch its transform.
-        // Materials still update, which is what keeps a waiting cap showing the right face.
-        bool ownedByThrower = _isParked && _stackBase == null && _state == CapState.Idle;
         if (!ownedByThrower)
         {
             transform.position = pos;

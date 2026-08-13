@@ -176,6 +176,11 @@ public sealed class CapFieldBoundary : MonoBehaviour
                 continue;
             }
 
+            // A parked cap waits at a thrower's spawn point rather than standing on the field, and its
+            // GroundPosition is not even kept in sync with where it is drawn — so it must not be judged
+            // by it. Said outright instead of relying on such a cap never having reached the field.
+            if (cap.IsParked) continue;
+
             _trails.TryGetValue(cap, out CapTrail trail);
             Vector3 currentPosition = cap.transform.position;
 

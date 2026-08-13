@@ -61,10 +61,7 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source || target.IsBusy) continue;
 
-            Vector2 offset = target.GroundPosition - command.Origin;
-            Vector2 direction = offset.sqrMagnitude > 0.000001f
-                ? offset.normalized
-                : Vector2.right;
+            Vector2 direction = CapImpact.RadialDirection(command.Origin, target.GroundPosition);
 
             _executor.TryLaunch(command.Source, target, direction, command.Force);
         }

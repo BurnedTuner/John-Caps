@@ -89,6 +89,19 @@ public sealed class AiSearchSettings
     [Tooltip("Throw power the danger metric assumes for the player. 0 = read it from the player's cap prefab.")]
     [Min(0f)] public float PlayerThrowPowerOverride = 0f;
 
+    // ---------------------------------------------------------------------------------------------
+    // Rules, not preferences. TurnController owns these and writes them here on Start, because a
+    // search that optimises a different rulebook than the one being played picks the wrong move.
+    // They are not serialized on purpose: there is nothing for a designer to decide here.
+    // The values below are only the fallbacks used when no TurnController is present.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>Mirrors TurnController's "knocking a neutral cap off also earns another turn".</summary>
+    [System.NonSerialized] public bool NeutralGrantsExtraTurn;
+
+    /// <summary>Mirrors TurnController's "caps buried in a stack still count as being on the field".</summary>
+    [System.NonSerialized] public bool StackedCapsCountAsOnField = true;
+
     [Header("Debug")]
     [Tooltip("Log the five best moves with their score broken down term by term.")]
     public bool VerboseLog = false;

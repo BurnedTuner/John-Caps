@@ -48,8 +48,25 @@ public sealed class AiMoveSearch
         }
     }
 
+    /// <summary>
+    /// Best score first, then a fixed geometric order. The tiebreak matters: on a quiet board most
+    /// candidates score exactly the same, and List.Sort is not stable, so without it the AI would
+    /// open differently on every run of an identical board.
+    /// </summary>
+    sealed class ScoreComparer : IComparer<AiMove>
+    {
+        public int Compare(AiMove a, AiMove b)
+        {
+            int byScore = b.Score.CompareTo(a.Score);
+            if (byScore != 0) return byScore;
+
+            int byX = a.LandingPoint.x.CompareTo(b.LandingPoint.x);
+            return byX != 0 ? byX : a.LandingPoint.y.CompareTo(b.LandingPoint.y);
+        }
+    }
+
     private static readonly float[] DefaultRingOffsets = { 0.95f, 0.75f, 0.5f };
-    private static readonly Comparison<AiMove> ByScoreDescending = (a, b) => b.Score.CompareTo(a.Score);
+    private static readonly ScoreComparer ByScoreDescending = new();
 
     private readonly CapBoardSimulation _simulation = new();
     private readonly List<Vector2> _candidates = new();
@@ -58,6 +75,7 @@ public sealed class AiMoveSearch
     private readonly List<ScoredPoint> _evaluatedPoints = new();
 
     private bool _checkScoringZones;
+    private int _droppedCandidates;
 
     /// <summary>Every landing point evaluated during the last search, for debug drawing.</summary>
     public IReadOnlyList<ScoredPoint> LastEvaluatedPoints => _evaluatedPoints;
@@ -69,13 +87,14 @@ public sealed class AiMoveSearch
     /// Finds the best throw among <paramref name="candidateCaps"/>. With a deck the list holds a
     /// single cap and the search only chooses a landing point; hand-style pools can pass several and
     /// the same code picks the cap too.
+    /// Every candidate cap must still be parked at its thrower's spawn point — that is what keeps
+    /// CapBoardSimulation.Capture from putting it on the board twice.
     /// </summary>
     public bool TryFindBestMove(
         CapTuning tuning,
         CapFieldBoundary boundary,
         AiSearchSettings settings,
         IReadOnlyList<Cap> candidateCaps,
-        Cap playerWaitingCap,
         float playerThrowPower,
         out AiMove move)
     {
@@ -99,7 +118,11 @@ public sealed class AiMoveSearch
             Cap cap = candidateCaps[c];
             if (cap == null) continue;
 
-            _simulation.Capture(tuning, boundary, CapRegistry.AllCaps, cap, playerWaitingCap);
+            _simulation.Capture(
+                tuning,
+                boundary,
+                CapRegistry.AllCaps,
+                settings.StackedCapsCountAsOnField);
             _simulation.SetSlammer(cap.Owner, cap.Parameters, cap.FlipEffects);
 
             BuildCandidates(boundary, settings, cap);
@@ -128,7 +151,7 @@ public sealed class AiMoveSearch
         int choiceCount = Mathf.Clamp(settings.TopNChoices, 1, _ranked.Count);
         AiMove chosen = _ranked[choiceCount > 1 ? UnityEngine.Random.Range(0, choiceCount) : 0];
 
-        move = ApplyAimJitter(chosen, boundary, settings);
+        move = ApplyAimJitter(chosen, tuning, boundary, settings, playerThrowPower);
         return true;
     }
 
@@ -140,7 +163,9 @@ public sealed class AiMoveSearch
     /// </summary>
     public static float Evaluate(in CapSimResult result, AiSearchSettings settings)
     {
-        bool keepsTurn = result.PlayerRemoved > 0;
+        // Exactly the condition TurnController uses to hand the board back or keep it.
+        bool keepsTurn = result.PlayerRemoved > 0
+            || (settings.NeutralGrantsExtraTurn && result.NeutralRemoved > 0);
 
         // Clearing the board wins the match outright, so it beats every other consideration.
         // Subtracting own losses only breaks ties between winning moves.
@@ -162,6 +187,7 @@ public sealed class AiMoveSearch
     {
         _candidates.Clear();
         _candidateKeys.Clear();
+        _droppedCandidates = 0;
 
         float slammerRadius = slammer.Parameters.Radius;
         float slammerPower = slammer.Parameters.ThrowPower;
@@ -175,6 +201,10 @@ public sealed class AiMoveSearch
         for (int i = 0; i < capCount; i++)
         {
             if (i == slammerIndex) continue;
+
+            // A cap riding on top of another one cannot be aimed at: it is out of reach until the cap
+            // under it moves.
+            if (_simulation.IsRider(i)) continue;
 
             CapOwner owner = _simulation.GetOwner(i);
             bool isEnemy = owner == CapOwner.Player;
@@ -232,12 +262,14 @@ public sealed class AiMoveSearch
         if (_candidates.Count == 0 && boundary != null)
             _candidates.Add(CapMath.ToXZ(boundary.FieldWorldBounds.center));
 
-        // Say so rather than let a truncated sweep pass for full coverage.
-        if (_candidates.Count >= settings.MaxCandidates)
+        // Say so rather than let a truncated sweep pass for full coverage. Counted rather than derived
+        // from the list length, which cannot tell a sweep that just fit from one that was cut short.
+        if (_droppedCandidates > 0)
         {
             Debug.LogWarning(
                 $"[AiMoveSearch] Hit the MaxCandidates limit of {settings.MaxCandidates}; " +
-                "later landing points were dropped. Raise the limit or lower RingAngles/GridStep.");
+                $"{_droppedCandidates} later landing points were dropped. " +
+                "Raise the limit or lower RingAngles/GridStep.");
         }
     }
 
@@ -263,7 +295,12 @@ public sealed class AiMoveSearch
 
     bool TryAddCandidate(Vector2 point, CapFieldBoundary boundary, AiSearchSettings settings, float slammerRadius)
     {
-        if (_candidates.Count >= settings.MaxCandidates) return false;
+        if (_candidates.Count >= settings.MaxCandidates)
+        {
+            _droppedCandidates++;
+            return false;
+        }
+
         if (!IsLandingAllowed(point, boundary, settings, slammerRadius)) return false;
 
         float step = Mathf.Max(0.05f, settings.DeduplicationStep);
@@ -288,8 +325,15 @@ public sealed class AiMoveSearch
     /// <summary>
     /// Nudges the chosen landing point by a random offset. Applied after the choice on purpose: this
     /// is a shaky hand, not a worse plan, so the throw honestly misses what the AI aimed at.
+    /// The nudged throw is simulated again rather than carrying the old numbers along, because the
+    /// score and board that travel with an AiMove are what the prediction check compares against.
     /// </summary>
-    AiMove ApplyAimJitter(in AiMove move, CapFieldBoundary boundary, AiSearchSettings settings)
+    AiMove ApplyAimJitter(
+        in AiMove move,
+        CapTuning tuning,
+        CapFieldBoundary boundary,
+        AiSearchSettings settings,
+        float playerThrowPower)
     {
         if (settings.AimJitter <= 0f) return move;
 
@@ -297,7 +341,19 @@ public sealed class AiMoveSearch
         if (boundary != null && boundary.DistanceToEdge(jittered) < settings.LandingEdgeMargin)
             return move;
 
-        return new AiMove(move.Cap, jittered, move.Score, move.Result);
+        // The scratch board may belong to a different candidate cap, so it is taken again here.
+        _simulation.Capture(tuning, boundary, CapRegistry.AllCaps, settings.StackedCapsCountAsOnField);
+        _simulation.SetSlammer(move.Cap.Owner, move.Cap.Parameters, move.Cap.FlipEffects);
+
+        var result = new CapSimResult();
+        _simulation.RunThrow(
+            jittered,
+            move.Cap.Parameters.ThrowPower,
+            playerThrowPower,
+            settings.MaxChainDepth,
+            ref result);
+
+        return new AiMove(move.Cap, jittered, Evaluate(result, settings), result);
     }
 
     void LogTopMoves(AiSearchSettings settings)

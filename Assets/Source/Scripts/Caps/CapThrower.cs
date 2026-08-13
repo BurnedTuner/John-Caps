@@ -111,7 +111,7 @@ public sealed class CapThrower : MonoBehaviour
     void KeepWaitingCapAtSpawn()
     {
         if (_waitingCap == null || _tuning == null || _tuning.SpawnPoint == null) return;
-        if (_waitingCap.CurrentState != Cap.CapState.Idle) return;
+        if (_waitingCap.CurrentState != Cap.CapState.Parked) return;
 
         _waitingCap.transform.position = _tuning.SpawnPosition;
     }
@@ -322,7 +322,7 @@ public sealed class CapThrower : MonoBehaviour
 
         if (_waitingCap != null)
         {
-            _waitingCap.EndHeldToIdle();
+            _waitingCap.EndHeldToParked();
             _waitingCap.transform.position = _tuning.SpawnPosition;
         }
 
@@ -335,6 +335,24 @@ public sealed class CapThrower : MonoBehaviour
         TurnInputEnabled = enabled;
         if (!enabled && CurrentState == State.Aiming)
             CancelAiming();
+    }
+
+    /// <summary>
+    /// Puts the thrower back into a state where it can take a turn, after the turn it was waiting on
+    /// was abandoned. TurnController's watchdog has no other way to unstick a thrower still waiting
+    /// for a resolution that is never going to be reported.
+    /// </summary>
+    public void AbortTurn()
+    {
+        if (CurrentState == State.Aiming)
+            CancelAiming();
+
+        TrajectoryPreview?.Hide();
+        _directHitSeeds.Clear();
+        _predictionResults.Clear();
+        _isDirectAimAllowed = false;
+        CurrentState = State.Idle;
+        SpawnWaitingCap();
     }
 
     void Fire()
@@ -374,9 +392,9 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        // Reset layer back to Default (0) so it interacts with the world normally
+        // Reset layer back to Default (0) so it interacts with the world normally.
+        // The cap is already out of parking: aiming moved it into BeginHeld.
         SetCapLayerRecursive(cap.gameObject, 0);
-        cap.SetParked(false);
 
         float force = cap.Parameters.ThrowPower;
         var request = new CapThrowRequest(cap, startPosition, landingPosition, force);
@@ -390,9 +408,8 @@ public sealed class CapThrower : MonoBehaviour
 
         // The throw was refused, so put the cap back in hand exactly as it was.
         _waitingCap = cap;
-        _waitingCap.EndHeldToIdle();
+        _waitingCap.EndHeldToParked();
         _waitingCap.transform.position = startPosition;
-        _waitingCap.SetParked(true);
         SetCapLayerRecursive(_waitingCap.gameObject, PlayerHandLayer);
         CurrentState = State.Idle;
     }
@@ -411,22 +428,22 @@ public sealed class CapThrower : MonoBehaviour
             if (cap == _waitingCap) continue;
             if (!cap.CanFlip) continue;
 
-            float combinedRadius = slammerRadius + cap.Parameters.Radius;
-            float distance = Vector2.Distance(landingPoint, cap.GroundPosition);
-            if (distance > combinedRadius) continue;
+            // The preview only draws caps that actually fly, so a contact that would bury the thrown
+            // cap in a stack is simply not shown.
+            if (!CapImpact.TryResolveHit(
+                    slammerRadius,
+                    CapImpactTarget.From(cap.Parameters),
+                    landingPoint,
+                    cap.GroundPosition,
+                    throwForce,
+                    _tuning,
+                    out Vector2 direction,
+                    out float inheritedForce,
+                    out float travelDistance,
+                    out bool stacks))
+                continue;
 
-            float normalizedOffset = combinedRadius > 0f
-                ? Mathf.Clamp01(distance / combinedRadius)
-                : 0f;
-            float contactFactor = cap.GetContactFactor(normalizedOffset);
-            float inheritedForce = throwForce * cap.Parameters.PowerConversion;
-            float travelDistance = inheritedForce * contactFactor * _tuning.ForceToTravelDistance;
-            if (travelDistance < _tuning.MinimumFlightLength) continue;
-
-            Vector2 direction = CapMath.VerticalImpactDirection(
-                landingPoint,
-                cap.GroundPosition,
-                Vector2.up);
+            if (stacks) continue;
 
             results.Add(new CapPrediction(
                 cap,
