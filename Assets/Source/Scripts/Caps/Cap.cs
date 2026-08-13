@@ -107,6 +107,22 @@ public class Cap : MonoBehaviour
     private float _flyDuration;
     private int _activationDepth;
 
+    /// <summary>
+    /// Y-axis rotation preserved when the cap lands. Set to the cap's current
+    /// Y rotation at the moment of landing. X and Z rotations are flattened
+    /// (cap lies flat), but Y is kept so the cap doesn't snap to a default
+    /// facing. Used by Idle and Pushed states in ApplyVisuals.
+    /// </summary>
+    private float _landingYaw;
+
+    /// <summary>
+    /// Full rotation captured when the cap starts flying (BeginLaunch).
+    /// Used as the Slerp start point for the flip animation so the cap
+    /// transitions smoothly from its current rotation (including Y) to the
+    /// flipped rotation, without snapping or changing flip direction.
+    /// </summary>
+    private Quaternion _flyStartRot;
+
     private Vector2 _pushStart;
     private Vector2 _pushDirection;
     private float _pushRemaining;
@@ -183,6 +199,10 @@ public class Cap : MonoBehaviour
         _throwArcHeight = arcHeight;
         _landingForce = force;
         _state = CapState.Throwing;
+        // Move the cap to the throw start immediately so there's no one-frame
+        // gap where it's still at its old position (hand overlay) before
+        // StepThrow runs next frame.
+        transform.position = start;
         ApplyVisuals();
     }
 
@@ -195,6 +215,7 @@ public class Cap : MonoBehaviour
         if (!IsFinite(GroundPosition)) return false;
 
         _activationDepth = depth;
+        _flyStartRot = transform.rotation; // capture full rotation before flip
         _flyStart = GroundPosition;
         _flyDirection = direction.sqrMagnitude > 0.000001f ? direction.normalized : Vector2.right;
         _flyTotalDistance = travelDistance;
@@ -338,6 +359,12 @@ public class Cap : MonoBehaviour
 
         if (_throwElapsed >= _throwDuration)
         {
+            // Flatten: extract Y from the current rotation using the RIGHT vector
+            // (not forward — forward is reversed when the cap is tails-up due to
+            // the 180° X flip, which also applies to hand-flipped caps).
+            // Right is 90° clockwise from forward.
+            Vector3 right = Vector3.ProjectOnPlane(transform.rotation * Vector3.right, Vector3.up);
+            _landingYaw = right.sqrMagnitude > 0.001f ? Mathf.Atan2(right.x, right.z) * Mathf.Rad2Deg - 90f : 0f;
             _state = CapState.Idle;
             transform.position = _throwEnd;
             onLanded?.Invoke(this, GroundPosition, _landingForce);
@@ -370,6 +397,12 @@ public class Cap : MonoBehaviour
             if (IsHeads)
                 onFlipped?.Invoke(this, GroundPosition, _landingForce);
 
+            // Flatten: extract Y from the current post-flip rotation using
+            // the RIGHT vector (not forward — forward is reversed by the 180°
+            // flip, right is not). Right is 90° clockwise from forward.
+            Vector3 right = Vector3.ProjectOnPlane(transform.rotation * Vector3.right, Vector3.up);
+            _landingYaw = right.sqrMagnitude > 0.001f ? Mathf.Atan2(right.x, right.z) * Mathf.Rad2Deg - 90f : 0f;
+
             if (_isPeeling && _stackAbove.Count > 0)
             {
                 _pendingLandedCallback = onLanded;
@@ -400,6 +433,7 @@ public class Cap : MonoBehaviour
         leftBehind._isPeeling = false;
         leftBehind._pendingLandedCallback = null;
         leftBehind.WasPeelOff = true;
+        leftBehind._landingYaw = _landingYaw; // inherit landing Y rotation
         if (!CapRegistry.AllCaps.Contains(leftBehind))
             CapRegistry.Register(leftBehind);
         leftBehind.ApplyVisuals();
@@ -462,6 +496,34 @@ public class Cap : MonoBehaviour
     }
 
     /// <summary>
+    /// Flip the cap in hand — toggle which side faces up (180° X) AND rotate
+    /// 180° on Y so the texture on the new face is right-side-up. Called when
+    /// the player presses F or RMB while hovering a hand cap.
+    /// </summary>
+    public void FlipInHand()
+    {
+        IsHeads = !IsHeads;
+        _handFlipYaw = (_handFlipYaw + 180f) % 360f;
+    }
+
+    /// <summary>
+    /// Clear the hand flip state. Called by CapHand.ReleaseCapForThrow so the
+    /// hand flip Y rotation doesn't leak into the throw/flight/landing rotation.
+    /// </summary>
+    public void ClearHandFlip()
+    {
+        _handFlipYaw = 0f;
+    }
+
+    /// <summary>
+    /// Additional Y rotation applied to caps in hand (for the F/RMB flip).
+    /// 0 = default facing, 180 = rotated so texture faces the other way.
+    /// CapHand.LayoutHand reads this when setting the hand rotation.
+    /// </summary>
+    public float HandFlipYaw => _handFlipYaw;
+    private float _handFlipYaw;
+
+    /// <summary>
     /// Sets a temporary material to be displayed on the cap.
     /// Pass null to clear it immediately.
     /// </summary>
@@ -478,10 +540,15 @@ public class Cap : MonoBehaviour
         // Base rotation: identity if heads-up, 180° X-flip if tails-up.
         // This is applied to ALL non-flying states so the 3D model shows the
         // correct face. Flying state overrides this with its own flip animation.
+        // The landing Y rotation (_landingYaw) is composed on top so the cap
+        // keeps facing the direction it landed in, instead of snapping to a
+        // default Y orientation.
         Quaternion sideRot = IsHeads ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
+        Quaternion yawRot = Quaternion.Euler(0f, _landingYaw, 0f);
+        Quaternion flatRot = yawRot * sideRot; // flat + correct side + landing Y
 
         Vector3 pos;
-        Quaternion rot = sideRot;
+        Quaternion rot = flatRot;
 
         if (_stackBase != null)
         {
@@ -500,14 +567,17 @@ public class Cap : MonoBehaviour
             {
                 case CapState.Held:
                     pos = _heldBasePos + Vector3.up * _heldCurrentHeight;
+                    // Held caps: don't override rotation. CapHand.LayoutHand sets
+                    // the rotation to face the camera, and we preserve it here.
+                    // Only the side (IsHeads) is encoded — LayoutHand already
+                    // applies sideRot in its rotation.
+                    rot = transform.rotation;
                     break;
 
                 case CapState.Throwing:
                     pos = transform.position;
-                    float throwProgress = _throwDuration > 0f ? _throwElapsed / _throwDuration : 1f;
-                    // Y-spin for the throw arc, composed with the side rotation
-                    // so the correct face stays up while spinning.
-                    rot = sideRot * Quaternion.Euler(0f, throwProgress * _tuning.FlightSpinDegrees, 0f);
+                    // No spin on throw — cap keeps its current rotation.
+                    rot = transform.rotation;
                     break;
 
                 case CapState.Flying:
@@ -518,19 +588,22 @@ public class Cap : MonoBehaviour
                     Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D);
                     if (!IsFinite(rotAxis) || rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
                     else rotAxis = rotAxis.normalized;
-                    // The flip animation: 180° rotation around the lateral axis.
-                    // Start from the current side (sideRot) so the model begins
-                    // showing the correct face, then the 180° flip reveals the
-                    // other side as it rotates.
-                    rot = sideRot * Quaternion.AngleAxis(flyProgress * 180f, rotAxis);
+                    // Flip animation: 180° around the world-space lateral axis,
+                    // applied ON TOP of the start rotation. World-space (left multiply)
+                    // keeps the flip axis correct regardless of the cap's Y rotation.
+                    rot = Quaternion.AngleAxis(flyProgress * 180f, rotAxis) * _flyStartRot;
                     break;
 
                 case CapState.Pushed:
                     pos = CapMath.FromXZ(GroundPosition, 0f);
+                    // Pushed caps keep their landing Y rotation.
+                    rot = flatRot;
                     break;
 
                 default:
                     pos = CapMath.FromXZ(GroundPosition, 0f);
+                    // Idle caps keep their landing Y rotation.
+                    rot = flatRot;
                     break;
             }
         }

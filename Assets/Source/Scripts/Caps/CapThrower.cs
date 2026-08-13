@@ -12,6 +12,7 @@ public sealed class CapThrower : MonoBehaviour
 
     [Header("References")]
     public Camera PlayerCamera;
+    public Camera HandCamera; // Used for cursor-over-hand-cap detection
     public LayerMask FieldMask = ~0;
     public Cap CapPrefab;
     public TrajectoryPreview TrajectoryPreview;
@@ -36,6 +37,37 @@ public sealed class CapThrower : MonoBehaviour
     public CapTurnResolver TurnResolver => _turnResolver;
     public CapHand Hand => _hand;
 
+    /// <summary>
+    /// The world-space position from which throws originate. Calculated by
+    /// projecting the held cap's screen position (as seen by the HandCamera)
+    /// onto the PlayerCamera's near plane. This gives a world position that
+    /// appears at the same screen spot from the Main Camera — so the trajectory
+    /// arc and throw start from where the player sees the cap on screen.
+    /// Recalculated every frame so it follows camera movement.
+    /// </summary>
+    Vector3 ThrowOriginPos
+    {
+        get
+        {
+            if (PlayerCamera == null || _heldCap == null)
+                return _tuning.SpawnPosition;
+
+            // Get the cap's screen position as seen by the HandCamera (or
+            // PlayerCamera if no HandCamera is assigned).
+            Camera projCam = HandCamera != null ? HandCamera : PlayerCamera;
+            Vector3 screenPos = projCam.WorldToScreenPoint(_heldCap.transform.position);
+            if (screenPos.z <= 0f)
+                return PlayerCamera.transform.position;
+
+            // Project that screen position onto the PlayerCamera at a reasonable
+            // distance from the camera (not the near plane — that's too close and
+            // the cap would be behind/inside the camera). Use 2 units in front
+            // so the cap is visible and the throw arc looks natural.
+            Vector3 playerScreen = new Vector3(screenPos.x, screenPos.y, 2f);
+            return PlayerCamera.ScreenToWorldPoint(playerScreen);
+        }
+    }
+
     private const int AimOverlapBufferSize = 32;
 
     private readonly Collider[] _aimOverlapBuffer = new Collider[AimOverlapBufferSize];
@@ -50,6 +82,7 @@ public sealed class CapThrower : MonoBehaviour
     private Cap _heldCap;
     private Vector3 _heldCapOriginalPos;
     private bool _cursorLeftHandArea;
+
 
     void Awake()
     {
@@ -205,14 +238,17 @@ public sealed class CapThrower : MonoBehaviour
     }
 
     /// <summary>
-    /// Find the hand cap under the cursor. Returns the cap, or null if no cap
-    /// is within CapGrabRadiusPixels of the cursor.
+    /// Find the hand cap under the cursor. Uses the HandCamera (not PlayerCamera)
+    /// for screen projection, since hand caps are rendered by the HandCamera.
+    /// Returns the cap, or null if no cap is within CapGrabRadiusPixels.
     /// </summary>
     Cap GetHandCapUnderCursor()
     {
-        if (_hand == null || PlayerCamera == null || Mouse.current == null) return null;
+        if (_hand == null || Mouse.current == null) return null;
+        Camera capCam = HandCamera != null ? HandCamera : PlayerCamera;
+        if (capCam == null) return null;
         Vector2 mousePos = Mouse.current.position.ReadValue();
-        return _hand.GetCapUnderScreenPosition(mousePos, PlayerCamera);
+        return _hand.GetCapUnderScreenPosition(mousePos, capCam);
     }
 
     void UpdateIdle()
@@ -223,17 +259,35 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
+        // F or RMB while hovering a hand cap flips it (toggles IsHeads).
+        // RMB also starts camera orbit in CameraController, but a single click
+        // won't cause visible orbit — and the flip is more useful.
+        bool fPressed = Keyboard.current?.fKey.wasPressedThisFrame == true;
+        bool rmbPressed = Mouse.current?.rightButton.wasPressedThisFrame == true;
+
+        if (fPressed || rmbPressed)
+        {
+            Cap hoverCap = GetHandCapUnderCursor();
+            if (hoverCap != null)
+            {
+                hoverCap.FlipInHand();
+                return; // consume the input — don't start aiming
+            }
+        }
+
         if (ClickedOnUI() || Mouse.current == null) return;
         if (!Mouse.current.leftButton.wasPressedThisFrame) return;
 
         Cap cap = GetHandCapUnderCursor();
         if (cap == null) return;
 
-        // Start dragging this cap. Capture its original hand position so we can
-        // keep it there (raise in place) instead of teleporting to spawn center.
+        // Start dragging this cap. The throw will originate from the cap's
+        // actual world position (its hand slot in the HandCamera overlay).
+        // No screen projection — the arc and throw both start from here.
         _heldCap = cap;
-        _heldCapOriginalPos = cap.transform.position;
+        _heldCapOriginalPos = cap.transform.position; // hand position (for cancel detection)
         _cursorLeftHandArea = false;
+
         _aimPoint = CapMath.ToXZ(_heldCapOriginalPos);
         _isDirectAimAllowed = false;
         TrajectoryPreview?.Hide();
@@ -256,7 +310,7 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        // Keep the held cap at its original hand position (raise in place).
+        // Keep the held cap at its hand position (HandCamera overlay).
         _heldCap.UpdateHeldBasePosition(_heldCapOriginalPos);
 
         _heldCap.StepSimulation(Time.deltaTime, null);
@@ -292,15 +346,16 @@ public sealed class CapThrower : MonoBehaviour
 
     /// <summary>
     /// Returns true if the cursor is near the held cap's original hand position
-    /// (within CancelDragRadiusPixels in screen space). Uses the cap's original
-    /// position — not the spawn point — because hand caps sit offset behind the
-    /// spawn point, so the spawn point is the wrong reference center.
+    /// (within CancelDragRadiusPixels in screen space). Uses the HandCamera for
+    /// screen projection since hand caps are rendered by the HandCamera.
     /// </summary>
     bool IsCursorNearHand()
     {
-        if (_heldCap == null || PlayerCamera == null || Mouse.current == null) return false;
+        if (_heldCap == null || Mouse.current == null) return false;
+        Camera capCam = HandCamera != null ? HandCamera : PlayerCamera;
+        if (capCam == null) return false;
 
-        Vector3 handScreenPos = PlayerCamera.WorldToScreenPoint(_heldCapOriginalPos);
+        Vector3 handScreenPos = capCam.WorldToScreenPoint(_heldCapOriginalPos);
         if (handScreenPos.z < 0f) return false; // behind camera
 
         Vector2 mousePos = Mouse.current.position.ReadValue();
@@ -309,7 +364,7 @@ public sealed class CapThrower : MonoBehaviour
     }
 
     float GetDragDistance() =>
-        Vector2.Distance(CapMath.ToXZ(_heldCapOriginalPos), _aimPoint);
+        Vector2.Distance(CapMath.ToXZ(ThrowOriginPos), _aimPoint);
 
     void UpdateAimPreview()
     {
@@ -337,7 +392,7 @@ public sealed class CapThrower : MonoBehaviour
             _predictionResults);
 
         TrajectoryPreview?.Show(
-            _heldCapOriginalPos,
+            ThrowOriginPos,
             _aimPoint,
             slammerRadius,
             _tuning,
@@ -355,10 +410,7 @@ public sealed class CapThrower : MonoBehaviour
         if (_heldCap != null)
         {
             _heldCap.EndHeldToIdle();
-            // Immediately override the position EndHeldToIdle→ApplyVisuals set
-            // (it snaps to GroundPosition, which is stale for hand caps). Setting
-            // it here avoids a one-frame snap to the wrong position before
-            // CapHand.LayoutHand runs next frame.
+            // Cap returns to its hand position in the HandCamera overlay.
             _heldCap.transform.position = _heldCapOriginalPos;
         }
 
@@ -399,17 +451,28 @@ public sealed class CapThrower : MonoBehaviour
 
         TrajectoryPreview?.Hide();
 
-        Vector3 startPosition = _heldCapOriginalPos;
+        // Capture the throw origin ONCE — this is the exact same position the
+        // trajectory arc was rendering from. Don't let ThrowOriginPos recalculate
+        // after this point (e.g. when _heldCap is cleared).
+        Vector3 startPosition = ThrowOriginPos;
         Vector3 landingPosition = CapMath.FromXZ(_aimPoint, 0f);
 
+        // Move the cap to the throw origin.
+        cap.transform.position = startPosition;
+
         // Reset layer back to Default (0) so it interacts with the world normally
+        // and is visible from the Main Camera.
         SetCapLayerRecursive(cap.gameObject, 0);
 
         // Make the cap interactable again (re-register in CapRegistry, clear immutable).
-        // CapHand made it non-interactable when it was instantiated into the hand.
         if (_hand != null) _hand.ReleaseCapForThrow(cap);
 
         float force = cap.Parameters.ThrowPower;
+
+        // Clear _heldCap BEFORE TryStartThrow so ApplyVisuals (called inside
+        // BeginThrow) doesn't use the Held state's position logic.
+        _heldCap = null;
+
         var request = new CapThrowRequest(cap, startPosition, landingPosition, force);
 
         if (_turnResolver.TryStartThrow(request))

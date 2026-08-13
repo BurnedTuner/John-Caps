@@ -26,24 +26,28 @@ public class CapHand : MonoBehaviour
     public CapDeckDefinition DeckTemplate;
 
     [Header("Layout")]
-    [Tooltip("Transform where the hand is centered. Usually CapTuning.SpawnPoint.")]
-    public Transform SpawnPoint;
+    [Tooltip("Camera that renders the hand caps. Used for screen-space cursor detection.")]
+    public Camera HandCamera;
+
+    [Tooltip("Transform that anchors the hand position. Caps are positioned relative to " +
+             "this transform, so moving it moves the hand. Usually a child of the HandCamera " +
+             "(e.g. the SpawnPoint). If null, uses the HandCamera's transform.")]
+    public Transform HandAnchor;
 
     [Tooltip("How many caps the hand can hold simultaneously.")]
     [Min(1)] public int HandSize = 3;
 
-    [Tooltip("Lateral distance between adjacent hand caps.")]
+    [Tooltip("Lateral distance between adjacent hand caps (in world units).")]
     [Min(0f)] public float SlotSpacing = 1.2f;
 
-    [Tooltip("How far back (in Z) the hand caps sit relative to the spawn point. " +
-             "Positive = behind the spawn point (further from the field).")]
-    [Min(0f)] public float SlotBackOffset = 0.8f;
+    [Tooltip("Distance from the HandAnchor at which caps are placed (along the anchor's forward).")]
+    [Min(0f)] public float HandDepth = 0f;
 
-    [Tooltip("Y offset for hand caps relative to spawn point. 0 = same height.")]
-    public float SlotYOffset = 0f;
+    [Tooltip("Vertical offset of the hand row relative to the HandAnchor (along the anchor's up).")]
+    public float HandVerticalOffset = 0f;
 
     [Tooltip("Screen-space radius (in pixels) around a hand cap where the player must " +
-             "press to start a drag-throw.")]
+             "press to start a drag-throw. Uses the HandCamera for screen projection.")]
     [Min(10f)] public float CapGrabRadiusPixels = 80f;
 
     [Header("Ownership")]
@@ -88,6 +92,13 @@ public class CapHand : MonoBehaviour
         for (int i = 0; i < _handCaps.Count; i++)
             if (_handCaps[i] != null) return true;
         return false;
+    }
+
+    /// <summary>Get the cap at hand slot index, or null if empty.</summary>
+    public Cap GetHandCap(int index)
+    {
+        if (index < 0 || index >= _handCaps.Count) return null;
+        return _handCaps[index];
     }
 
     /// <summary>
@@ -331,7 +342,9 @@ public class CapHand : MonoBehaviour
     {
         if (prefab == null) return null;
 
-        Vector3 spawnPos = SpawnPoint != null ? SpawnPoint.position : Vector3.zero;
+        Transform anchor = HandAnchor != null ? HandAnchor
+            : (HandCamera != null ? HandCamera.transform : transform);
+        Vector3 spawnPos = anchor != null ? anchor.position : Vector3.zero;
         Cap instance = CapFactory.Create(
             prefab,
             CapMath.ToXZ(spawnPos),
@@ -367,6 +380,8 @@ public class CapHand : MonoBehaviour
     {
         if (cap == null) return;
         cap.SetImmutable(false);
+        // Do NOT clear the hand flip — the cap should keep its hand rotation
+        // through the throw, flight, and landing.
         if (!CapRegistry.Contains(cap))
             CapRegistry.Register(cap);
     }
@@ -383,26 +398,33 @@ public class CapHand : MonoBehaviour
     }
 
     /// <summary>
-    /// Position all hand caps in a row behind the spawn point, evenly spaced.
-    /// Caps currently in Held/Throwing/Flying state are skipped — CapThrower and
-    /// the simulation own their position during aiming/throw.
+    /// Position all hand caps in a row at the HandAnchor. Caps are placed
+    /// relative to the anchor's transform (position + rotation), so moving the
+    /// anchor moves the hand. Caps face the anchor's forward direction.
+    /// Caps currently in Held/Throwing/Flying state are skipped — CapThrower
+    /// and the simulation own their position during aiming/throw.
     /// </summary>
     void LayoutHand()
     {
-        Vector3 spawnPos = SpawnPoint != null ? SpawnPoint.position : transform.position;
-        Vector3 forward = SpawnPoint != null ? SpawnPoint.forward : Vector3.forward;
-        Vector3 right = SpawnPoint != null ? SpawnPoint.right : Vector3.right;
+        Transform anchor = HandAnchor != null ? HandAnchor
+            : (HandCamera != null ? HandCamera.transform : transform);
+        if (anchor == null) return;
 
-        // Collect non-null caps to position them evenly.
-        // All caps sit in a row behind the spawn point, centered on the spawn X.
+        Vector3 anchorPos = anchor.position;
+        Vector3 forward = anchor.forward;
+        Vector3 right = anchor.right;
+        Vector3 up = anchor.up;
+
+        // Center of the hand row: offset from the anchor by HandDepth and HandVerticalOffset.
+        Vector3 rowCenter = anchorPos + forward * HandDepth + up * HandVerticalOffset;
+
+        // Count non-null caps to center them.
         int nonNullCount = 0;
         for (int i = 0; i < _handCaps.Count; i++)
             if (_handCaps[i] != null) nonNullCount++;
 
         if (nonNullCount == 0) return;
 
-        // Position each non-null cap.
-        // Center the row: for N caps, the center offset is (N-1)/2 slots.
         int placedIndex = 0;
         for (int i = 0; i < _handCaps.Count; i++)
         {
@@ -413,19 +435,22 @@ public class CapHand : MonoBehaviour
             Cap.CapState state = cap.CurrentState;
             if (state == Cap.CapState.Held || state == Cap.CapState.Throwing || state == Cap.CapState.Flying)
             {
-                placedIndex++; // still advance so layout stays consistent
+                placedIndex++;
                 continue;
             }
 
-            // Center the row of caps around the spawn point.
+            // Center the row of caps.
             float centerOffset = (nonNullCount - 1) * 0.5f;
             float slotOffset = placedIndex - centerOffset;
 
-            Vector3 slotPos = spawnPos
-                + right * (slotOffset * SlotSpacing)
-                - forward * SlotBackOffset
-                + Vector3.up * SlotYOffset;
+            Vector3 slotPos = rowCenter + right * (slotOffset * SlotSpacing);
             cap.transform.position = slotPos;
+            // Caps face the anchor's forward (toward the camera), with the
+            // correct side up based on IsHeads, plus the hand-flip Y rotation.
+            Quaternion faceCam = Quaternion.LookRotation(-forward, up);
+            Quaternion sideRot = cap.IsHeads ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
+            Quaternion flipRot = Quaternion.Euler(0f, cap.HandFlipYaw, 0f);
+            cap.transform.rotation = faceCam * flipRot * sideRot;
 
             placedIndex++;
         }

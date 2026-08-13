@@ -192,7 +192,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
 
             _pendingLandings.RemoveAt(i);
             if (_chainCount < _tuning.MaximumChainLength)
-                ResolveLanding(pending.LandedCap, pending.LandingPosition, pending.LandingForce);
+                ResolveLanding(pending.LandedCap, pending.LandingPosition, pending.LandingForce, isThrowLanding: false);
         }
     }
 
@@ -217,7 +217,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             return;
         }
 
-        ResolveLanding(landedCap, landingPosition, landingForce);
+        ResolveLanding(landedCap, landingPosition, landingForce, isThrowLanding: true);
     }
 
     void OnCapFlipped(Cap flippedCap, Vector2 position, float incomingForce)
@@ -267,7 +267,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             source.ActivationDepthPlusOne);
     }
 
-    void ResolveLanding(Cap landedCap, Vector2 landingPosition, float landingForce)
+    void ResolveLanding(Cap landedCap, Vector2 landingPosition, float landingForce, bool isThrowLanding = false)
     {
         if (landedCap == null) return;
 
@@ -343,7 +343,34 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             OnTableImpact?.Invoke(landingPosition3D, landingForce);
         }
 
+        // Check if the slammer (thrown cap) has a bomb effect that should trigger
+        // on landing from a throw. Only fires for throw landings (not flip landings)
+        // to avoid double-triggering with ResolvePendingFlipEffects.
+        if (isThrowLanding)
+            TryTriggerBombOnThrowLanding(landedCap, landingPosition, landingForce);
+
         ApplyPush(landedCap, landingPosition);
+    }
+
+    void TryTriggerBombOnThrowLanding(Cap landedCap, Vector2 landingPosition, float landingForce)
+    {
+        if (landedCap == null || landedCap.FlipEffects == null) return;
+
+        for (int i = 0; i < landedCap.FlipEffects.Length; i++)
+        {
+            if (landedCap.FlipEffects[i] is BombCapFlipEffect bomb)
+            {
+                if (bomb.ShouldTrigger(landedCap.IsHeads))
+                {
+                    var flipEvent = new CapFlipEvent(landedCap, landingPosition, landingForce);
+                    _effectResolver.ResolveImmediate(flipEvent);
+
+                    Vector3 pos3D = CapMath.FromXZ(landingPosition, 0f);
+                    bomb.PlayFeedback(pos3D, landingForce);
+                }
+                break;
+            }
+        }
     }
 
     // A cap that came down past the field never touched the table, so it makes no landing sound.

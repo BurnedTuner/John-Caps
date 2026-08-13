@@ -1,13 +1,29 @@
 using UnityEngine;
 
 /// <summary>
-/// Launches nearby caps away from this cap when it finishes a flip.
-/// Bomb levels are prefab variants with different Radius and Force values.
+/// Which side the bomb must land on to trigger.
+/// </summary>
+public enum BombTriggerSide
+{
+    Heads = 0,
+    Tails = 1,
+    Either = 2
+}
+
+/// <summary>
+/// Launches nearby caps away from this cap when it finishes a flip OR when it
+/// lands from a hand throw on the trigger side.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Cap))]
 public sealed class BombCapFlipEffect : CapFlipEffect
 {
+    [Header("Trigger")]
+    [Tooltip("Which side the bomb must land on to trigger the explosion. " +
+             "Heads = bomb explodes when it lands heads-up. Tails = explodes when tails-up. " +
+             "Either = explodes on any landing.")]
+    public BombTriggerSide TriggerSide = BombTriggerSide.Heads;
+
     [SerializeField, Min(0.01f)]
     [Tooltip("Explosion radius on the XZ plane, measured between cap centres.")]
     private float _radius = 3f;
@@ -39,7 +55,22 @@ public sealed class BombCapFlipEffect : CapFlipEffect
         ICapEffectCommandSink commands)
     {
         if (flipEvent.Source == null || _radius <= 0f || _force <= 0f) return;
+        if (!ShouldTrigger(flipEvent.Source.IsHeads)) return;
         commands.Add(new RadialLaunchCommand(flipEvent.Source, flipEvent.Position, _radius, _force));
+    }
+
+    /// <summary>
+    /// Returns true if the bomb should explode given the side it landed on.
+    /// </summary>
+    public bool ShouldTrigger(bool landedHeads)
+    {
+        return TriggerSide switch
+        {
+            BombTriggerSide.Heads => landedHeads,
+            BombTriggerSide.Tails => !landedHeads,
+            BombTriggerSide.Either => true,
+            _ => false,
+        };
     }
 
     void OnValidate()

@@ -991,11 +991,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   DeckTemplate: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
-  SpawnPoint: {fileID: 1509960716}
+  HandCamera: {fileID: 1100515957}
+  HandAnchor: {fileID: 1509960716}
   HandSize: 3
   SlotSpacing: 3
-  SlotBackOffset: 1.5
-  SlotYOffset: -2
+  HandDepth: 0
+  HandVerticalOffset: 0
   CapGrabRadiusPixels: 80
   Owner: 1
   PlayerHandLayer: 3
@@ -1570,6 +1571,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1039596993}
   m_CullTransparentMesh: 1
+--- !u!20 &1100515957 stripped
+Camera:
+  m_CorrespondingSourceObject: {fileID: 3037818553459505959, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+  m_PrefabInstance: {fileID: 1945879161}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1173679231
 GameObject:
   m_ObjectHideFlags: 0
@@ -1631,6 +1637,42 @@ PrefabInstance:
       propertyPath: m_Name
       value: BasicScene
       objectReference: {fileID: 0}
+    - target: {fileID: 4105249724942728188, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -4.75
+      objectReference: {fileID: 0}
+    - target: {fileID: 4105249724942728188, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 10.34
+      objectReference: {fileID: 0}
+    - target: {fileID: 4105249724942728188, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.86602587
+      objectReference: {fileID: 0}
+    - target: {fileID: 4105249724942728188, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.49999917
+      objectReference: {fileID: 0}
+    - target: {fileID: 4105249724942728188, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4105249724942728188, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4105249724942728188, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: -60
+      objectReference: {fileID: 0}
+    - target: {fileID: 5175839692357260753, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: _hand
+      value: 
+      objectReference: {fileID: 472246326}
+    - target: {fileID: 5175839692357260753, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: HandCamera
+      value: 
+      objectReference: {fileID: 1100515957}
     - target: {fileID: 6576823205662733966, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_LocalPosition.x
       value: -3.2676153
