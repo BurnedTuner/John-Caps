@@ -254,6 +254,11 @@ public sealed class CapThrower : MonoBehaviour
                 return true;
         }
 
+        // Defender cap zones: circular no-aim zones around defender caps.
+        // Blocks the player if the defender is owned by the opponent (or set to Both).
+        if (CapAimRules.IsBlockedByDefenderCap(point, capRadius, ThrowOwner))
+            return true;
+
         return false;
     }
 

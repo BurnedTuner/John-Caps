@@ -1176,6 +1176,7 @@ MonoBehaviour:
   _firstTurn: 1
   _neutralGrantsExtraTurn: 0
   _endMatchWhenSideWipedOut: 1
+  _stackedCapsCountAsOnField: 1
   _maxConsecutiveTurns: 0
   _turnTimeout: 15
   _logTurns: 1
@@ -1237,10 +1238,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _entries:
+  - Prefab: {fileID: 8346996880160647550, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+    Count: 1
   - Prefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     Count: 5
-  - Prefab: {fileID: 8693585558862005274, guid: 21a3a79e2bc267242995580d2798209e, type: 3}
-    Count: 1
   _shuffle: 1
   _randomSeed: 0
   _spawnPoint: {fileID: 656311913}
@@ -1290,6 +1291,7 @@ MonoBehaviour:
     PlayerThrowPowerOverride: 0
     VerboseLog: 0
     DrawGizmos: 0
+  _verifyPrediction: 0
 --- !u!114 &1868331109 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 1800930899156425945, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
@@ -1419,6 +1421,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _fieldCollider: {fileID: 1945879162}
   _fallSpin: 1
+  _edgeToppleAngle: 105
+  _edgeToppleDuration: 0.35
   _fallGravityScale: 6
   _vanishHeight: -10
   _fallLifetime: 10

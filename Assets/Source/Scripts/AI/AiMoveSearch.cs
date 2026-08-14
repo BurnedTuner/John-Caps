@@ -319,6 +319,10 @@ public sealed class AiMoveSearch
         if (_checkScoringZones && CapAimRules.IsBlockedByScoringZone(CapMath.FromXZ(point, 0f), slammerRadius))
             return false;
 
+        // Defender cap zones: the AI (opponent) is blocked by player-owned defenders.
+        if (CapAimRules.IsBlockedByDefenderCap(CapMath.FromXZ(point, 0f), slammerRadius, CapOwner.Opponent))
+            return false;
+
         return true;
     }
 
