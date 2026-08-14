@@ -430,6 +430,19 @@ public sealed class CapThrower : MonoBehaviour
     float GetDragDistance() =>
         Vector2.Distance(CapMath.ToXZ(ThrowOriginPos), _aimPoint);
 
+    /// <summary>
+    /// Returns the held cap's prediction-depth bonus from a PredictorCapEffect
+    /// component, or 0 if the cap has no such component. Added to
+    /// CapTuning.PredictionDepth during aim preview to give the player more
+    /// flip trajectories when aiming with a predictor cap.
+    /// </summary>
+    int GetHeldCapPredictionBonus()
+    {
+        if (_heldCap == null) return 0;
+        var predictor = _heldCap.GetComponent<PredictorCapEffect>();
+        return predictor != null ? predictor.PredictionDepthBonus : 0;
+    }
+
     void UpdateAimPreview()
     {
         if (!_isDirectAimAllowed)
@@ -468,10 +481,13 @@ public sealed class CapThrower : MonoBehaviour
         //   Direct → always shown (primary effect of the throw)
         //   Chain  → needs PredictContinuedChain
         //   Stack  → needs PredictContinuedStack
+        //
+        // Predictor cap bonus: if the held cap has a PredictorCapEffect,
+        // add its PredictionDepthBonus to the effective depth.
         _fullPredictions.Clear();
         _continuationPredictions.Clear();
 
-        int depth = _tuning.PredictionDepth;
+        int depth = _tuning.PredictionDepth + GetHeldCapPredictionBonus();
         for (int i = 0; i < _predictionResults.Count; i++)
         {
             CapPrediction pred = _predictionResults[i];
