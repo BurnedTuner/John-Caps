@@ -17,8 +17,16 @@ public sealed class CapFieldBoundary : MonoBehaviour
     [SerializeField] private BoxCollider _fieldCollider;
 
     [Header("Fall off the field")]
-    [Tooltip("Tumble speed (radians/second) around the edge the cap falls over.")]
+    [Tooltip("Tumble speed (radians/second) kept up while a cap is falling, after it has cleared the edge.")]
     [Min(0f)][SerializeField] private float _fallSpin = 1f;
+    [Tooltip("How far a cap turns over the rim, in degrees, before it lets go and falls free. " +
+             "Applies to a cap the table still holds up: its centre crossed the edge, but almost its " +
+             "whole face is still over the table, so it has to topple before it can fall. Past 90° it " +
+             "is unambiguously going over.")]
+    [Range(45f, 180f)][SerializeField] private float _edgeToppleAngle = 105f;
+    [Tooltip("Seconds the topple over the rim takes. Caps are wide (radius 1) and fall under scaled " +
+             "gravity, so a real topple is quick — around 0.3 s.")]
+    [Min(0.01f)][SerializeField] private float _edgeToppleDuration = 0.35f;
     [Tooltip("Gravity multiplier for a falling cap. Caps are large, so scene gravity alone looks floaty.")]
     [Range(1f, 20f)][SerializeField] private float _fallGravityScale = 6f;
     [Tooltip("World height at which a falling cap disappears.")]
@@ -207,18 +215,25 @@ public sealed class CapFieldBoundary : MonoBehaviour
 
     void DropCap(Cap cap, Vector3 previousPosition)
     {
-        // A cap that still reaches the field has landed on it, so it starts falling from rest and
-        // simply tips over the edge. A cap that came down past the field never touched anything, so
-        // it keeps the speed of its last move and flies on.
+        DistanceToEdge(cap.GroundPosition, out Vector2 nearestEdgePoint);
+        Vector3 outwardDirection = ResolveOutwardDirection(cap.GroundPosition, nearestEdgePoint);
+
+        // A cap that still reaches the field has landed on it and has to topple over the rim before it
+        // can fall — almost its whole face is still over the table. A cap that came down past the field
+        // never touched anything, so it has nothing to topple over: it keeps the speed of its last move
+        // and flies on.
         bool landedOnField = Supports(cap.GroundPosition, cap.Parameters.Radius);
-        Vector3 velocity = landedOnField || Time.deltaTime <= 0f
-            ? Vector3.zero
-            : (cap.transform.position - previousPosition) / Time.deltaTime;
+        Vector3 velocity = !landedOnField && Time.deltaTime > 0f
+            ? (cap.transform.position - previousPosition) / Time.deltaTime
+            : Vector3.zero;
 
         var settings = new FallingCap.Settings
         {
-            FieldCenter = CapMath.ToXZ(_fieldCollider.transform.TransformPoint(_fieldCollider.center)),
+            OutwardDirection = outwardDirection,
+            TopplesOverEdge = landedOnField,
             Velocity = velocity,
+            ToppleAngle = _edgeToppleAngle,
+            ToppleDuration = _edgeToppleDuration,
             Spin = _fallSpin,
             GravityScale = _fallGravityScale,
             VanishHeight = _vanishHeight,
@@ -229,11 +244,60 @@ public sealed class CapFieldBoundary : MonoBehaviour
         List<Cap> stack = cap.ReleaseStack();
         for (int i = 0; i < stack.Count; i++)
         {
+            // Every cap topples around the edge under its own underside, so a stack does not swing about
+            // the bottom cap's rim.
+            settings.Pivot = ResolveTopplePivot(stack[i], nearestEdgePoint);
+
             // Announced before the fall starts, while the cap is still intact and readable.
             OnCapLeftField?.Invoke(stack[i]);
             FallingCap.Begin(stack[i], this, settings);
         }
     }
+
+    /// <summary>
+    /// The world point a cap topples around: on the field edge it crossed, at the height of the cap's
+    /// underside. Read off the collider so a cap pivots on its own bottom face — pivoting on its centre
+    /// would drive half of it down through the table as it turns.
+    /// </summary>
+    static Vector3 ResolveTopplePivot(Cap cap, Vector2 edgePoint)
+    {
+        Collider capCollider = cap.GetComponent<Collider>();
+        float undersideY = capCollider != null && capCollider.enabled
+            ? capCollider.bounds.min.y
+            : cap.transform.position.y;
+
+        return new Vector3(edgePoint.x, undersideY, edgePoint.y);
+    }
+
+    /// <summary>
+    /// Which way to tip a cap that is leaving the field: the outward normal of the edge its centre
+    /// crossed. <paramref name="nearestEdgePoint"/> comes from
+    /// <see cref="DistanceToEdge(Vector2, out Vector2)"/>, which clamps a point outside the field onto
+    /// the field box, so the offset between the two is that normal — and near a corner it is the corner
+    /// diagonal, which is also the way the cap goes.
+    ///
+    /// That offset is only as long as the overhang, so for a cap sitting all but exactly on the edge it
+    /// is too short to normalise reliably. Those fall back to pointing away from the field centre, which
+    /// is the direction the cap has to travel anyway.
+    /// </summary>
+    Vector3 ResolveOutwardDirection(Vector2 groundPoint, Vector2 nearestEdgePoint)
+    {
+        Vector2 outward = groundPoint - nearestEdgePoint;
+
+        // Kept above Vector3.normalized's own 1e-5 threshold, below which it returns a zero vector —
+        // that would leave the cap with no topple axis at all.
+        if (outward.sqrMagnitude <= 1e-8f)
+            outward = groundPoint - FieldCenterXZ;
+
+        return outward.sqrMagnitude > 1e-8f
+            ? new Vector3(outward.x, 0f, outward.y).normalized
+            : Vector3.forward;
+    }
+
+    /// <summary>The field's centre projected onto the ground plane.</summary>
+    Vector2 FieldCenterXZ => _fieldCollider != null
+        ? CapMath.ToXZ(_fieldCollider.transform.TransformPoint(_fieldCollider.center))
+        : Vector2.zero;
 
     internal void ReportFallingCapVanished(Vector3 position) => OnFallingCapVanished?.Invoke(position);
 
