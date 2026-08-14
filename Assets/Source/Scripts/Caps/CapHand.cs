@@ -102,6 +102,47 @@ public class CapHand : MonoBehaviour
     }
 
     /// <summary>
+    /// Returns the world position of the hand slot where the given cap would
+    /// be if it weren't held/throwing/flying. Used by CapThrower to keep the
+    /// held cap following its hand slot when the HandAnchor (and therefore
+    /// the HandCamera) moves during aiming — without this, the held cap is
+    /// pinned to its click-time world position, so when the camera moves the
+    /// cap (and the trajectory origin computed from it) doesn't follow.
+    /// </summary>
+    public Vector3 GetCapSlotPosition(Cap cap)
+    {
+        if (cap == null) return Vector3.zero;
+
+        Transform anchor = HandAnchor != null ? HandAnchor
+            : (HandCamera != null ? HandCamera.transform : transform);
+        if (anchor == null) return Vector3.zero;
+
+        Vector3 anchorPos = anchor.position;
+        Vector3 forward = anchor.forward;
+        Vector3 up = anchor.up;
+        Vector3 right = anchor.right;
+
+        Vector3 rowCenter = anchorPos + forward * HandDepth + up * HandVerticalOffset;
+
+        // Count non-null caps and find the given cap's placedIndex (same
+        // logic as LayoutHand — caps are placed left-to-right, skipping nulls).
+        int nonNullCount = 0;
+        int capPlacedIndex = -1;
+        for (int i = 0; i < _handCaps.Count; i++)
+        {
+            if (_handCaps[i] == null) continue;
+            if (_handCaps[i] == cap) capPlacedIndex = nonNullCount;
+            nonNullCount++;
+        }
+
+        if (capPlacedIndex < 0 || nonNullCount == 0) return anchorPos;
+
+        float centerOffset = (nonNullCount - 1) * 0.5f;
+        float slotOffset = capPlacedIndex - centerOffset;
+        return rowCenter + right * (slotOffset * SlotSpacing);
+    }
+
+    /// <summary>
     /// Find the hand cap under the given screen position (in pixels).
     /// Returns the cap, or null if no cap is within CapGrabRadiusPixels.
     /// Uses the provided camera to project cap world positions to screen.

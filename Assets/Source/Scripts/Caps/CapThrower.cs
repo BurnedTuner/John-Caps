@@ -44,33 +44,36 @@ public sealed class CapThrower : MonoBehaviour
     public Cap WaitingCap => _heldCap;
 
     /// <summary>
-    /// The world-space position from which throws originate. Calculated by
-    /// projecting the held cap's screen position (as seen by the HandCamera)
-    /// onto the PlayerCamera's near plane. This gives a world position that
-    /// appears at the same screen spot from the Main Camera — so the trajectory
-    /// arc and throw start from where the player sees the cap on screen.
-    /// Recalculated every frame so it follows camera movement.
+    /// The world-space position from which throws originate. Computed by
+    /// projecting the cap's CAPTURED viewport position + depth (saved at click
+    /// time) through PlayerCamera's CURRENT transform. This makes the throw
+    /// origin camera-relative — it follows the camera as it moves — while
+    /// matching the cap's exact screen position and depth at click time, so
+    /// there is NO teleport when the throw begins.
+    ///
+    /// Why viewport + depth instead of the cap's live transform.position:
+    /// If HandAnchor is a static world object (not parented to the camera),
+    /// the cap's world position doesn't change when the camera moves, so the
+    /// trajectory and throw origin would stay at a fixed world position
+    /// instead of following the camera. By capturing the viewport (0-1,
+    /// camera-relative) and depth at click time, then recomputing the world
+    /// position every frame via PlayerCamera.ViewportToWorldPoint, the
+    /// position automatically moves with the camera.
     /// </summary>
     Vector3 ThrowOriginPos
     {
         get
         {
-            if (PlayerCamera == null || _heldCap == null)
+            if (PlayerCamera == null || _heldCap == null || !_hasGrab)
                 return _tuning.SpawnPosition;
 
-            // Get the cap's screen position as seen by the HandCamera (or
-            // PlayerCamera if no HandCamera is assigned).
-            Camera projCam = HandCamera != null ? HandCamera : PlayerCamera;
-            Vector3 screenPos = projCam.WorldToScreenPoint(_heldCap.transform.position);
-            if (screenPos.z <= 0f)
-                return PlayerCamera.transform.position;
-
-            // Project that screen position onto the PlayerCamera at a reasonable
-            // distance from the camera (not the near plane — that's too close and
-            // the cap would be behind/inside the camera). Use 2 units in front
-            // so the cap is visible and the throw arc looks natural.
-            Vector3 playerScreen = new Vector3(screenPos.x, screenPos.y, 2f);
-            return PlayerCamera.ScreenToWorldPoint(playerScreen);
+            // Recompute from captured viewport + depth using PlayerCamera's
+            // current transform. ViewportToWorldPoint = camera.position +
+            // camera.forward * depth + camera.right * (vx-0.5) * width +
+            // camera.up * (vy-0.5) * height. As the camera moves, this world
+            // position moves with it.
+            return PlayerCamera.ViewportToWorldPoint(
+                new Vector3(_grabViewport.x, _grabViewport.y, _grabDepth));
         }
     }
 
@@ -88,6 +91,17 @@ public sealed class CapThrower : MonoBehaviour
     private Cap _heldCap;
     private Vector3 _heldCapOriginalPos;
     private bool _cursorLeftHandArea;
+
+    // Captured at click time: the cap's viewport position (0-1, camera-relative)
+    // on the HandCamera (or PlayerCamera if no HandCamera), and the cap's depth
+    // from PlayerCamera along its forward axis. Throughout aiming, we
+    // recompute the cap's world position from these values via
+    // PlayerCamera.ViewportToWorldPoint — this makes the cap, trajectory, and
+    // throw origin follow the camera while matching the cap's click-time
+    // screen position and depth (no teleport).
+    private Vector3 _grabViewport;
+    private float _grabDepth;
+    private bool _hasGrab;
 
 
     void Awake()
@@ -294,6 +308,28 @@ public sealed class CapThrower : MonoBehaviour
         _heldCapOriginalPos = cap.transform.position; // hand position (for cancel detection)
         _cursorLeftHandArea = false;
 
+        // Capture the cap's viewport position and depth at click time.
+        // Throughout aiming, ThrowOriginPos recomputes the world position
+        // from these values using PlayerCamera's CURRENT transform — so the
+        // cap, trajectory, and throw origin follow the camera as it moves.
+        // Depth is along PlayerCamera's forward axis (what ViewportToWorldPoint
+        // expects for z). Clamped to >= 0.5 to avoid degenerate near-plane
+        // positions.
+        Camera grabCam = HandCamera != null ? HandCamera : PlayerCamera;
+        if (PlayerCamera != null && grabCam != null)
+        {
+            _grabViewport = grabCam.WorldToViewportPoint(cap.transform.position);
+            _grabDepth = Vector3.Dot(
+                cap.transform.position - PlayerCamera.transform.position,
+                PlayerCamera.transform.forward);
+            if (_grabDepth < 0.5f) _grabDepth = 2f;
+            _hasGrab = true;
+        }
+        else
+        {
+            _hasGrab = false;
+        }
+
         _aimPoint = CapMath.ToXZ(_heldCapOriginalPos);
         _isDirectAimAllowed = false;
         TrajectoryPreview?.Hide();
@@ -316,7 +352,22 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        // Keep the held cap at its hand position (HandCamera overlay).
+        // Keep the held cap at its hand slot position (NOT at ThrowOriginPos).
+        // This prevents the grab teleport — the cap stays where it was when
+        // clicked. ThrowOriginPos (the viewport+depth projection) is used ONLY
+        // for the trajectory rendering and the throw start position, NOT for
+        // the cap's visual position during aiming.
+        //
+        // GetCapSlotPosition returns the cap's current hand slot position
+        // (HandAnchor-relative), so if HandAnchor moves with the camera, the
+        // cap follows. If HandAnchor is static, the cap stays at its slot.
+        if (_hand != null)
+        {
+            Vector3 slotPos = _hand.GetCapSlotPosition(_heldCap);
+            if (slotPos.sqrMagnitude > 0.0001f)
+                _heldCapOriginalPos = slotPos;
+        }
+
         _heldCap.UpdateHeldBasePosition(_heldCapOriginalPos);
 
         _heldCap.StepSimulation(Time.deltaTime, null);
@@ -412,12 +463,21 @@ public sealed class CapThrower : MonoBehaviour
     void CancelAiming()
     {
         TrajectoryPreview?.Hide();
+        _hasGrab = false;
 
         if (_heldCap != null)
         {
             _heldCap.EndHeldToIdle();
-            // Cap returns to its hand position in the HandCamera overlay.
-            _heldCap.transform.position = _heldCapOriginalPos;
+            // Cap returns to its hand slot (HandAnchor-relative), NOT the
+            // camera-following position. GetCapSlotPosition gives the current
+            // slot position so the cap snaps back correctly even if the camera
+            // moved during aiming.
+            if (_hand != null)
+            {
+                Vector3 slotPos = _hand.GetCapSlotPosition(_heldCap);
+                if (slotPos.sqrMagnitude > 0.0001f)
+                    _heldCap.transform.position = slotPos;
+            }
         }
 
         _heldCap = null;
@@ -473,14 +533,39 @@ public sealed class CapThrower : MonoBehaviour
 
         TrajectoryPreview?.Hide();
 
-        // Capture the throw origin ONCE — this is the exact same position the
-        // trajectory arc was rendering from. Don't let ThrowOriginPos recalculate
-        // after this point (e.g. when _heldCap is cleared).
+        // The throw starts from ThrowOriginPos (the viewport+depth projection
+        // that the trajectory was rendered from). The cap is currently at its
+        // hand slot (_heldCapOriginalPos), so we move it to the throw start.
+        // This is the "transition to throw start" — the cap moves from its
+        // hand position to the throw origin.
         Vector3 startPosition = ThrowOriginPos;
         Vector3 landingPosition = CapMath.FromXZ(_aimPoint, 0f);
 
-        // Move the cap to the throw origin.
+        // Move the cap to the throw start position.
         cap.transform.position = startPosition;
+
+        // Update the cap's rotation for the throw. The cap's rotation was set
+        // by CapHand.LayoutHand to face the HandAnchor (which may differ from
+        // the HandCamera). The user wants the cap's rotation relative to the
+        // HAND CAMERA preserved — i.e., whatever rotation the cap had relative
+        // to HandCamera before the throw, it should have the same rotation
+        // relative to PlayerCamera at throw start.
+        //
+        // This is a frame-of-reference transfer:
+        //   localRot = inverse(handCamera.rotation) * cap.rotation
+        //   cap.rotation = PlayerCamera.rotation * localRot
+        //
+        // Source is always the HandCamera (NOT the HandAnchor) because the
+        // user wants the hand camera's view preserved specifically. If no
+        // HandCamera is assigned, fall back to PlayerCamera (no transfer).
+        {
+            Camera sourceCam = HandCamera != null ? HandCamera : PlayerCamera;
+            Quaternion localRot = Quaternion.Inverse(sourceCam.transform.rotation) * cap.transform.rotation;
+            cap.transform.rotation = PlayerCamera.transform.rotation * localRot;
+        }
+
+        // Clear grab state — the cap is no longer held.
+        _hasGrab = false;
 
         // Reset layer back to Default (0) so it interacts with the world normally
         // and is visible from the Main Camera.
