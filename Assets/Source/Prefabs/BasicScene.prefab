@@ -497,6 +497,8 @@ MonoBehaviour:
   CapFlipApexHeight: 0.65
   SettleDelay: 0.22
   PredictionDepth: 0
+  PredictContinuedChain: 0
+  PredictContinuedStack: 1
   ArcSamples: 24
   GhostMaterial: {fileID: 2100000, guid: c1d495c1c9de15d4fb976690c694e48e, type: 2}
   GhostAlpha: 0.35

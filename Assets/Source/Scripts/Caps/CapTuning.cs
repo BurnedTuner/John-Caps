@@ -47,7 +47,21 @@ public class CapTuning : MonoBehaviour
     [Min(0f)] public float SettleDelay = 0.22f;
 
     [Header("Prediction / preview")]
+    [Tooltip("How many flip trajectories to show. 0 = only the throw arc, no flip predictions. " +
+             "1 = one flip trajectory + ghost. 2 = two, etc. " +
+             "Each predicted cap (direct hit, chain reaction, or stack peel-off) counts as 1. " +
+             "If the chain/stack continues beyond this depth, a half-trajectory continuation " +
+             "indicator is shown (controlled by the toggles below).")]
     [Range(0, 16)] public int PredictionDepth = 4;
+
+    [Tooltip("Show a half-trajectory continuation indicator for chain-reaction caps " +
+             "beyond PredictionDepth. If off, chain continuations are hidden.")]
+    public bool PredictContinuedChain = true;
+
+    [Tooltip("Show a half-trajectory continuation indicator for stack-peel-off caps " +
+             "beyond PredictionDepth. If off, stack continuations are hidden.")]
+    public bool PredictContinuedStack = true;
+
     [Range(8, 64)] public int ArcSamples = 24;
 
     [Header("Ghost Preview (stack aim preview)")]

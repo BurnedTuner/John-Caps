@@ -83,6 +83,8 @@ public sealed class CapThrower : MonoBehaviour
     private readonly RaycastHit[] _fieldHitBuffer = new RaycastHit[AimOverlapBufferSize];
     private readonly List<CapPrediction> _directHitSeeds = new();
     private readonly List<CapPrediction> _predictionResults = new();
+    private readonly List<CapPrediction> _fullPredictions = new();
+    private readonly List<CapPrediction> _continuationPredictions = new();
 
     private CapTuning _tuning;
     private Vector2 _aimPoint;
@@ -434,6 +436,8 @@ public sealed class CapThrower : MonoBehaviour
         {
             _directHitSeeds.Clear();
             _predictionResults.Clear();
+            _fullPredictions.Clear();
+            _continuationPredictions.Clear();
             TrajectoryPreview?.Hide();
             return;
         }
@@ -443,9 +447,7 @@ public sealed class CapThrower : MonoBehaviour
 
         CollectDirectHitPredictions(_aimPoint, _throwForce, slammerRadius, _directHitSeeds);
 
-        // Use StackPeelOffPredictor: ignores PredictionDepth (shows full chain),
-        // respects MaximumChainLength, and peels off stacks the same way the real
-        // sim does — so ghost previews match what will actually happen.
+        // Predict the FULL chain — depth filtering happens below.
         _predictionResults.Clear();
         StackPeelOffPredictor.Predict(
             CapRegistry.AllCaps,
@@ -453,16 +455,54 @@ public sealed class CapThrower : MonoBehaviour
             _tuning,
             _predictionResults);
 
+        // Split predictions by depth:
+        //   Depth < PredictionDepth  → full (trajectory + ghost)
+        //   Depth == PredictionDepth → continuation (half trajectory, no ghost)
+        //   Depth > PredictionDepth  → hidden
+        //
+        // When PredictionDepth = 0, ALL predictions at depth 0 become
+        // continuations (dotted-line placeholders) — this shows the player
+        // "something will be hit" without full detail.
+        //
+        // Continuations are filtered by toggle based on source:
+        //   Direct → always shown (primary effect of the throw)
+        //   Chain  → needs PredictContinuedChain
+        //   Stack  → needs PredictContinuedStack
+        _fullPredictions.Clear();
+        _continuationPredictions.Clear();
+
+        int depth = _tuning.PredictionDepth;
+        for (int i = 0; i < _predictionResults.Count; i++)
+        {
+            CapPrediction pred = _predictionResults[i];
+            if (pred.Depth < depth)
+            {
+                _fullPredictions.Add(pred);
+            }
+            else if (pred.Depth == depth)
+            {
+                // N+1 continuation — check toggle based on source.
+                // "Chain" toggle covers both Direct and Chain sources (any
+                // non-stack prediction). "Stack" toggle covers peel-off caps.
+                bool show = pred.Source == PredictionSource.Stack
+                    ? _tuning.PredictContinuedStack
+                    : _tuning.PredictContinuedChain;
+                if (show)
+                    _continuationPredictions.Add(pred);
+            }
+            // else: Depth > depth → hidden, drop.
+        }
+
         TrajectoryPreview?.Show(
             ThrowOriginPos,
             _aimPoint,
             slammerRadius,
             _tuning,
-            _directHitSeeds,
-            _predictionResults);
+            _fullPredictions,
+            _continuationPredictions);
 
-        // Add transparent ghost-cap previews on top of the line-based trajectory.
-        TrajectoryPreview?.ShowGhosts(_predictionResults);
+        // Ghosts only for full predictions (not continuations).
+        TrajectoryPreview?.ShowGhosts(_fullPredictions);
     }
 
     void CancelAiming()
@@ -509,6 +549,8 @@ public sealed class CapThrower : MonoBehaviour
         TrajectoryPreview?.Hide();
         _directHitSeeds.Clear();
         _predictionResults.Clear();
+        _fullPredictions.Clear();
+        _continuationPredictions.Clear();
         _isDirectAimAllowed = false;
         CurrentState = State.Idle;
     }
@@ -639,7 +681,8 @@ public sealed class CapThrower : MonoBehaviour
                 direction,
                 inheritedForce,
                 travelDistance,
-                willLandHeads: !cap.IsHeads));
+                willLandHeads: !cap.IsHeads,
+                source: PredictionSource.Direct));
         }
     }
 
@@ -679,6 +722,8 @@ public sealed class CapThrower : MonoBehaviour
         TrajectoryPreview?.ClearGhosts(); // destroy pooled ghosts — caps are being recreated
         _directHitSeeds.Clear();
         _predictionResults.Clear();
+        _fullPredictions.Clear();
+        _continuationPredictions.Clear();
         _isDirectAimAllowed = false;
         CurrentState = State.Idle;
 

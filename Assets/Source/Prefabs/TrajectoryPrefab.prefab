@@ -50,3 +50,4 @@ MonoBehaviour:
   DirectHitColor: {r: 0.28, g: 1, b: 0.52, a: 0.95}
   DeepChainColor: {r: 1, g: 0.42, b: 0.18, a: 0.95}
   LandingCircleColor: {r: 1, g: 0.68, b: 0.18, a: 0.55}
+  ContinuationColor: {r: 0.5019608, g: 0.8, b: 1, a: 0.69803923}

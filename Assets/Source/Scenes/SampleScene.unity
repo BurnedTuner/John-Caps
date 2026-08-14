@@ -378,7 +378,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: PredictionDepth
-      value: 1
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: PredictContinuedChain
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3809033516813011136, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_Name

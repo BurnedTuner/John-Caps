@@ -5,9 +5,12 @@ using UnityEngine;
 /// Visualizes the throw trajectory and chain reaction predictions.
 /// - Draws a parabolic ARC from the spawn point to the aim point (visual only).
 /// - Draws a landing circle at the aim point (thrown cap's landing spot).
-/// - For each predicted cap (direct hit + chain):
+/// - For each FULL prediction (within PredictionDepth):
 ///   - Draws a line from its start position to its predicted end position (color-coded by depth).
 ///   - Draws a circle at its predicted end position (using that cap's own radius).
+/// - For each CONTINUATION prediction (the N+1 cap beyond PredictionDepth):
+///   - Draws a HALF-LENGTH line in ContinuationColor (placeholder for a dotted line).
+///   - No end circle, no ghost.
 /// </summary>
 public class TrajectoryPreview : MonoBehaviour
 {
@@ -21,10 +24,15 @@ public class TrajectoryPreview : MonoBehaviour
     public Color DeepChainColor = new Color(1f, 0.42f, 0.18f, 0.95f);
     public Color LandingCircleColor = new Color(1f, 0.68f, 0.18f, 0.55f);
 
+    [Tooltip("Color for the half-length continuation indicator (the N+1 cap beyond PredictionDepth). " +
+             "Placeholder for a future dotted-line style.")]
+    public Color ContinuationColor = new Color(1f, 1f, 1f, 0.4f);
+
     private LineRenderer _arcLine;
     private LineRenderer _landingCircle;
     private readonly List<LineRenderer> _predictionLines = new();
     private readonly List<LineRenderer> _endCircles = new();
+    private readonly List<LineRenderer> _continuationLines = new();
 
     private Transform _lineParent;
     private GameObject _runtimeContainer;
@@ -88,13 +96,22 @@ public class TrajectoryPreview : MonoBehaviour
         }
     }
 
+    void EnsureContinuationLineCount(int count)
+    {
+        while (_continuationLines.Count < count)
+        {
+            var line = CreateLineRenderer($"Continuation_{_continuationLines.Count}", ContinuationColor);
+            _continuationLines.Add(line);
+        }
+    }
+
     public void Show(
         Vector3 spawnPoint,
         Vector2 aimPoint,
         float slammerRadius,
         CapTuning tuning,
-        IReadOnlyList<CapPrediction> directHits,
-        IReadOnlyList<CapPrediction> chainPredictions)
+        IReadOnlyList<CapPrediction> fullPredictions,
+        IReadOnlyList<CapPrediction> continuationPredictions)
     {
         EnsureLineRenderers();
 
@@ -117,30 +134,35 @@ public class TrajectoryPreview : MonoBehaviour
         // --- Landing circle (thrown cap's landing spot) ---
         DrawCircle(_landingCircle, aim3D, slammerRadius, LandingCircleColor);
 
-        // --- Prediction lines + end circles ---
-        int totalPredictions = directHits.Count + chainPredictions.Count;
-        EnsurePredictionLineCount(totalPredictions);
-        EnsureEndCircleCount(totalPredictions);
+        // --- Full prediction lines + end circles ---
+        int fullCount = fullPredictions.Count;
+        EnsurePredictionLineCount(fullCount);
+        EnsureEndCircleCount(fullCount);
 
-        int lineIndex = 0;
-        for (int i = 0; i < directHits.Count; i++)
+        for (int i = 0; i < fullCount; i++)
         {
-            DrawPrediction(directHits[i], lineIndex);
-            lineIndex++;
+            DrawPrediction(fullPredictions[i], i);
         }
-        for (int i = 0; i < chainPredictions.Count; i++)
-        {
-            DrawPrediction(chainPredictions[i], lineIndex);
-            lineIndex++;
-        }
-        for (int i = lineIndex; i < _predictionLines.Count; i++)
-        {
+        for (int i = fullCount; i < _predictionLines.Count; i++)
             _predictionLines[i].enabled = false;
-        }
-        for (int i = lineIndex; i < _endCircles.Count; i++)
-        {
+        for (int i = fullCount; i < _endCircles.Count; i++)
             _endCircles[i].enabled = false;
+
+        // --- Continuation lines (half-length, no end circle, no ghost) ---
+        int contCount = continuationPredictions != null ? continuationPredictions.Count : 0;
+        EnsureContinuationLineCount(contCount);
+        // If there are full predictions, stack continuations draw the second half
+        // to avoid overlapping the previous cap's full trajectory. If there are
+        // NO full predictions (N=0), stack continuations draw the first half —
+        // there's nothing to overlap, and the first half shows the cap launching
+        // from the stack instead of a disconnected floating line.
+        bool hasPrecedingFull = fullPredictions.Count > 0;
+        for (int i = 0; i < contCount; i++)
+        {
+            DrawContinuation(continuationPredictions[i], i, hasPrecedingFull);
         }
+        for (int i = contCount; i < _continuationLines.Count; i++)
+            _continuationLines[i].enabled = false;
     }
 
     public void Hide()
@@ -149,6 +171,7 @@ public class TrajectoryPreview : MonoBehaviour
         if (_landingCircle != null) _landingCircle.enabled = false;
         foreach (var line in _predictionLines) line.enabled = false;
         foreach (var circle in _endCircles) circle.enabled = false;
+        foreach (var line in _continuationLines) line.enabled = false;
         _ghostPool?.HideAll();
     }
 
@@ -161,10 +184,6 @@ public class TrajectoryPreview : MonoBehaviour
     public void ShowGhosts(IReadOnlyList<CapPrediction> predictions)
     {
         // Lazy-init in case Awake didn't run (e.g., component added at runtime).
-        // Always create a fresh runtime container as the parent — never use
-        // `transform` directly because the TrajectoryPreview GameObject might
-        // be a prefab instance whose transform Unity treats as persistent,
-        // which would cause Instantiate to refuse the parent.
         if (_ghostPool == null)
         {
             if (_lineParent == null || !_lineParent.gameObject.scene.IsValid())
@@ -206,6 +225,54 @@ public class TrajectoryPreview : MonoBehaviour
         var circle = _endCircles[lineIndex];
         float capRadius = prediction.Cap != null ? prediction.Cap.Parameters.Radius : 0.5f;
         DrawCircle(circle, end, capRadius, color);
+    }
+
+    /// <summary>
+    /// Draw a HALF-LENGTH continuation line for the N+1 prediction beyond
+    /// PredictionDepth. Signals "the chain/stack continues, but we're not
+    /// showing full detail." No end circle, no ghost. Placeholder for a
+    /// future dotted-line style.
+    ///
+    /// Which half is drawn depends on the prediction's source and whether
+    /// there are preceding full predictions:
+    ///   - Stack + hasPrecedingFull: SECOND HALF (midpoint → end). All peel-off
+    ///     caps share the same StartPosition (the stack), so the first half
+    ///     would overlap exactly with the previous cap's full trajectory.
+    ///     The second half appears AFTER the last ghost.
+    ///   - Stack + no preceding full (N=0): FIRST HALF (start → midpoint).
+    ///     There's nothing to overlap, and the first half shows the cap
+    ///     launching from the stack instead of a disconnected floating line.
+    ///   - Chain/Direct: FIRST HALF (start → midpoint). Each chain cap has
+    ///     its own distinct start position, so the first half is meaningful.
+    /// </summary>
+    void DrawContinuation(CapPrediction prediction, int lineIndex, bool hasPrecedingFull)
+    {
+        var line = _continuationLines[lineIndex];
+        line.enabled = true;
+        line.startColor = ContinuationColor;
+        line.endColor = ContinuationColor;
+
+        Vector3 start = CapMath.FromXZ(prediction.StartPosition, 0.05f);
+        Vector3 mid = CapMath.FromXZ(
+            prediction.StartPosition + prediction.Direction * (prediction.TravelDistance * 0.5f),
+            0.05f);
+        Vector3 end = CapMath.FromXZ(prediction.EndPosition, 0.05f);
+        line.positionCount = 2;
+
+        bool drawSecondHalf = prediction.Source == PredictionSource.Stack && hasPrecedingFull;
+
+        if (drawSecondHalf)
+        {
+            // Second half: midpoint → end
+            line.SetPosition(0, mid);
+            line.SetPosition(1, end);
+        }
+        else
+        {
+            // First half: start → midpoint
+            line.SetPosition(0, start);
+            line.SetPosition(1, mid);
+        }
     }
 
     void DrawCircle(LineRenderer line, Vector3 center, float radius, Color color, int segments = 32)

@@ -6,14 +6,14 @@ using UnityEngine;
 /// <see cref="CapTurnResolver.ResolveLanding"/> chain logic, but operates on
 /// simulated state without mutating any real Cap fields.
 ///
-/// Differences from <see cref="ChainPredictor"/>:
-///   - Ignores <see cref="CapTuning.PredictionDepth"/> — predicts the full
-///     chain up to <see cref="CapTuning.MaximumChainLength"/> only.
-///   - When a direct or chain hit lands on a STACK base, peels off every cap
-///     in the stack (in the same drop order the real sim uses) and emits one
-///     <see cref="CapPrediction"/> per cap.
-///   - Computes <see cref="CapPrediction.WillLandHeads"/> for every prediction
-///     so the ghost-preview system can render the correct side.
+/// Predicts the FULL chain up to <see cref="CapTuning.MaximumChainLength"/>.
+/// Each prediction is tagged with a <see cref="PredictionSource"/> (Direct,
+/// Chain, or Stack) so the caller can apply depth limits and continuation
+/// toggles differently for chain reactions vs stack peel-offs.
+///
+/// When a direct or chain hit lands on a STACK base, peels off every cap
+/// in the stack (in the same drop order the real sim uses) and emits one
+/// <see cref="CapPrediction"/> per cap with Source = Stack.
 ///
 /// The drop order mirrors Cap.HandleStackPeelOff exactly:
 ///   For stack [B, S1, S2, S3, T] (bottom-to-top), the drop sequence is
@@ -21,11 +21,6 @@ using UnityEngine;
 ///   Each iteration flips every cap still in the working stack, so a cap
 ///   dropped at iteration k has been flipped k times:
 ///   WillLandHeads = initial_IsHeads XOR (k is odd).
-///
-/// Known V1 limitation: when a peel-off cap lands on another cap with
-/// insufficient force to launch it, the real sim calls AddToStack (stacking
-/// the cap on top). This predictor pretends nothing happens — the cap just
-/// lands and stops. Acceptable for V1 ghost preview.
 /// </summary>
 public static class StackPeelOffPredictor
 {
@@ -62,6 +57,7 @@ public static class StackPeelOffPredictor
             ProcessCapLaunch(
                 hit.Cap, hit.StartPosition, hit.Direction,
                 hit.Force, hit.TravelDistance, depth: 0,
+                source: PredictionSource.Direct,
                 simPositions, simConsumed, allCaps, tuning, results);
         }
     }
@@ -77,6 +73,7 @@ public static class StackPeelOffPredictor
         float force,
         float travelDistance,
         int depth,
+        PredictionSource source,
         Dictionary<Cap, Vector2> simPositions,
         HashSet<Cap> simConsumed,
         IReadOnlyList<Cap> allCaps,
@@ -91,7 +88,6 @@ public static class StackPeelOffPredictor
         Vector2 basePos = simPositions.TryGetValue(baseCap, out Vector2 p) ? p : baseCap.GroundPosition;
 
         // Build the full stack bottom-to-top: [base, ...StackedAbove]
-        // (StackedAbove returns bottom-to-top per Cap.cs).
         var stack = new List<Cap> { baseCap };
         IReadOnlyList<Cap> above = baseCap.StackedAbove;
         for (int i = 0; i < above.Count; i++)
@@ -102,9 +98,9 @@ public static class StackPeelOffPredictor
             // Single cap, no peel-off.
             simConsumed.Add(cap);
             Vector2 landingPos = startPos + direction * travelDistance;
-            bool willLandHeads = !cap.IsHeads; // StepFly flips IsHeads once on landing
+            bool willLandHeads = !cap.IsHeads;
             results.Add(new CapPrediction(
-                cap, depth, startPos, direction, force, travelDistance, willLandHeads));
+                cap, depth, startPos, direction, force, travelDistance, willLandHeads, source));
             simPositions[cap] = landingPos;
             ProcessChainReaction(cap, landingPos, force, depth + 1,
                 simPositions, simConsumed, allCaps, tuning, results);
@@ -133,9 +129,7 @@ public static class StackPeelOffPredictor
         CapTuning tuning,
         List<CapPrediction> results)
     {
-        // stack is bottom-to-top: [base, S1, S2, ..., T]
-        // All landing positions lie on a straight line, each spaced travelDistance apart.
-        Vector2 currentLanding = startPos + direction * travelDistance; // L1 = base's own landing
+        Vector2 currentLanding = startPos + direction * travelDistance;
         int iteration = 0;
         var workingStack = new List<Cap>(stack);
 
@@ -144,14 +138,12 @@ public static class StackPeelOffPredictor
             if (results.Count >= tuning.MaximumChainLength) return;
             iteration++;
 
-            // Reverse to get top-first order (matches HandleStackPeelOff line 375).
             workingStack.Reverse();
             Cap dropCap = workingStack[0];
 
             if (dropCap == null || simConsumed.Contains(dropCap))
             {
                 if (workingStack.Count <= 1) break;
-                // Remove dropCap and continue with the remainder as new stack.
                 Cap newHead = workingStack[1];
                 workingStack.RemoveAt(0);
                 workingStack.RemoveAt(0);
@@ -162,13 +154,8 @@ public static class StackPeelOffPredictor
 
             simConsumed.Add(dropCap);
 
-            // dropCap flips once per iteration it survives. Caps dropped at iteration k
-            // have been flipped k times. WillLandHeads = initial XOR (k is odd).
             bool willLandHeads = (iteration % 2) == 1 ? !dropCap.IsHeads : dropCap.IsHeads;
 
-            // For the trajectory LINE, draw from the stack's pre-launch position
-            // (startPos) to this cap's final landing. Direction + travelDistance
-            // are recomputed so EndPosition == currentLanding exactly.
             Vector2 toLanding = currentLanding - startPos;
             float dropTravel = toLanding.magnitude;
             Vector2 dropDir = dropTravel > 0.0001f ? toLanding / dropTravel : direction;
@@ -180,25 +167,22 @@ public static class StackPeelOffPredictor
                 dropDir,
                 force,
                 dropTravel,
-                willLandHeads));
+                willLandHeads,
+                PredictionSource.Stack));
 
             simPositions[dropCap] = currentLanding;
 
-            // Chain reaction at this landing (may hit OTHER base caps/stacks).
             ProcessChainReaction(dropCap, currentLanding, force, depth + iteration,
                 simPositions, simConsumed, allCaps, tuning, results);
 
             if (workingStack.Count == 1)
-                break; // last cap dropped, no more flight
+                break;
 
-            // Set up next iteration: newHead = workingStack[1], newStack = [newHead] + workingStack[2..]
-            // This mirrors Cap.cs:398-406.
             Cap nextHead = workingStack[1];
-            workingStack.RemoveAt(0); // remove dropCap
-            workingStack.RemoveAt(0); // remove nextHead from its old position
+            workingStack.RemoveAt(0);
+            workingStack.RemoveAt(0);
             workingStack.Insert(0, nextHead);
 
-            // Next flight launches from currentLanding, lands at currentLanding + dir*travel.
             currentLanding = currentLanding + direction * travelDistance;
         }
     }
@@ -244,6 +228,7 @@ public static class StackPeelOffPredictor
 
             ProcessCapLaunch(
                 cap, capPos, dir, transferForce, travel, depth,
+                source: PredictionSource.Chain,
                 simPositions, simConsumed, allCaps, tuning, results);
         }
     }
