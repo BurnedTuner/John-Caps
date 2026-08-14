@@ -28,6 +28,11 @@ public readonly struct ExtraTurnInfo
 /// turn and throws again. Only a turn that knocks nothing off hands the board over. That makes a run
 /// of knockouts the strongest thing either side can do, and the AI evaluation is weighted to match.
 ///
+/// The match ends in one of two ways, and both are decided by what is standing on the table:
+/// a side loses the moment its last cap leaves the field, and a side that has just played its last cap
+/// loses if the other one still has anything standing — see WinnerByExhaustion. Neither is a count
+/// comparison: being behind on caps is not losing, having none is.
+///
 /// Turn ownership is derived from the board, not from the throwers: cap counts by owner are taken
 /// when the turn starts and compared once CapTurnResolver reports the board has settled.
 /// Runs after the throwers so their waiting caps already exist when the first turn begins.
@@ -79,7 +84,10 @@ public sealed class TurnController : MonoBehaviour
     public CapOwner CurrentTurn { get; private set; } = CapOwner.Neutral;
     public TurnPhase CurrentPhase { get; private set; } = TurnPhase.Idle;
 
-    /// <summary>Winner once the match is over. Neutral while it is still running or if nobody could throw.</summary>
+    /// <summary>
+    /// Winner once the match is over. Neutral while it is still running, and in a sandbox scene that ran
+    /// out of caps with only one side played. A real match always names a side.
+    /// </summary>
     public CapOwner Winner { get; private set; } = CapOwner.Neutral;
 
     /// <summary>How many turns in a row the current side has taken, this one included.</summary>
@@ -245,12 +253,20 @@ public sealed class TurnController : MonoBehaviour
 
         if (IsMatch)
         {
-            // A side that has run out of caps to throw cannot come back, and letting the other one
-            // throw alone for the rest of the match is not a game — every turn would simply be passed
-            // back to it. What is standing on the table decides it instead.
-            if (!CanThrow(owner) || !CanThrow(Other(owner)))
+            // The match is decided the moment either side has played its last cap: it can no longer
+            // answer what the other one left standing, and letting the other throw on alone is not a
+            // game. Which of the two ran out is what decides it — see WinnerByExhaustion.
+            // Checked in this order so that if both are out at once, the side whose turn it would have
+            // been counts as the one that ran out, which is the one that just failed to act.
+            if (!CanThrow(owner))
             {
-                FinishMatch(WinnerByCapCount());
+                FinishMatch(WinnerByExhaustion(owner));
+                return;
+            }
+
+            if (!CanThrow(Other(owner)))
+            {
+                FinishMatch(WinnerByExhaustion(Other(owner)));
                 return;
             }
         }
@@ -366,16 +382,22 @@ public sealed class TurnController : MonoBehaviour
     }
 
     /// <summary>
-    /// Who is ahead on the table right now. Used when the match ends because a side has nothing left
-    /// to throw rather than because it was wiped out.
+    /// Who wins when <paramref name="exhausted"/> has just played its last cap.
+    ///
+    /// Running out is only fatal if the other side still has a cap standing: those caps can no longer
+    /// be answered, so the side that ran out has lost. If the other side has nothing left on the table
+    /// either, then it is the one that was beaten — whatever it still holds in reserve is of no use,
+    /// because the board is what the match is played on.
+    ///
+    /// Deliberately not a count comparison: being behind on caps is not losing, having none is.
     /// </summary>
-    CapOwner WinnerByCapCount()
+    CapOwner WinnerByExhaustion(CapOwner exhausted)
     {
         FieldCounts counts = CountCapsOnField();
+        CapOwner other = Other(exhausted);
+        int otherCapsOnField = other == CapOwner.Player ? counts.Player : counts.Opponent;
 
-        if (counts.Player > counts.Opponent) return CapOwner.Player;
-        if (counts.Opponent > counts.Player) return CapOwner.Opponent;
-        return CapOwner.Neutral;
+        return otherCapsOnField > 0 ? other : exhausted;
     }
 
     bool TryFinishMatch(in FieldCounts counts)
@@ -481,7 +503,7 @@ public sealed class TurnController : MonoBehaviour
     bool IsMatch => _playerThrower != null && _opponentThrower != null;
 
     bool CanThrow(CapOwner owner) => owner == CapOwner.Player
-        ? _playerThrower != null
+        ? _playerThrower != null && _playerThrower.HasCapToThrow
         : _opponentThrower != null && _opponentThrower.HasCapToThrow;
 
     /// <summary>
