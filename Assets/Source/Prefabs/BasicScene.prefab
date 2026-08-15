@@ -477,7 +477,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HeadsMaterial: {fileID: 0}
   TailsMaterial: {fileID: 0}
-  CapThickness: 0.05
+  CapThickness: 0.2
   SpawnPoint: {fileID: 4105249724942728188}
   MinimumDragDistance: 0.5
   CapGrabRadiusPixels: 80

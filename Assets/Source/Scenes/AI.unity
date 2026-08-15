@@ -1274,7 +1274,7 @@ MonoBehaviour:
     EnemyDangerWeight: 1
     OwnStackedWeight: 1
     WinScore: 10000
-    MaxChainDepth: 0
+    MaxChainDepth: 1
     RingAngles: 12
     RingOffsets:
     - 0.95
@@ -1311,6 +1311,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: PredictionDepth
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 1800930899156425945, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: _fieldBoundary
       value: 
