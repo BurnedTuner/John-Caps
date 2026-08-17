@@ -486,9 +486,9 @@ MonoBehaviour:
   ArcHeight: 3
   FlightDuration: 0.8
   FlightSpinDegrees: 540
-  ForceToTravelDistance: 1
+  ForceToTravelDistance: 0.7
   CapMoveSpeed: 5
-  MinimumFlightLength: 0.4
+  MinimumFlightLength: 1.1
   ChainFlightDuration: 0.4
   ChainDeflection: 0.65
   ChainContactDelay: 0.08
@@ -496,7 +496,7 @@ MonoBehaviour:
   CapFlipDuration: 0.52
   CapFlipApexHeight: 0.65
   SettleDelay: 0.22
-  PredictionDepth: 0
+  PredictionDepth: 2
   PredictContinuedChain: 0
   PredictContinuedStack: 1
   ArcSamples: 24
