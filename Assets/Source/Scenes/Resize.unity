@@ -376,22 +376,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      propertyPath: PredictionDepth
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      propertyPath: MinimumFlightLength
-      value: 1.1
-      objectReference: {fileID: 0}
-    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      propertyPath: ForceToTravelDistance
-      value: 0.7
-      objectReference: {fileID: 0}
-    - target: {fileID: 587048335412767923, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      propertyPath: PredictContinuedChain
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 3809033516813011136, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_Name
       value: BasicScene

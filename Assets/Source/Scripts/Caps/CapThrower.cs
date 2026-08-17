@@ -108,6 +108,8 @@ public sealed class CapThrower : MonoBehaviour
     private Cap _heldCap;
     private Vector3 _heldCapOriginalPos;
     private bool _cursorLeftHandArea;
+    private Vector2 _lastAllowedAimPoint;
+    private bool _hasLastAllowedAimPoint;
 
     // Captured at click time: the cap's viewport position (0-1, camera-relative)
     // on the HandCamera (or PlayerCamera if no HandCamera), and the cap's depth
@@ -280,6 +282,56 @@ public sealed class CapThrower : MonoBehaviour
     }
 
     /// <summary>
+    /// Given a line from <paramref name="from"/> (an allowed point) to
+    /// <paramref name="to"/> (a restricted point), find the point on the line
+    /// closest to the restricted zone boundary — the last allowed point before
+    /// crossing into the zone.
+    ///
+    /// Uses binary search: samples the midpoint, checks if it's allowed.
+    /// If allowed, search the second half; if restricted, search the first half.
+    /// Converges in ~12 iterations to sub-centimeter precision.
+    /// </summary>
+    Vector2 ClampToZoneBoundary(Vector2 from, Vector2 to, float capRadius)
+    {
+        // If `from` is already restricted (shouldn't happen, but defensive),
+        // return `from` as-is.
+        Vector3 from3D = CapMath.FromXZ(from, 0f);
+        if (OverlapsAimBlockingZone(from3D, capRadius))
+            return from;
+
+        // If `to` is somehow allowed, just use it.
+        Vector3 to3D = CapMath.FromXZ(to, 0f);
+        if (!OverlapsAimBlockingZone(to3D, capRadius))
+            return to;
+
+        // Binary search for the boundary.
+        float lo = 0f;  // allowed
+        float hi = 1f;  // restricted
+        Vector2 result = from;
+
+        for (int i = 0; i < 16; i++)
+        {
+            float mid = (lo + hi) * 0.5f;
+            Vector2 sample = Vector2.Lerp(from, to, mid);
+            Vector3 sample3D = CapMath.FromXZ(sample, 0f);
+
+            if (OverlapsAimBlockingZone(sample3D, capRadius))
+            {
+                // Restricted — search first half.
+                hi = mid;
+            }
+            else
+            {
+                // Allowed — search second half, keep as result.
+                lo = mid;
+                result = sample;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Find the hand cap under the cursor. Uses the HandCamera (not PlayerCamera)
     /// for screen projection, since hand caps are rendered by the HandCamera.
     /// Returns the cap, or null if no cap is within CapGrabRadiusPixels.
@@ -329,6 +381,7 @@ public sealed class CapThrower : MonoBehaviour
         _heldCap = cap;
         _heldCapOriginalPos = cap.transform.position; // hand position (for cancel detection)
         _cursorLeftHandArea = false;
+        _hasLastAllowedAimPoint = false;
 
         // Capture the cap's viewport position and depth at click time.
         // Throughout aiming, ThrowOriginPos recomputes the world position
@@ -396,8 +449,35 @@ public sealed class CapThrower : MonoBehaviour
 
         if (TryGetFieldPoint(out Vector3 point, out bool isDirectAimAllowed))
         {
-            _aimPoint = CapMath.ToXZ(point);
-            _isDirectAimAllowed = isDirectAimAllowed;
+            float capRadius = _heldCap != null ? _heldCap.Parameters.Radius : 0.5f;
+
+            if (isDirectAimAllowed)
+            {
+                // Cursor is on an allowed spot — update aim point and cache it.
+                _aimPoint = CapMath.ToXZ(point);
+                _lastAllowedAimPoint = _aimPoint;
+                _hasLastAllowedAimPoint = true;
+                _isDirectAimAllowed = true;
+            }
+            else if (_hasLastAllowedAimPoint)
+            {
+                // Cursor is in a restricted zone. Instead of freezing at the
+                // last allowed position (which can be far from the zone if the
+                // cursor moved fast), sample along the line from the last allowed
+                // position to the current cursor position. Find the boundary
+                // crossing and clamp the aim point to just before it.
+                Vector2 cursorPoint = CapMath.ToXZ(point);
+                Vector2 clamped = ClampToZoneBoundary(_lastAllowedAimPoint, cursorPoint, capRadius);
+                _aimPoint = clamped;
+                _lastAllowedAimPoint = clamped;
+                _isDirectAimAllowed = true;
+            }
+            else
+            {
+                // No allowed position cached yet (e.g., grabbed a cap and
+                // immediately moved into a restricted zone). Block aiming.
+                _isDirectAimAllowed = false;
+            }
         }
         else
         {
@@ -583,6 +663,7 @@ public sealed class CapThrower : MonoBehaviour
         _fullPredictions.Clear();
         _continuationPredictions.Clear();
         _isDirectAimAllowed = false;
+        _hasLastAllowedAimPoint = false;
         CurrentState = State.Idle;
     }
 
@@ -756,6 +837,7 @@ public sealed class CapThrower : MonoBehaviour
         _fullPredictions.Clear();
         _continuationPredictions.Clear();
         _isDirectAimAllowed = false;
+        _hasLastAllowedAimPoint = false;
         CurrentState = State.Idle;
 
         // Reset the hand: destroy all hand caps, restore deck from template, refill.
