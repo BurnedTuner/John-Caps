@@ -186,7 +186,6 @@ public class Cap : MonoBehaviour
     public void EndHeldToIdle()
     {
         _state = CapState.Idle;
-        ApplyVisuals();
     }
 
     /// <summary>
