@@ -22,6 +22,12 @@ public struct CapSimResult
 
     public float PlayerDanger;
     public float OpponentDanger;
+
+    /// <summary>Danger of the AI's own caps BEFORE the throw. Used to compute danger delta.</summary>
+    public float OpponentDangerBefore;
+
+    /// <summary>Danger of the player's caps BEFORE the throw. Used to compute danger delta.</summary>
+    public float PlayerDangerBefore;
 }
 
 /// <summary>
@@ -291,6 +297,12 @@ public sealed class CapBoardSimulation
 
         _activations = 0;
         _queue.Clear();
+
+        // Capture pre-throw danger so the AI can reward moves that reduce danger
+        // (protect own caps) or increase enemy danger (push enemy caps to edge).
+        Tally(playerThrowPower, ref result);
+        result.OpponentDangerBefore = result.OpponentDanger;
+        result.PlayerDangerBefore = result.PlayerDanger;
 
         if (_slammerIndex >= 0)
         {

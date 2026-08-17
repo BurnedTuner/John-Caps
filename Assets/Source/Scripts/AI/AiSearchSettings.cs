@@ -29,6 +29,18 @@ public sealed class AiSearchSettings
     [Tooltip("Cost per unit of exposure of the AI's surviving caps.")]
     public float OwnDangerWeight = 2f;
 
+    [Tooltip("Bonus per unit of danger REDUCED on the AI's own caps. " +
+             "Rewards moves that push own caps away from the edge (toward the center). " +
+             "Computed as max(0, OpponentDangerBefore - OpponentDanger after throw). " +
+             "This is a DELTA reward — distinct from OwnDangerWeight which penalizes absolute danger.")]
+    [Min(0f)] public float ProtectOwnFromEdgeWeight = 3f;
+
+    [Tooltip("Bonus per unit of danger INCREASED on the player's caps. " +
+             "Rewards moves that push player caps toward the edge without knocking them off. " +
+             "Computed as max(0, PlayerDanger - PlayerDangerBefore). " +
+             "This is a DELTA reward — distinct from EnemyDangerWeight which rewards absolute danger.")]
+    [Min(0f)] public float PushEnemyToEdgeWeight = 3f;
+
     [Tooltip("How much own-cap exposure still counts when the move keeps the turn. " +
              "The player does not get to punish it, so it is mostly discounted.")]
     [Range(0f, 1f)] public float ExtraTurnDangerDiscount = 0.25f;
@@ -67,8 +79,9 @@ public sealed class AiSearchSettings
     [Tooltip("Also sample around neutral caps — useful for chains and for setting off bombs.")]
     public bool TargetNeutralCaps = true;
 
-    [Tooltip("Also sample around the AI's own caps. Off by default: usually a way to lose them.")]
-    public bool TargetOwnCaps = false;
+    [Tooltip("Also sample around the AI's own caps. On by default: needed for ProtectOwnFromEdgeWeight — " +
+             "the AI hits its own caps from the edge-side to push them toward the center.")]
+    public bool TargetOwnCaps = true;
 
     [Tooltip("Safety valve on how many landing points are evaluated in one turn.")]
     [Min(16)] public int MaxCandidates = 1024;

@@ -1270,6 +1270,8 @@ MonoBehaviour:
     SelfLossWeight: 12
     NeutralLossWeight: 0.5
     OwnDangerWeight: 2
+    ProtectOwnFromEdgeWeight: 3
+    PushEnemyToEdgeWeight: 10
     ExtraTurnDangerDiscount: 0.25
     EnemyDangerWeight: 1
     OwnStackedWeight: 1

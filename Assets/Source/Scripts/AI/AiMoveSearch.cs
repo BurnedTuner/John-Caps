@@ -174,12 +174,20 @@ public sealed class AiMoveSearch
 
         float dangerScale = keepsTurn ? settings.ExtraTurnDangerDiscount : 1f;
 
+        // Danger-delta terms (rewards for CHANGING the board, not just the end state):
+        //   - ProtectOwnFromEdgeWeight: bonus for reducing own caps' danger (pushing them toward center).
+        //   - PushEnemyToEdgeWeight: bonus for increasing player caps' danger (pushing them toward edge).
+        float ownDangerReduced = Mathf.Max(0f, result.OpponentDangerBefore - result.OpponentDanger);
+        float enemyDangerIncreased = Mathf.Max(0f, result.PlayerDanger - result.PlayerDangerBefore);
+
         return settings.KillWeight * result.PlayerRemoved
              + (keepsTurn ? settings.ExtraTurnBonus : 0f)
              - settings.SelfLossWeight * result.OpponentRemoved
              - settings.NeutralLossWeight * result.NeutralRemoved
              - settings.OwnDangerWeight * result.OpponentDanger * dangerScale
              + settings.EnemyDangerWeight * result.PlayerDanger
+             + settings.ProtectOwnFromEdgeWeight * ownDangerReduced * dangerScale
+             + settings.PushEnemyToEdgeWeight * enemyDangerIncreased
              - settings.OwnStackedWeight * result.OpponentStacked;
     }
 
@@ -236,7 +244,47 @@ public sealed class AiMoveSearch
                 {
                     Vector2 escape = toEdge.normalized;
                     TryAddCandidate(target - escape * (0.95f * combinedRadius), boundary, settings, slammerRadius);
+
+                    // For non-knockable enemy caps: add extra "push toward edge" candidates.
+                    // Even if the cap can't be knocked off in one hit, pushing it closer to the edge
+                    // sets up a future kill. Sample at multiple offsets along the escape direction.
+                    if (!knockable && settings.PushEnemyToEdgeWeight > 0f)
+                    {
+                        for (int o = 0; o < offsets.Length; o++)
+                        {
+                            TryAddCandidate(target - escape * (offsets[o] * combinedRadius), boundary, settings, slammerRadius);
+                        }
+                    }
                 }
+            }
+            else if (isEnemy)
+            {
+                // Enemy cap but no boundary — still try a coarse ring.
+            }
+            else if (owner == CapOwner.Opponent && boundary != null && settings.ProtectOwnFromEdgeWeight > 0f)
+            {
+                // Own cap near the edge: add "push toward center" candidates.
+                // Hit from the edge-side so the cap flies toward the center (away from the edge).
+                float edgeDistance = boundary.DistanceToEdge(target, out Vector2 nearestEdgePoint);
+                float maxKnock = _simulation.GetMaxKnockDistance(i, slammerPower);
+                bool nearEdge = edgeDistance < maxKnock * 0.5f; // within half of knockable range
+
+                if (nearEdge)
+                {
+                    // Direction from edge to cap = toward center.
+                    Vector2 toCenter = target - nearestEdgePoint;
+                    if (toCenter.sqrMagnitude > 0.000001f)
+                    {
+                        Vector2 towardCenter = toCenter.normalized;
+                        // Hit from the edge-side (opposite of center direction) so cap flies toward center.
+                        for (int o = 0; o < offsets.Length; o++)
+                        {
+                            TryAddCandidate(target - towardCenter * (offsets[o] * combinedRadius), boundary, settings, slammerRadius);
+                        }
+                    }
+                }
+
+                angleCount = Mathf.Max(4, angleCount / 2);
             }
             else if (!isEnemy)
             {
