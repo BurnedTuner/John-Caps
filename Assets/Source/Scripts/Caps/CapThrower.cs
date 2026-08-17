@@ -44,6 +44,21 @@ public sealed class CapThrower : MonoBehaviour
     public Cap WaitingCap => _heldCap;
 
     /// <summary>
+    /// False once the player has nothing left to throw: nothing held, no cap in hand and an empty deck.
+    /// Mirrors <see cref="AiCapThrower.HasCapToThrow"/> so TurnController can ask both sides the same
+    /// question and end the match on whichever runs out first.
+    ///
+    /// The deck is counted as well as the hand, because CapHand only draws the replacement once the turn
+    /// has resolved — asking in between would report a hand that is briefly one cap short of the truth,
+    /// and with a hand of one that reads as the player being out of the game.
+    ///
+    /// A thrower with no CapHand is not deck-limited at all — that is a sandbox scene rather than a
+    /// match — so it can always throw.
+    /// </summary>
+    public bool HasCapToThrow =>
+        _heldCap != null || _hand == null || _hand.HasCapToThrow() || _hand.DeckCount > 0;
+
+    /// <summary>
     /// The world-space position from which throws originate. Computed by
     /// projecting the cap's CAPTURED viewport position + depth (saved at click
     /// time) through PlayerCamera's CURRENT transform. This makes the throw
