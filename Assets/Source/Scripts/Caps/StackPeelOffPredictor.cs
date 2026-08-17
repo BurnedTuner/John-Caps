@@ -154,6 +154,12 @@ public static class StackPeelOffPredictor
 
             simConsumed.Add(dropCap);
 
+            // Each peel-off cap flips once per iteration it survives.
+            // Iteration 1 (odd): flipped once → !IsHeads.
+            // Iteration 2 (even): flipped twice → back to IsHeads.
+            // Iteration 3 (odd): flipped 3 times → !IsHeads.
+            // This produces the alternating pattern:
+            // 2-stack [h,h] → [t,h], 3-stack [h,h,h] → [t,h,t], etc.
             bool willLandHeads = (iteration % 2) == 1 ? !dropCap.IsHeads : dropCap.IsHeads;
 
             Vector2 toLanding = currentLanding - startPos;

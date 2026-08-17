@@ -186,6 +186,12 @@ public class Cap : MonoBehaviour
     public void EndHeldToIdle()
     {
         _state = CapState.Idle;
+        // Don't call ApplyVisuals() here — for a hand cap, the Idle branch
+        // computes a flat rotation (Euler(0, _landingYaw, 0) * sideRot) which
+        // is wrong for a hand cap that should face the camera. CapHand.LayoutHand
+        // runs every frame in Update and sets the correct camera-facing rotation.
+        // Calling ApplyVisuals here would snap the cap to the wrong orientation
+        // for one frame before LayoutHand corrects it.
     }
 
     /// <summary>
@@ -259,6 +265,11 @@ public class Cap : MonoBehaviour
         ApplyVisuals();
         for (int i = 0; i < _stackAbove.Count; i++)
         {
+            // Capture each stacked cap's own start rotation so the flip
+            // animation can be applied on top of IT, not the base's rotation.
+            // Without this, stacked caps snap to the base's rotation at the
+            // start of the flip animation.
+            _stackAbove[i]._flyStartRot = _stackAbove[i].transform.rotation;
             _stackAbove[i].ApplyVisuals();
         }
         return true;
@@ -290,6 +301,17 @@ public class Cap : MonoBehaviour
         while (head._stackBase != null)
             head = head._stackBase;
 
+        // Flatten the incoming cap's rotation BEFORE adding it to the stack.
+        // The cap may have a tilted rotation from the throw arc / frame-of-reference
+        // transfer. When it joins the stack, ApplyVisuals will compute the flat
+        // rotation (Euler(0, _landingYaw, 0) * sideRot). Setting it now prevents
+        // a one-frame visual snap from the tilted rotation to the flat rotation.
+        // _landingYaw was already extracted in StepThrow/StepFly before this runs.
+        Quaternion incomingSideRot = incoming.IsHeads
+            ? Quaternion.identity
+            : Quaternion.Euler(180f, 0f, 0f);
+        incoming.transform.rotation = Quaternion.Euler(0f, incoming._landingYaw, 0f) * incomingSideRot;
+
         if (incoming._stackAbove.Count > 0)
         {
             for (int i = 0; i < incoming._stackAbove.Count; i++)
@@ -305,7 +327,11 @@ public class Cap : MonoBehaviour
         CapRegistry.Unregister(incoming);
 
         incoming._state = CapState.Idle;
-        incoming.ApplyVisuals();
+        // Position the cap on top of the base. ApplyVisuals will handle this too,
+        // but setting it now ensures the cap is in the right place immediately.
+        float yOff = _tuning != null ? _tuning.CapThickness : 0.1f;
+        int myIndex = head._stackAbove.IndexOf(incoming) + 1;
+        incoming.transform.position = head.transform.position + Vector3.up * (yOff * myIndex);
         head.ApplyVisuals();
     }
 
@@ -414,6 +440,11 @@ public class Cap : MonoBehaviour
             GroundPosition = _flyStart + _flyDirection * _flyTotalDistance;
             if (!IsFinite(GroundPosition)) GroundPosition = _flyStart;
 
+            // Toggle IsHeads on every landing (including peel-off continuation
+            // flights). Each peel-off cap flips once per iteration it survives:
+            // iteration 1 → flipped once, iteration 2 → flipped twice (back to
+            // original), etc. This produces the alternating pattern:
+            // 2-stack [h,h] → [t,h], 3-stack [h,h,h] → [t,h,t], etc.
             IsHeads = !IsHeads;
             for (int i = 0; i < _stackAbove.Count; i++)
             {
@@ -428,6 +459,20 @@ public class Cap : MonoBehaviour
             // flip, right is not). Right is 90° clockwise from forward.
             Vector3 right = Vector3.ProjectOnPlane(transform.rotation * Vector3.right, Vector3.up);
             _landingYaw = right.sqrMagnitude > 0.001f ? Mathf.Atan2(right.x, right.z) * Mathf.Rad2Deg - 90f : 0f;
+
+            // Extract _landingYaw for each stacked cap from THEIR OWN transform.rotation.
+            // Stacked caps have their own _flyStartRot and may have a different yaw
+            // than the base. Without this, they inherit the base's _landingYaw in
+            // HandleStackPeelOff (line 493), causing a rotation snap when they
+            // transition from the animated flip to the flat rest rotation.
+            for (int i = 0; i < _stackAbove.Count; i++)
+            {
+                Cap stacked = _stackAbove[i];
+                Vector3 stackedRight = Vector3.ProjectOnPlane(stacked.transform.rotation * Vector3.right, Vector3.up);
+                stacked._landingYaw = stackedRight.sqrMagnitude > 0.001f
+                    ? Mathf.Atan2(stackedRight.x, stackedRight.z) * Mathf.Rad2Deg - 90f
+                    : 0f;
+            }
 
             if (_isPeeling && _stackAbove.Count > 0)
             {
@@ -459,7 +504,8 @@ public class Cap : MonoBehaviour
         leftBehind._isPeeling = false;
         leftBehind._pendingLandedCallback = null;
         leftBehind.WasPeelOff = true;
-        leftBehind._landingYaw = _landingYaw; // inherit landing Y rotation
+        // leftBehind._landingYaw was already extracted from its own transform.rotation
+        // in StepFly (before HandleStackPeelOff ran). Don't overwrite with the base's.
         if (!CapRegistry.AllCaps.Contains(leftBehind))
             CapRegistry.Register(leftBehind);
         leftBehind.ApplyVisuals();
@@ -497,10 +543,16 @@ public class Cap : MonoBehaviour
         newHead._flyElapsed = 0f;
         newHead._flyDuration = _peelDuration;
         newHead._landingForce = _peelForce;
+        // Capture the cap's current rotation as the flip-animation start point.
+        // Without this, the flip animation uses a stale/default _flyStartRot
+        // and the cap's rotation doesn't animate correctly during the peel-off flight.
+        newHead._flyStartRot = newHead.transform.rotation;
         newHead._state = CapState.Flying;
         newHead.ApplyVisuals();
         for (int i = 0; i < newHead._stackAbove.Count; i++)
         {
+            // Capture each stacked cap's own start rotation for the flip animation.
+            newHead._stackAbove[i]._flyStartRot = newHead._stackAbove[i].transform.rotation;
             newHead._stackAbove[i].ApplyVisuals();
         }
     }
@@ -584,12 +636,39 @@ public class Cap : MonoBehaviour
         {
             float yOff = _tuning != null ? _tuning.CapThickness : 0.1f;
             int myIndex = _stackBase._stackAbove.IndexOf(this) + 1;
-            Vector3 localUp = _stackBase.transform.rotation * Vector3.up;
+            // Use world up, not the base's local up. The base's rotation may
+            // include a 180° X flip (tails-up), which would invert local up to
+            // point down — stacking the cap BELOW the base instead of above.
+            // Stacked caps always sit above the base in world space, regardless
+            // of the base's side.
+            Vector3 localUp = Vector3.up;
             pos = _stackBase.transform.position + localUp * (yOff * myIndex);
-            // Stacked caps inherit the base's rotation (which already encodes
-            // the base's side). Each stacked cap's own IsHeads is encoded in
-            // an additional local flip on top of the base rotation.
-            rot = _stackBase.transform.rotation * sideRot;
+
+            // During the base's flight (Flying state), stacked caps animate the
+            // SAME 180° flip as the base, but applied on top of THEIR OWN start
+            // rotation (_flyStartRot, captured in BeginLaunch). This prevents the
+            // snap that would occur if they inherited the base's rotation directly
+            // (the base's rotation may have a different yaw/side).
+            // When at rest (Idle/Pushed), stacked caps lay FLAT with their OWN
+            // landing yaw and side.
+            if (_stackBase._state == CapState.Flying)
+            {
+                // Compute the same flip animation the base uses, but on top of
+                // this cap's own _flyStartRot.
+                float flyProgress = _stackBase._flyDuration > 0f
+                    ? Mathf.Clamp01(_stackBase._flyElapsed / _stackBase._flyDuration)
+                    : 1f;
+                Vector3 motion3D = new Vector3(_stackBase._flyDirection.x, 0f, _stackBase._flyDirection.y);
+                Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D);
+                if (!IsFinite(rotAxis) || rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
+                else rotAxis = rotAxis.normalized;
+                rot = Quaternion.AngleAxis(flyProgress * 180f, rotAxis) * _flyStartRot;
+            }
+            else
+            {
+                // At rest: flat rotation with own yaw + own side.
+                rot = Quaternion.Euler(0f, _landingYaw, 0f) * sideRot;
+            }
         }
         else
         {
