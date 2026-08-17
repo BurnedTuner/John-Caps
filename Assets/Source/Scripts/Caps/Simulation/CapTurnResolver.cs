@@ -160,6 +160,19 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             }
         }
 
+        // Also wait for FallingCap animations: caps that left the field are
+        // no longer "busy" (LeaveGame sets state to Idle), but their FallingCap
+        // component is still animating the fall via Update(). Don't end the turn
+        // until those finish — otherwise the turn changes mid-fall, which looks
+        // jarring.
+        if (!anyBusy)
+        {
+            FallingCap[] fallingCaps = UnityEngine.Object.FindObjectsByType<FallingCap>(
+                UnityEngine.FindObjectsSortMode.None);
+            if (fallingCaps != null && fallingCaps.Length > 0)
+                anyBusy = true;
+        }
+
         if (anyBusy)
         {
             _settleElapsed = 0f;
