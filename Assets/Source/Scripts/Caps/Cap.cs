@@ -10,6 +10,12 @@ public class Cap : MonoBehaviour
     [Header("Identity")]
     [SerializeField] private int _stableId;
     [SerializeField] private CapOwner _owner = CapOwner.Neutral;
+
+    [Tooltip("Initial side of the cap when placed in the scene. " +
+             "Checked = heads-up, unchecked = tails-up. " +
+             "Only used for scene-placed caps (ignored for factory-created caps).")]
+    [SerializeField] private bool _initialIsHeads = true;
+
     public int StableId => _stableId;
     public CapOwner Owner => _owner;
 
@@ -43,6 +49,17 @@ public class Cap : MonoBehaviour
     public int ActivationDepthPlusOne => _activationDepth + 1;
     public int StackCount => _stackAbove.Count + 1;
     public bool WasPeelOff { get; set; }
+
+    /// <summary>
+    /// True if this cap was placed in the scene editor (not created via CapFactory.Create).
+    /// Scene-placed caps are regenerated on board reset instead of destroyed.
+    /// </summary>
+    public bool IsScenePlaced => _isScenePlaced;
+    internal bool _isScenePlaced;
+
+    /// <summary>Initial position captured on Awake, used to restore on reset.</summary>
+    private Vector3 _initialPosition;
+    private Quaternion _initialRotation;
 
     /// <summary>True after the cap has left the playing field (fell off, handed to physics).</summary>
     public bool HasLeftGame => _hasLeftGame;
@@ -159,7 +176,84 @@ public class Cap : MonoBehaviour
         ApplyOutline();
     }
 
+    /// <summary>
+    /// Regenerates a scene-placed cap for board reset: restores its initial
+    /// position, rotation, and IsHeads; resets state to Idle; re-registers in
+    /// CapRegistry; and reapplies visuals. Called by GameManager.ResetBoard
+    /// instead of destroying the cap.
+    /// </summary>
+    public void RegenerateForReset()
+    {
+        if (!IsScenePlaced) return;
+
+        // If the cap fell off the field during play, a FallingCap component was
+        // added, the Cap component was disabled, and the GameObject may have
+        // been hidden (SetActive(false)). Undo all of this so the cap can
+        // participate in the simulation again.
+        FallingCap falling = GetComponent<FallingCap>();
+        if (falling != null)
+            Destroy(falling);
+        enabled = true;
+        if (!gameObject.activeSelf)
+            gameObject.SetActive(true);
+
+        // Re-enable colliders (FallingCap disables them when the cap leaves play).
+        Collider[] colliders = GetComponentsInChildren<Collider>();
+        for (int c = 0; c < colliders.Length; c++)
+        {
+            if (colliders[c] != null)
+                colliders[c].enabled = true;
+        }
+
+        // Restore initial transform (the cap may have moved during play).
+        transform.position = _initialPosition;
+        transform.rotation = _initialRotation;
+        IsHeads = _initialIsHeads;
+
+        // Re-extract _landingYaw from the restored rotation so ApplyVisuals
+        // preserves the designer-set yaw (same logic as Awake).
+        Vector3 right = Vector3.ProjectOnPlane(transform.rotation * Vector3.right, Vector3.up);
+        _landingYaw = right.sqrMagnitude > 0.001f
+            ? Mathf.Atan2(right.x, right.z) * Mathf.Rad2Deg - 90f
+            : 0f;
+
+        // Reset state to Idle — clears flying/throwing/pushed/parked.
+        _state = CapState.Idle;
+        _stackAbove.Clear();
+        _stackBase = null;
+        _isPeeling = false;
+        _pendingLandedCallback = null;
+        _hasLeftGame = false;
+        WasPeelOff = false;
+        _isImmutable = false;
+        _overrideMaterial = null;
+        _overrideMaterialTimer = 0f;
+
+        // Re-read GroundPosition from restored transform.
+        Vector3 pos = transform.position;
+        GroundPosition = IsFinite(pos) ? CapMath.ToXZ(pos) : Vector2.zero;
+
+        // Assign a new stable ID (counter was reset by ResetIdCounter).
+        _stableId = CapFactory.NextStableId();
+
+        // Re-register.
+        if (!CapRegistry.Contains(this))
+            CapRegistry.Register(this);
+
+        ApplyVisuals();
+        ApplyOutline();
+    }
+
     public void SetImmutable(bool value) => _isImmutable = value;
+
+    /// <summary>
+    /// Marks this cap as factory-created (not scene-placed). Called by
+    /// CapFactory.Create after Configure, to override the _isScenePlaced flag
+    /// that Awake may have set (Awake runs during Instantiate, before Configure
+    /// assigns a non-zero _stableId, so it can't distinguish scene-placed from
+    /// factory-created at that point).
+    /// </summary>
+    public void MarkFactoryCreated() => _isScenePlaced = false;
 
     public void SetOwner(CapOwner owner)
     {
@@ -827,6 +921,41 @@ public class Cap : MonoBehaviour
         {
             rb.isKinematic = true;
             rb.useGravity = false;
+        }
+
+        // Auto-register scene-placed caps: if _stableId is 0 (the default for a
+        // cap placed in the scene editor, not created via CapFactory.Create),
+        // initialize it now and register in CapRegistry. This lets designers
+        // place cap prefabs in the scene with Owner/IsHeads set in the
+        // inspector — no extra component needed.
+        if (_stableId == 0)
+        {
+            // Capture initial transform BEFORE Configure changes anything.
+            _initialPosition = transform.position;
+            _initialRotation = transform.rotation;
+
+            // Set IsHeads from the serialized _initialIsHeads field (inspector).
+            IsHeads = _initialIsHeads;
+
+            // Extract _landingYaw from the cap's initial transform rotation so
+            // the designer-set yaw is preserved. Without this, Configure →
+            // ApplyVisuals computes flatRot = Euler(0, _landingYaw=0, 0) * sideRot,
+            // resetting the yaw to 0.
+            // Use the RIGHT vector (not forward — forward is reversed by the 180°
+            // X flip when tails-up, right is not). Right is 90° clockwise from forward.
+            Vector3 right = Vector3.ProjectOnPlane(transform.rotation * Vector3.right, Vector3.up);
+            _landingYaw = right.sqrMagnitude > 0.001f
+                ? Mathf.Atan2(right.x, right.z) * Mathf.Rad2Deg - 90f
+                : 0f;
+
+            Vector3 pos = transform.position;
+            GroundPosition = IsFinite(pos) ? CapMath.ToXZ(pos) : Vector2.zero;
+            Configure(CapFactory.NextStableId(), IsHeads, _owner);
+            // Configure doesn't register (it's called by CapFactory.Create which
+            // does the registration). Register here for scene-placed caps.
+            if (!CapRegistry.Contains(this))
+                CapRegistry.Register(this);
+            _isScenePlaced = true;
         }
 
         ApplyOutline();

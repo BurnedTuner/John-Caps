@@ -74,25 +74,42 @@ public class GameManager : MonoBehaviour
         _turnResolver?.ResetSimulation();
 
         Cap[] caps = CapRegistry.Snapshot();
+
+        // Clear the registry first so caps can re-register cleanly.
+        CapRegistry.Clear();
+        CapFactory.ResetIdCounter();
+
         for (int i = 0; i < caps.Length; i++)
         {
             if (caps[i] == null) continue;
 
-            // Destroy stacked caps (they're unregistered from CapRegistry, so
-            // they're NOT in the snapshot above — only the base is). Walk the
-            // base's StackedAbove list and destroy each one.
+            // Stacked caps are unregistered from CapRegistry (by AddToStack),
+            // so they're NOT in the snapshot above — only the base is. Walk the
+            // base's StackedAbove list and handle each one.
             IReadOnlyList<Cap> stacked = caps[i].StackedAbove;
             for (int s = 0; s < stacked.Count; s++)
             {
-                if (stacked[s] != null)
-                    Destroy(stacked[s].gameObject);
+                Cap stackedCap = stacked[s];
+                if (stackedCap == null) continue;
+
+                if (stackedCap.IsScenePlaced)
+                    stackedCap.RegenerateForReset();
+                else
+                    Destroy(stackedCap.gameObject);
             }
 
-            Destroy(caps[i].gameObject);
+            // Scene-placed caps are regenerated: reset their state and re-register.
+            // Factory-created caps (ambient scatter) are destroyed.
+            if (caps[i].IsScenePlaced)
+            {
+                caps[i].RegenerateForReset();
+            }
+            else
+            {
+                Destroy(caps[i].gameObject);
+            }
         }
 
-        CapRegistry.Clear();
-        CapFactory.ResetIdCounter();
         ScatterAmbientCaps();
         OnBoardReset?.Invoke(this);
     }

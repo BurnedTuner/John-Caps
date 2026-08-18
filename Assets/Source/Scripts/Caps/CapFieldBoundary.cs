@@ -203,7 +203,11 @@ public sealed class CapFieldBoundary : MonoBehaviour
 
                 // Unregister now rather than waiting for the fall to play out. This prevents scoring
                 // and chain-reaction code from seeing a cap that is already out of the game.
-                CapRegistry.Unregister(cap);
+                // Scene-placed caps are NOT unregistered — they need to stay in CapRegistry so
+                // GameManager.ResetBoard can find and regenerate them. FallingCap.HandleVanish
+                // hides them instead of destroying them.
+                if (!cap.IsScenePlaced)
+                    CapRegistry.Unregister(cap);
                 DropCap(cap, trail.PreviousPosition);
                 continue;
             }

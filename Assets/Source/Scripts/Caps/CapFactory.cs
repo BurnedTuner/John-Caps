@@ -32,6 +32,11 @@ public static class CapFactory
 
         cap.Configure(_nextStableId++, isHeads, owner);
 
+        // Awake ran during Instantiate and may have set _isScenePlaced = true
+        // (it checks _stableId == 0, but Configure hadn't run yet). Clear it —
+        // this cap was factory-created, not scene-placed.
+        cap.MarkFactoryCreated();
+
         CapRegistry.Register(cap);
         return cap;
     }
@@ -39,5 +44,15 @@ public static class CapFactory
     public static void ResetIdCounter(int startId = 1)
     {
         _nextStableId = startId;
+    }
+
+    /// <summary>
+    /// Returns the next stable ID and increments the counter. Used by Cap.Awake
+    /// to assign IDs to caps placed in the scene editor (which don't go through
+    /// CapFactory.Create).
+    /// </summary>
+    public static int NextStableId()
+    {
+        return _nextStableId++;
     }
 }

@@ -120,7 +120,7 @@ public sealed class FallingCap : MonoBehaviour
         if (transform.position.y <= _settings.VanishHeight)
         {
             if (_owner != null) _owner.ReportFallingCapVanished(transform.position);
-            Destroy(gameObject);
+            HandleVanish();
             return;
         }
 
@@ -136,6 +136,29 @@ public sealed class FallingCap : MonoBehaviour
                 $"{_settings.MaximumLifetime} s and is removed at {transform.position}.", this);
 
             if (_owner != null) _owner.ReportFallingCapVanished(transform.position);
+            HandleVanish();
+        }
+    }
+
+    /// <summary>
+    /// Handles the cap vanishing from sight. Scene-placed caps are NOT destroyed —
+    /// they're hidden (SetActive(false)) so GameManager.ResetBoard can regenerate
+    /// them later. Factory-created caps are destroyed as usual.
+    /// </summary>
+    void HandleVanish()
+    {
+        Cap cap = GetComponent<Cap>();
+        if (cap != null && cap.IsScenePlaced)
+        {
+            // Scene-placed cap: hide the GameObject but keep it alive for
+            // regeneration on board reset. The cap stays in CapRegistry (it
+            // was never unregistered since we're not destroying it). ResetBoard
+            // will call RegenerateForReset to restore it.
+            enabled = false; // stop the FallingCap animation
+            gameObject.SetActive(false);
+        }
+        else
+        {
             Destroy(gameObject);
         }
     }

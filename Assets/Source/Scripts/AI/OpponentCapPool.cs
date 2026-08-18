@@ -1,17 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>One kind of cap in the opponent's deck and how many copies of it there are.</summary>
-[System.Serializable]
-public struct CapPoolEntry
-{
-    [Tooltip("Cap prefab to put into the deck.")]
-    public Cap Prefab;
-
-    [Tooltip("How many copies of this prefab the deck holds.")]
-    [Min(1)] public int Count;
-}
-
 /// <summary>
 /// The opponent's supply of caps, configured per scene.
 ///
@@ -19,15 +8,19 @@ public struct CapPoolEntry
 /// the spawn point, exactly the way CapThrower prepares the player's cap. The spawn point must sit
 /// outside the field — a waiting cap is registered like any other, and CapFieldBoundary only leaves
 /// it alone as long as it has never touched the field.
+///
+/// The deck uses a <see cref="CapDeckDefinition"/> asset — the SAME format as the player's deck.
+/// Assign a CapDeckDefinition to <see cref="DeckTemplate"/> in the inspector.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class OpponentCapPool : MonoBehaviour
 {
     [Header("Deck")]
-    [Tooltip("Cap prefabs the opponent gets for the match, in deck order.")]
-    [SerializeField] private CapPoolEntry[] _entries;
+    [Tooltip("Cap deck template (same format as the player's deck). The pool " +
+             "rebuilds from this asset on Awake and on every board reset.")]
+    [SerializeField] private CapDeckDefinition _deckTemplate;
 
-    [Tooltip("Shuffle the deck when the match starts.")]
+    [Tooltip("Shuffle the deck when the match starts. Overrides the deck template's ShuffleOnStart.")]
     [SerializeField] private bool _shuffle = true;
 
     [Tooltip("Fixed shuffle seed for reproducible runs. 0 uses the global random state.")]
@@ -55,25 +48,27 @@ public sealed class OpponentCapPool : MonoBehaviour
         Rebuild();
     }
 
-    /// <summary>Refills the deck from the inspector entries. Called on Awake and on every board reset.</summary>
+    /// <summary>Refills the deck from the deck template. Called on Awake and on every board reset.</summary>
     public void Rebuild()
     {
         _deck.Clear();
         _nextIndex = 0;
 
-        if (_entries != null)
+        if (_deckTemplate == null || _deckTemplate.Caps == null)
         {
-            for (int i = 0; i < _entries.Length; i++)
-            {
-                CapPoolEntry entry = _entries[i];
-                if (entry.Prefab == null) continue;
-
-                for (int c = 0; c < Mathf.Max(1, entry.Count); c++)
-                    _deck.Add(entry.Prefab);
-            }
+            Debug.LogWarning($"[OpponentCapPool] No DeckTemplate assigned on {gameObject.name}. " +
+                             "The AI has no caps to throw.", this);
+            return;
         }
 
-        if (_shuffle) Shuffle();
+        for (int i = 0; i < _deckTemplate.Caps.Length; i++)
+        {
+            if (_deckTemplate.Caps[i] != null)
+                _deck.Add(_deckTemplate.Caps[i]);
+        }
+
+        if (_shuffle)
+            Shuffle();
     }
 
     /// <summary>The prefab of the cap currently on top of the deck, or null when it is empty.</summary>
