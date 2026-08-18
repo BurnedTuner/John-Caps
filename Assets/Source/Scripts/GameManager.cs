@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using System.Collections.Generic;
 public class GameManager : MonoBehaviour
 {
     [Header("References")]
@@ -76,8 +76,19 @@ public class GameManager : MonoBehaviour
         Cap[] caps = CapRegistry.Snapshot();
         for (int i = 0; i < caps.Length; i++)
         {
-            if (caps[i] != null)
-                Destroy(caps[i].gameObject);
+            if (caps[i] == null) continue;
+
+            // Destroy stacked caps (they're unregistered from CapRegistry, so
+            // they're NOT in the snapshot above — only the base is). Walk the
+            // base's StackedAbove list and destroy each one.
+            IReadOnlyList<Cap> stacked = caps[i].StackedAbove;
+            for (int s = 0; s < stacked.Count; s++)
+            {
+                if (stacked[s] != null)
+                    Destroy(stacked[s].gameObject);
+            }
+
+            Destroy(caps[i].gameObject);
         }
 
         CapRegistry.Clear();
