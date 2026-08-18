@@ -88,9 +88,9 @@ MonoBehaviour:
   StackPitchStepPerStack: 0.05
   StackMaxPitch: 2
   StackVolume: 1
-  CapVanishSound: {fileID: 8300000, guid: 0a42898e2e13c26409bcbee2a401a6d8, type: 3}
-  CapVanishPitch: 1
-  CapVanishVolume: 1
+  CapVanishSound: {fileID: 8300000, guid: bef66a8bef535344e918bd950df96bce, type: 3}
+  CapVanishPitch: 0.75
+  CapVanishVolume: 0.5
   TableImpactVFX: {fileID: 1665320002680328946, guid: 81f722c6dab8a524aaaeb6e227989306, type: 3}
   CapImpactVFX: {fileID: 1651180019113697609, guid: f5f44277cf002e24e827f7d37c1a587e, type: 3}
   StackVFX: {fileID: 1651180019113697609, guid: f5f44277cf002e24e827f7d37c1a587e, type: 3}
