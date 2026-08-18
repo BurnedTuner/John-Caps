@@ -253,8 +253,21 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
                 Vector3 pos3D = CapMath.FromXZ(_pendingFlipEvents[i].Position, 0f);
                 for (int j = 0; j < sourceCap.FlipEffects.Length; j++)
                 {
-                    // Let the effect handle its own feedback
-                    sourceCap.FlipEffects[j].PlayFeedback(pos3D, _pendingFlipEvents[i].IncomingForce);
+                    CapFlipEffect effect = sourceCap.FlipEffects[j];
+                    if (effect == null || !effect.enabled) continue;
+
+                    // Only play feedback if the effect should trigger based on
+                    // the cap's current side (after the flip). This prevents
+                    // bomb/flipper VFX and sound from playing when the effect
+                    // didn't actually trigger (ShouldTrigger returned false).
+                    bool shouldTrigger = effect switch
+                    {
+                        BombCapFlipEffect bomb => bomb.ShouldTrigger(sourceCap.IsHeads),
+                        FlipperCapEffect flipper => flipper.ShouldTrigger(sourceCap.IsHeads),
+                        _ => true, // unknown effects: play feedback (backward compat)
+                    };
+                    if (shouldTrigger)
+                        effect.PlayFeedback(pos3D, _pendingFlipEvents[i].IncomingForce);
                 }
             }
         }
@@ -295,6 +308,26 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
         // Push the cap — slides it without flipping. Chain-push collisions are
         // handled in Cap.StepPush.
         target.BeginPush(direction, pushDistance, _tuning.ChainFlightDuration);
+        return true;
+    }
+
+    bool ICapEffectCommandExecutor.TryFlip(Cap source, Cap target)
+    {
+        if (source == null || target == null || _tuning == null) return false;
+        if (target.IsBusy) return false;
+        if (_chainCount >= _tuning.MaximumChainLength) return false;
+
+        // Count the flip toward the chain limit — prevents infinite flip cycles
+        // (e.g., A flips B, B flips C, C flips A) from never ending the turn.
+        _chainCount++;
+
+        // Flip the cap IN PLACE — no movement, no peel-off. The cap (and any
+        // stacked caps) flip together. Pass null for the landed callback — the
+        // flip-in-place doesn't trigger ResolveLanding (no chain reactions
+        // since the cap doesn't move). The onFlipped callback (from
+        // StepSimulation) still fires, which adds a CapFlipEvent that lets the
+        // flipper effect on THIS cap trigger if it has one.
+        target.BeginFlipInPlace(_tuning.ChainFlightDuration, null);
         return true;
     }
 
@@ -371,32 +404,43 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             OnTableImpact?.Invoke(landingPosition3D, landingForce);
         }
 
-        // Check if the slammer (thrown cap) has a bomb effect that should trigger
+        // Check if the slammer (thrown cap) has a flip effect that should trigger
         // on landing from a throw. Only fires for throw landings (not flip landings)
         // to avoid double-triggering with ResolvePendingFlipEffects.
         if (isThrowLanding)
-            TryTriggerBombOnThrowLanding(landedCap, landingPosition, landingForce);
+            TryTriggerEffectOnThrowLanding(landedCap, landingPosition, landingForce);
 
         ApplyPush(landedCap, landingPosition);
     }
 
-    void TryTriggerBombOnThrowLanding(Cap landedCap, Vector2 landingPosition, float landingForce)
+    void TryTriggerEffectOnThrowLanding(Cap landedCap, Vector2 landingPosition, float landingForce)
     {
         if (landedCap == null || landedCap.FlipEffects == null) return;
 
+        // Create a CapFlipEvent and resolve it immediately — this triggers
+        // BuildCommands on ALL flip effects (bomb, flipper, etc.), not just bombs.
+        // Each effect's ShouldTrigger check filters by side.
+        var flipEvent = new CapFlipEvent(landedCap, landingPosition, landingForce);
+        _effectResolver.ResolveImmediate(flipEvent);
+
+        // Play feedback for all flip effects that triggered.
         for (int i = 0; i < landedCap.FlipEffects.Length; i++)
         {
-            if (landedCap.FlipEffects[i] is BombCapFlipEffect bomb)
+            CapFlipEffect effect = landedCap.FlipEffects[i];
+            if (effect == null || !effect.enabled) continue;
+
+            // Check if this effect should trigger (same check as BuildCommands).
+            // This is a bit redundant (BuildCommands already checked), but we
+            // need to know whether to play feedback.
+            if (effect is BombCapFlipEffect bomb)
             {
                 if (bomb.ShouldTrigger(landedCap.IsHeads))
-                {
-                    var flipEvent = new CapFlipEvent(landedCap, landingPosition, landingForce);
-                    _effectResolver.ResolveImmediate(flipEvent);
-
-                    Vector3 pos3D = CapMath.FromXZ(landingPosition, 0f);
-                    bomb.PlayFeedback(pos3D, landingForce);
-                }
-                break;
+                    bomb.PlayFeedback(CapMath.FromXZ(landingPosition, 0f), landingForce);
+            }
+            else if (effect is FlipperCapEffect flipper)
+            {
+                if (flipper.ShouldTrigger(landedCap.IsHeads))
+                    flipper.PlayFeedback(CapMath.FromXZ(landingPosition, 0f), landingForce);
             }
         }
     }

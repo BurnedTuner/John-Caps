@@ -72,9 +72,16 @@ public sealed class CapBoardSimulation
         public bool HasRadialEffect;
         public float EffectRadius;
         public float EffectForce;
+        public RadialEffectType EffectType;
 
         /// <summary>Index of the cap this one rides on, or -1 when it stands on the table itself.</summary>
         public int BaseIndex;
+    }
+
+    enum RadialEffectType
+    {
+        Push,
+        Flip,
     }
 
     /// <summary>Per-cap state that a candidate throw mutates.</summary>
@@ -416,17 +423,15 @@ public sealed class CapBoardSimulation
             _runtime[source].IsStacked = true;
     }
 
-    /// <summary>Mirror of CapEffectResolver.ExecuteRadialPush driven by RadialPushCommand.
-    /// PUSHES caps (slides them) without flipping them. Does NOT queue chain-reaction
-    /// landings — the push effect doesn't flip, so there are no chain reactions from it.
-    /// (Chain-push collisions during StepPush are not modelled in the simulation —
-    /// the AI prediction is approximate here.)</summary>
+    /// <summary>Mirror of CapEffectResolver.ExecuteRadialPush/ExecuteRadialFlip.
+    /// Dispatches based on EffectType: Push (bomb) or Flip (flipper).</summary>
     void ApplyRadialLaunch(in Landing landing)
     {
         int source = landing.Index;
         float effectRadius = _profiles[source].EffectRadius;
         float effectForce = _profiles[source].EffectForce;
-        if (effectRadius <= 0f || effectForce <= 0f) return;
+        RadialEffectType effectType = _profiles[source].EffectType;
+        if (effectRadius <= 0f) return;
 
         float radiusSquared = effectRadius * effectRadius;
 
@@ -440,31 +445,64 @@ public sealed class CapBoardSimulation
             Vector2 offset = _runtime[i].Position - landing.Position;
             if (offset.sqrMagnitude >= radiusSquared) continue;
 
-            if (!CapImpact.TryResolveLaunch(
-                    ToImpactTarget(i),
-                    effectForce,
-                    _tuning,
-                    out float force,
-                    out float travelDistance))
-                continue;
-
-            _hits.Add(new Hit
+            if (effectType == RadialEffectType.Flip)
             {
-                Index = i,
-                Direction = CapImpact.RadialDirection(landing.Position, _runtime[i].Position),
-                Force = force,
-                TravelDistance = travelDistance
-            });
+                // Flipper: flip in place, no movement. Direction/force not used.
+                _hits.Add(new Hit
+                {
+                    Index = i,
+                    Direction = CapImpact.RadialDirection(landing.Position, _runtime[i].Position),
+                    Force = 0f,
+                    TravelDistance = 0f
+                });
+            }
+            else
+            {
+                // Bomb (push): resolve launch force to travel distance.
+                if (effectForce <= 0f) continue;
+                if (!CapImpact.TryResolveLaunch(
+                        ToImpactTarget(i),
+                        effectForce,
+                        _tuning,
+                        out float force,
+                        out float travelDistance))
+                    continue;
+
+                _hits.Add(new Hit
+                {
+                    Index = i,
+                    Direction = CapImpact.RadialDirection(landing.Position, _runtime[i].Position),
+                    Force = force,
+                    TravelDistance = travelDistance
+                });
+            }
         }
 
         for (int i = 0; i < _hits.Count; i++)
         {
             Hit hit = _hits[i];
-            // PUSH (not launch): move the cap but do NOT flip IsHeads and do NOT
-            // queue a chain-reaction landing. The bomb pushes caps away without
-            // flipping them.
-            ActivatePush(hit.Index, hit.Direction, hit.TravelDistance);
+            if (effectType == RadialEffectType.Flip)
+            {
+                // Flip in place: toggle IsHeads, no movement, no chain reaction.
+                ActivateFlip(hit.Index);
+            }
+            else
+            {
+                // Push: move without flipping.
+                ActivatePush(hit.Index, hit.Direction, hit.TravelDistance);
+            }
         }
+    }
+
+    /// <summary>
+    /// Flips a cap in place (toggle IsHeads) without moving it. Does NOT queue
+    /// a chain-reaction landing — the flipper doesn't cause chain reactions
+    /// (caps don't move, so they can't hit other caps).
+    /// </summary>
+    void ActivateFlip(int index)
+    {
+        _runtime[index].IsHeads = !_runtime[index].IsHeads;
+        // NOTE: no position change, no landing queued.
     }
 
     /// <summary>
@@ -660,6 +698,11 @@ public sealed class CapBoardSimulation
             profile.HasRadialEffect = true;
             profile.EffectRadius = radius;
             profile.EffectForce = force;
+
+            // Detect effect type: FlipperCapEffect → Flip, else (BombCapFlipEffect) → Push.
+            profile.EffectType = effect is FlipperCapEffect
+                ? RadialEffectType.Flip
+                : RadialEffectType.Push;
         }
 
         return profile;

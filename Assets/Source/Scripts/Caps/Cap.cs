@@ -387,6 +387,52 @@ public class Cap : MonoBehaviour
         ApplyVisuals();
     }
 
+    /// <summary>
+    /// Flips this cap IN PLACE — plays the flip animation (180° around the
+    /// lateral axis) but does NOT move the cap. Toggles IsHeads. For stacks,
+    /// ALL caps in the stack flip together (no peel-off, no scatter).
+    ///
+    /// The cap ends up at the same GroundPosition, same yaw, but with IsHeads
+    /// toggled. Stacked caps also toggle IsHeads.
+    ///
+    /// Used by the FlipperCapEffect (RadialFlipCommand).
+    /// </summary>
+    /// <param name="duration">How long the flip animation takes.</param>
+    /// <param name="onFlipped">Callback when the flip completes.</param>
+    public void BeginFlipInPlace(float duration, System.Action<Cap, Vector2, float> onFlipped = null)
+    {
+        if (_isImmutable) return;
+        if (_state != CapState.Idle && _state != CapState.Pushed) return;
+        if (_stackBase != null) return;
+        if (!IsFinite(GroundPosition)) return;
+
+        // Set up a flip with zero travel distance — the cap stays in place.
+        _flyStartRot = transform.rotation;
+        _flyStart = GroundPosition;
+        _flyDirection = Vector2.right; // direction doesn't matter (travel = 0)
+        _flyTotalDistance = 0f; // NO travel — flip in place
+        _flyElapsed = 0f;
+        _flyDuration = Mathf.Max(0.01f, duration);
+        _landingForce = 0f;
+        _isPeeling = false; // NO peel-off — the stack flips as a unit
+        _state = CapState.Flying;
+
+        // Capture stacked caps' start rotations for the flip animation.
+        for (int i = 0; i < _stackAbove.Count; i++)
+        {
+            _stackAbove[i]._flyStartRot = _stackAbove[i].transform.rotation;
+        }
+
+        ApplyVisuals();
+        for (int i = 0; i < _stackAbove.Count; i++)
+        {
+            _stackAbove[i].ApplyVisuals();
+        }
+
+        // Store the callback for when the flip completes.
+        _pendingLandedCallback = onFlipped;
+    }
+
     public void AddToStack(Cap incoming)
     {
         if (incoming == null || incoming == this || incoming._hasLeftGame) return;
@@ -545,8 +591,12 @@ public class Cap : MonoBehaviour
                 _stackAbove[i].IsHeads = !_stackAbove[i].IsHeads;
             }
 
-            if (IsHeads)
-                onFlipped?.Invoke(this, GroundPosition, _landingForce);
+            // Always invoke onFlipped — the flipper effect needs to trigger on
+            // BOTH heads and tails landings (the ShouldTrigger check in
+            // BuildCommands filters by side). Previously this only fired when
+            // IsHeads was true, which meant flipper effects configured for Tails
+            // or Either never triggered.
+            onFlipped?.Invoke(this, GroundPosition, _landingForce);
 
             // Flatten: extract Y from the current post-flip rotation using
             // the RIGHT vector (not forward — forward is reversed by the 180°
@@ -577,7 +627,13 @@ public class Cap : MonoBehaviour
 
             _isPeeling = false;
             _state = CapState.Idle;
-            onLanded?.Invoke(this, GroundPosition, _landingForce);
+
+            // For flip-in-place (travel distance = 0), don't call onLanded —
+            // the cap didn't move, so there are no chain reactions to resolve.
+            // Calling onLanded with force 0 would trigger ResolveLanding which
+            // could cause issues (trying to stack on caps at the same position).
+            if (_flyTotalDistance > 0f)
+                onLanded?.Invoke(this, GroundPosition, _landingForce);
         }
     }
 
