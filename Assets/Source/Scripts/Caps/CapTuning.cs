@@ -74,6 +74,22 @@ public class CapTuning : MonoBehaviour
     [Tooltip("Small Y offset to lift ghosts above the table and avoid z-fighting.")]
     [Min(0f)] public float GhostYOffset = 0.02f;
 
+    [Header("Aim system")]
+    [Tooltip("Multiplier on the cap's radius for the aim dead zone. " +
+             "When the cursor is within this radius of the aim point, the aim point doesn't move. " +
+             "1.0 = the dead zone matches the landing circle exactly.")]
+    [Min(0f)] public float AimDeadZoneMultiplier = 1f;
+
+    [Tooltip("Acceleration rate for the aim point toward the cursor when outside the dead zone. " +
+             "Higher = faster catch-up. The acceleration is proportional to how far the cursor " +
+             "is beyond the dead zone radius (overshoot).")]
+    [Min(0f)] public float AimAcceleration = 30f;
+
+    [Tooltip("Velocity damping per second. Higher = the aim point slows down faster. " +
+             "0 = no damping (aim point keeps momentum). The aim point stops immediately " +
+             "when the cursor re-enters the dead zone regardless of this setting.")]
+    [Range(0f, 10f)] public float AimDamping = 4f;
+
     void Awake() => Instance = this;
 
     public Vector3 SpawnPosition => SpawnPoint != null ? SpawnPoint.position : new Vector3(0f, 0f, -8f);

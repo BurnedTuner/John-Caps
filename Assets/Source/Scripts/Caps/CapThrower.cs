@@ -103,6 +103,7 @@ public sealed class CapThrower : MonoBehaviour
 
     private CapTuning _tuning;
     private Vector2 _aimPoint;
+    private Vector2 _aimVelocity;
     private bool _isDirectAimAllowed;
     private float _throwForce;
     private Cap _heldCap;
@@ -382,6 +383,7 @@ public sealed class CapThrower : MonoBehaviour
         _heldCapOriginalPos = cap.transform.position; // hand position (for cancel detection)
         _cursorLeftHandArea = false;
         _hasLastAllowedAimPoint = false;
+        _aimVelocity = Vector2.zero;
 
         // Capture the cap's viewport position and depth at click time.
         // Throughout aiming, ThrowOriginPos recomputes the world position
@@ -406,6 +408,7 @@ public sealed class CapThrower : MonoBehaviour
         }
 
         _aimPoint = CapMath.ToXZ(_heldCapOriginalPos);
+        _aimVelocity = Vector2.zero;
         _isDirectAimAllowed = false;
         TrajectoryPreview?.Hide();
         cap.BeginHeld(_heldCapOriginalPos);
@@ -447,41 +450,91 @@ public sealed class CapThrower : MonoBehaviour
 
         _heldCap.StepSimulation(Time.deltaTime, null);
 
-        if (TryGetFieldPoint(out Vector3 point, out bool isDirectAimAllowed))
-        {
-            float capRadius = _heldCap != null ? _heldCap.Parameters.Radius : 0.5f;
+        float capRadius = _heldCap != null ? _heldCap.Parameters.Radius : 0.5f;
+        float deadZoneRadius = capRadius * Mathf.Max(0f, _tuning.AimDeadZoneMultiplier);
+        float dt = Time.deltaTime;
 
-            if (isDirectAimAllowed)
+        if (TryGetFieldPoint(out Vector3 point, out _))
+        {
+            Vector2 cursorPoint = CapMath.ToXZ(point);
+
+            // Compute distance from current aim point to cursor.
+            Vector2 toCursor = cursorPoint - _aimPoint;
+            float distanceToCursor = toCursor.magnitude;
+
+            if (distanceToCursor <= deadZoneRadius)
             {
-                // Cursor is on an allowed spot — update aim point and cache it.
-                _aimPoint = CapMath.ToXZ(point);
-                _lastAllowedAimPoint = _aimPoint;
-                _hasLastAllowedAimPoint = true;
-                _isDirectAimAllowed = true;
-            }
-            else if (_hasLastAllowedAimPoint)
-            {
-                // Cursor is in a restricted zone. Instead of freezing at the
-                // last allowed position (which can be far from the zone if the
-                // cursor moved fast), sample along the line from the last allowed
-                // position to the current cursor position. Find the boundary
-                // crossing and clamp the aim point to just before it.
-                Vector2 cursorPoint = CapMath.ToXZ(point);
-                Vector2 clamped = ClampToZoneBoundary(_lastAllowedAimPoint, cursorPoint, capRadius);
-                _aimPoint = clamped;
-                _lastAllowedAimPoint = clamped;
-                _isDirectAimAllowed = true;
+                // Cursor is inside the dead zone (landing circle) — stop immediately.
+                _aimVelocity = Vector2.zero;
             }
             else
             {
-                // No allowed position cached yet (e.g., grabbed a cap and
-                // immediately moved into a restricted zone). Block aiming.
-                _isDirectAimAllowed = false;
+                // Cursor is outside the dead zone — accelerate toward it.
+                Vector2 direction = toCursor / distanceToCursor;
+                float overshoot = distanceToCursor - deadZoneRadius;
+                float acceleration = overshoot * _tuning.AimAcceleration;
+                _aimVelocity += direction * acceleration * dt;
+
+                // Apply damping.
+                _aimVelocity *= Mathf.Max(0f, 1f - _tuning.AimDamping * dt);
+
+                // Move aim point.
+                _aimPoint += _aimVelocity * dt;
+
+                // Check for overshoot: if the aim point crossed past the cursor
+                // (ended up inside the dead zone or on the other side), clamp it
+                // to the dead zone edge and zero velocity. This prevents the aim
+                // point from stopping too late when moving fast.
+                Vector2 toCursorAfter = cursorPoint - _aimPoint;
+                float distanceAfter = toCursorAfter.magnitude;
+                if (distanceAfter <= deadZoneRadius)
+                {
+                    // Overshot — clamp to the edge of the dead zone (the point
+                    // on the dead zone circle closest to the cursor, in the
+                    // direction the aim point was moving).
+                    if (distanceAfter > 0.0001f)
+                    {
+                        Vector2 edgeDirection = toCursorAfter / distanceAfter;
+                        _aimPoint = cursorPoint - edgeDirection * deadZoneRadius;
+                    }
+                    else
+                    {
+                        // Aim point is exactly on the cursor — leave it there.
+                        _aimPoint = cursorPoint;
+                    }
+                    _aimVelocity = Vector2.zero;
+                }
             }
         }
         else
         {
-            _isDirectAimAllowed = false;
+            // Cursor not on field — apply damping only.
+            _aimVelocity *= Mathf.Max(0f, 1f - _tuning.AimDamping * dt);
+        }
+
+        // Clamp to zone boundaries: if the aim point entered a restricted zone,
+        // clamp it back to the boundary and zero out velocity to prevent buildup.
+        Vector3 aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);
+        if (OverlapsAimBlockingZone(aimPoint3D, capRadius))
+        {
+            if (_hasLastAllowedAimPoint)
+            {
+                _aimPoint = ClampToZoneBoundary(_lastAllowedAimPoint, _aimPoint, capRadius);
+            }
+            _aimVelocity = Vector2.zero;
+        }
+
+        // Check if the (possibly clamped) aim point is now allowed.
+        aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);
+        if (!OverlapsAimBlockingZone(aimPoint3D, capRadius))
+        {
+            _lastAllowedAimPoint = _aimPoint;
+            _hasLastAllowedAimPoint = true;
+            _isDirectAimAllowed = true;
+        }
+        else
+        {
+            _isDirectAimAllowed = _hasLastAllowedAimPoint;
         }
 
         // Track whether the cursor has left the hand area since the drag started.
@@ -664,6 +717,7 @@ public sealed class CapThrower : MonoBehaviour
         _continuationPredictions.Clear();
         _isDirectAimAllowed = false;
         _hasLastAllowedAimPoint = false;
+        _aimVelocity = Vector2.zero;
         CurrentState = State.Idle;
     }
 
@@ -838,6 +892,7 @@ public sealed class CapThrower : MonoBehaviour
         _continuationPredictions.Clear();
         _isDirectAimAllowed = false;
         _hasLastAllowedAimPoint = false;
+        _aimVelocity = Vector2.zero;
         CurrentState = State.Idle;
 
         // Reset the hand: destroy all hand caps, restore deck from template, refill.
