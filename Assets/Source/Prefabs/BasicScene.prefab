@@ -503,6 +503,9 @@ MonoBehaviour:
   GhostMaterial: {fileID: 2100000, guid: c1d495c1c9de15d4fb976690c694e48e, type: 2}
   GhostAlpha: 0.35
   GhostYOffset: 0.02
+  AimDeadZoneMultiplier: 0.1
+  AimAcceleration: 30
+  AimDamping: 4
 --- !u!1 &6341038369104801065
 GameObject:
   m_ObjectHideFlags: 0
@@ -900,7 +903,7 @@ MonoBehaviour:
   CapPrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
   AmbientCapPrefabs:
   - {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-  - {fileID: 8693585558862005274, guid: 21a3a79e2bc267242995580d2798209e, type: 3}
+  - {fileID: 0}
   InitialCapCount: 6
   InitialPlayerCapCount: 3
   InitialOpponentCapCount: 3
