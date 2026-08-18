@@ -283,6 +283,21 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             source.ActivationDepthPlusOne);
     }
 
+    bool ICapEffectCommandExecutor.TryPush(Cap source, Cap target, Vector2 direction, float rawForce)
+    {
+        if (source == null || target == null || _tuning == null) return false;
+        if (target.IsBusy) return false;
+
+        // Convert force to push distance (same formula as launch).
+        float pushDistance = rawForce * _tuning.ForceToTravelDistance;
+        if (pushDistance <= _tuning.MinimumFlightLength) return false;
+
+        // Push the cap — slides it without flipping. Chain-push collisions are
+        // handled in Cap.StepPush.
+        target.BeginPush(direction, pushDistance, _tuning.ChainFlightDuration);
+        return true;
+    }
+
     void ResolveLanding(Cap landedCap, Vector2 landingPosition, float landingForce, bool isThrowLanding = false)
     {
         if (landedCap == null) return;

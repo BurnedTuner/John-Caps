@@ -663,8 +663,75 @@ public class Cap : MonoBehaviour
             _state = CapState.Idle;
             return;
         }
+
+        // Chain-push collision detection: check if the cap's path from its
+        // current position to `next` crosses any other cap. If so, push that
+        // cap in the same direction (with remaining force proportional to
+        // remaining travel distance).
+        Vector2 previousPos = GroundPosition;
+        CheckChainPushCollisions(previousPos, next);
+
         GroundPosition = next;
         if (t >= 1f) _state = CapState.Idle;
+    }
+
+    /// <summary>
+    /// Checks if this pushed cap's path crosses any other cap. If so, pushes
+    /// that cap in the same direction (chain-push). The pushed cap receives a
+    /// push distance proportional to the remaining travel of this cap.
+    /// </summary>
+    void CheckChainPushCollisions(Vector2 from, Vector2 to)
+    {
+        float myRadius = _parameters != null ? _parameters.Radius : 0.5f;
+        Vector2 delta = to - from;
+        float moveDistance = delta.magnitude;
+        if (moveDistance <= 0.0001f) return;
+        Vector2 moveDir = delta / moveDistance;
+
+        // The remaining push distance this cap would travel after the collision.
+        float remainingPush = _pushRemaining * (1f - Mathf.Clamp01(_pushElapsed / _pushTotalDuration));
+
+        IReadOnlyList<Cap> allCaps = CapRegistry.AllCaps;
+        for (int i = 0; i < allCaps.Count; i++)
+        {
+            Cap other = allCaps[i];
+            if (other == null || other == this) continue;
+            if (other._stackBase != null) continue; // skip stacked caps
+            if (!other.CanFlip) continue; // not pushable
+            if (other._state != CapState.Idle) continue; // already moving
+
+            float otherRadius = other._parameters != null ? other._parameters.Radius : 0.5f;
+            float combinedRadius = myRadius + otherRadius;
+
+            // Check if the segment from→to passes within combinedRadius of the other cap.
+            Vector2 toOther = other.GroundPosition - from;
+            float projection = Vector2.Dot(toOther, moveDir);
+
+            // Skip if the other cap is behind the start of the segment.
+            if (projection < 0f) continue;
+            // Skip if the other cap is beyond the end of the segment.
+            if (projection > moveDistance + combinedRadius) continue;
+
+            // Closest point on the segment to the other cap.
+            float clampedProjection = Mathf.Clamp(projection, 0f, moveDistance);
+            Vector2 closestPoint = from + moveDir * clampedProjection;
+            float distanceToOther = Vector2.Distance(other.GroundPosition, closestPoint);
+
+            if (distanceToOther < combinedRadius)
+            {
+                // Collision — push the other cap. Use the direction from this cap
+                // to the other cap (radial push) so caps don't all pile up in one line.
+                Vector2 pushDir = other.GroundPosition - GroundPosition;
+                if (pushDir.sqrMagnitude > 0.0001f)
+                    pushDir.Normalize();
+                else
+                    pushDir = _pushDirection;
+
+                // Push distance = remaining push of this cap (transferred force).
+                float pushDistance = Mathf.Max(0.1f, remainingPush);
+                other.BeginPush(pushDir, pushDistance, _pushTotalDuration - _pushElapsed);
+            }
+        }
     }
 
     /// <summary>

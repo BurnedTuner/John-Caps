@@ -416,7 +416,11 @@ public sealed class CapBoardSimulation
             _runtime[source].IsStacked = true;
     }
 
-    /// <summary>Mirror of CapEffectResolver.ExecuteRadialLaunch driven by RadialLaunchCommand.</summary>
+    /// <summary>Mirror of CapEffectResolver.ExecuteRadialPush driven by RadialPushCommand.
+    /// PUSHES caps (slides them) without flipping them. Does NOT queue chain-reaction
+    /// landings — the push effect doesn't flip, so there are no chain reactions from it.
+    /// (Chain-push collisions during StepPush are not modelled in the simulation —
+    /// the AI prediction is approximate here.)</summary>
     void ApplyRadialLaunch(in Landing landing)
     {
         int source = landing.Index;
@@ -456,8 +460,27 @@ public sealed class CapBoardSimulation
         for (int i = 0; i < _hits.Count; i++)
         {
             Hit hit = _hits[i];
-            Activate(hit.Index, hit.Direction, hit.Force, hit.TravelDistance, landing.Generation);
+            // PUSH (not launch): move the cap but do NOT flip IsHeads and do NOT
+            // queue a chain-reaction landing. The bomb pushes caps away without
+            // flipping them.
+            ActivatePush(hit.Index, hit.Direction, hit.TravelDistance);
         }
+    }
+
+    /// <summary>
+    /// Moves a cap without flipping it (push, not launch). Does NOT queue a
+    /// chain-reaction landing — pushed caps don't trigger chain reactions
+    /// (only collision-based chain pushes, which aren't modelled here).
+    /// </summary>
+    void ActivatePush(int index, Vector2 direction, float travelDistance)
+    {
+        Vector2 destination = _runtime[index].Position + direction * travelDistance;
+        _runtime[index].Position = destination;
+        // NOTE: IsHeads is NOT toggled — push doesn't flip.
+        _runtime[index].LaunchedGeneration = -1; // not launched, so can be hit again
+
+        _runtime[index].IsOnField = _boundary == null || _boundary.Supports(destination, 0f);
+        // NOTE: no landing queued — push doesn't trigger chain reactions.
     }
 
     /// <summary>Mirror of CapTurnResolver.TryActivateCap plus Cap.StepFly's move-and-flip.</summary>

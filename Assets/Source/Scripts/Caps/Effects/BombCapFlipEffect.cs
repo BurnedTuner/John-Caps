@@ -16,7 +16,7 @@ public enum BombTriggerSide
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Cap))]
-public sealed class BombCapFlipEffect : CapFlipEffect
+public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius
 {
     [Header("Trigger")]
     [Tooltip("Which side the bomb must land on to trigger the explosion. " +
@@ -34,6 +34,10 @@ public sealed class BombCapFlipEffect : CapFlipEffect
 
     public float Radius => _radius;
     public float Force => _force;
+
+    public float EffectRadius => _radius;
+
+    public Color ZoneColor => Color.red;
 
     [Header("Feedback")]
     public GameObject ExplosionVFX;
@@ -56,7 +60,9 @@ public sealed class BombCapFlipEffect : CapFlipEffect
     {
         if (flipEvent.Source == null || _radius <= 0f || _force <= 0f) return;
         if (!ShouldTrigger(flipEvent.Source.IsHeads)) return;
-        commands.Add(new RadialLaunchCommand(flipEvent.Source, flipEvent.Position, _radius, _force));
+        // Use RadialPushCommand instead of RadialLaunchCommand — the bomb
+        // PUSHES caps away (slides them) without flipping them.
+        commands.Add(new RadialPushCommand(flipEvent.Source, flipEvent.Position, _radius, _force));
     }
 
     /// <summary>
@@ -110,4 +116,6 @@ public sealed class BombCapFlipEffect : CapFlipEffect
             }
         }
     }
+
+    public bool ShouldTriggerOnSide(bool isHeads) => ShouldTrigger(isHeads);
 }

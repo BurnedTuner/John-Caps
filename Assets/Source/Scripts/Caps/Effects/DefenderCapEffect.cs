@@ -33,7 +33,7 @@ public enum DefenderTriggerSide
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Cap))]
-public sealed class DefenderCapEffect : MonoBehaviour
+public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius
 {
     [Header("Zone")]
     [Tooltip("Radius of the no-aim zone around the cap, measured from the cap's center on the XZ plane. " +
@@ -142,6 +142,15 @@ public sealed class DefenderCapEffect : MonoBehaviour
     /// use this to check if a landing point is inside the zone.
     /// </summary>
     public Vector2 ZoneCenter => _cap != null ? _cap.GroundPosition : Vector2.zero;
+
+    /// <summary>ICapEffectRadius — same as ZoneRadius.</summary>
+    public float EffectRadius => ZoneRadius;
+
+    /// <summary>Cyan color for defender radius circles in the trajectory preview.</summary>
+    public Color ZoneColor => new Color(0.2f, 0.6f, 1f, 0.3f);
+
+    /// <summary>ICapEffectRadius — wraps the private ShouldTrigger for the trajectory preview.</summary>
+    public bool ShouldTriggerOnSide(bool isHeads) => ShouldTrigger(isHeads);
 
     /// <summary>
     /// Returns true if the defender's trigger side matches the cap's current side.

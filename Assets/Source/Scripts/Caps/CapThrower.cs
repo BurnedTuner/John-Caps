@@ -100,6 +100,7 @@ public sealed class CapThrower : MonoBehaviour
     private readonly List<CapPrediction> _predictionResults = new();
     private readonly List<CapPrediction> _fullPredictions = new();
     private readonly List<CapPrediction> _continuationPredictions = new();
+    private readonly List<(Vector3 center, float radius, Color color)> _bombZones = new();
 
     private CapTuning _tuning;
     private Vector2 _aimPoint;
@@ -657,13 +658,49 @@ public sealed class CapThrower : MonoBehaviour
             // else: Depth > depth → hidden, drop.
         }
 
+        // Collect effect radius zones from ANY ICapEffectRadius component
+        // (bomb, defender, etc.). Works for both the held cap (throw) and
+        // predicted caps (chain reaction).
+        _bombZones.Clear();
+        if (_heldCap != null)
+        {
+            var effects = _heldCap.GetComponents<ICapEffectRadius>();
+            for (int e = 0; e < effects.Length; e++)
+            {
+                if (effects[e].ShouldTriggerOnSide(_heldCap.IsHeads))
+                {
+                    _bombZones.Add((CapMath.FromXZ(_aimPoint, 0f),
+                                    effects[e].EffectRadius,
+                                    effects[e].ZoneColor));
+                }
+            }
+        }
+        for (int i = 0; i < _fullPredictions.Count; i++)
+        {
+            CapPrediction pred = _fullPredictions[i];
+            if (pred.Cap == null) continue;
+            var effects = pred.Cap.GetComponents<ICapEffectRadius>();
+            for (int e = 0; e < effects.Length; e++)
+            {
+                // For predicted caps: the effect triggers when the cap FLIPS
+                // (chain reaction). The cap's side after flipping = WillLandHeads.
+                if (effects[e].ShouldTriggerOnSide(pred.WillLandHeads))
+                {
+                    _bombZones.Add((CapMath.FromXZ(pred.EndPosition, 0f),
+                                    effects[e].EffectRadius,
+                                    effects[e].ZoneColor));
+                }
+            }
+        }
+
         TrajectoryPreview?.Show(
             ThrowOriginPos,
             _aimPoint,
             slammerRadius,
             _tuning,
             _fullPredictions,
-            _continuationPredictions);
+            _continuationPredictions,
+            _bombZones);
 
         // Ghosts only for full predictions (not continuations).
         TrajectoryPreview?.ShowGhosts(_fullPredictions);

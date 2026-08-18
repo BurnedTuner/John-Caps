@@ -28,11 +28,15 @@ public class TrajectoryPreview : MonoBehaviour
              "Placeholder for a future dotted-line style.")]
     public Color ContinuationColor = new Color(1f, 1f, 1f, 0.4f);
 
+    [Tooltip("Color for the bomb explosion radius circles.")]
+    public Color BombRadiusColor = new Color(1f, 0.2f, 0.1f, 0.35f);
+
     private LineRenderer _arcLine;
     private LineRenderer _landingCircle;
     private readonly List<LineRenderer> _predictionLines = new();
     private readonly List<LineRenderer> _endCircles = new();
     private readonly List<LineRenderer> _continuationLines = new();
+    private readonly List<LineRenderer> _bombRadiusCircles = new();
 
     private Transform _lineParent;
     private GameObject _runtimeContainer;
@@ -105,13 +109,23 @@ public class TrajectoryPreview : MonoBehaviour
         }
     }
 
+    void EnsureBombRadiusCount(int count)
+    {
+        while (_bombRadiusCircles.Count < count)
+        {
+            var line = CreateLineRenderer($"BombRadius_{_bombRadiusCircles.Count}", BombRadiusColor);
+            _bombRadiusCircles.Add(line);
+        }
+    }
+
     public void Show(
         Vector3 spawnPoint,
         Vector2 aimPoint,
         float slammerRadius,
         CapTuning tuning,
         IReadOnlyList<CapPrediction> fullPredictions,
-        IReadOnlyList<CapPrediction> continuationPredictions)
+        IReadOnlyList<CapPrediction> continuationPredictions,
+        IReadOnlyList<(Vector3 center, float radius, Color color)> bombZones)
     {
         EnsureLineRenderers();
 
@@ -163,6 +177,16 @@ public class TrajectoryPreview : MonoBehaviour
         }
         for (int i = contCount; i < _continuationLines.Count; i++)
             _continuationLines[i].enabled = false;
+
+        // --- Effect radius circles (bomb, defender, etc.) ---
+        int bombCount = bombZones != null ? bombZones.Count : 0;
+        EnsureBombRadiusCount(bombCount);
+        for (int i = 0; i < bombCount; i++)
+        {
+            DrawCircle(_bombRadiusCircles[i], bombZones[i].center, bombZones[i].radius, bombZones[i].color);
+        }
+        for (int i = bombCount; i < _bombRadiusCircles.Count; i++)
+            _bombRadiusCircles[i].enabled = false;
     }
 
     public void Hide()
@@ -172,6 +196,7 @@ public class TrajectoryPreview : MonoBehaviour
         foreach (var line in _predictionLines) line.enabled = false;
         foreach (var circle in _endCircles) circle.enabled = false;
         foreach (var line in _continuationLines) line.enabled = false;
+        foreach (var circle in _bombRadiusCircles) circle.enabled = false;
         _ghostPool?.HideAll();
     }
 

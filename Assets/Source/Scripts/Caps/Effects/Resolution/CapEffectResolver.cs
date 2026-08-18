@@ -45,6 +45,8 @@ internal sealed class CapEffectResolver
     {
         if (command is RadialLaunchCommand radialLaunch)
             ExecuteRadialLaunch(radialLaunch);
+        else if (command is RadialPushCommand radialPush)
+            ExecuteRadialPush(radialPush);
         else
             Debug.LogError($"[CapEffectResolver] Unsupported command: {command?.GetType().Name ?? "null"}.");
     }
@@ -67,6 +69,29 @@ internal sealed class CapEffectResolver
                 : Vector2.right;
 
             _executor.TryLaunch(command.Source, target, direction, command.Force);
+        }
+
+        _targets.Clear();
+    }
+
+    void ExecuteRadialPush(RadialPushCommand command)
+    {
+        if (command.Source == null || command.Radius <= 0f || command.Force <= 0f)
+            return;
+
+        _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
+
+        for (int i = 0; i < _targets.Count; i++)
+        {
+            Cap target = _targets[i];
+            if (target == null || target == command.Source || target.IsBusy) continue;
+
+            Vector2 offset = target.GroundPosition - command.Origin;
+            Vector2 direction = offset.sqrMagnitude > 0.000001f
+                ? offset.normalized
+                : Vector2.right;
+
+            _executor.TryPush(command.Source, target, direction, command.Force);
         }
 
         _targets.Clear();
