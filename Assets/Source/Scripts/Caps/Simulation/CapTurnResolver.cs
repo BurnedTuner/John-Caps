@@ -299,7 +299,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     bool ICapEffectCommandExecutor.TryPush(Cap source, Cap target, Vector2 direction, float rawForce)
     {
         if (source == null || target == null || _tuning == null) return false;
-        if (target.IsBusy) return false;
+        if (target.IsBusy || target.HasLeftGame) return false;
 
         // Convert force to push distance (same formula as launch).
         float pushDistance = rawForce * _tuning.ForceToTravelDistance;
@@ -314,7 +314,7 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     bool ICapEffectCommandExecutor.TryFlip(Cap source, Cap target)
     {
         if (source == null || target == null || _tuning == null) return false;
-        if (target.IsBusy) return false;
+        if (target.IsBusy || target.HasLeftGame) return false;
         if (_chainCount >= _tuning.MaximumChainLength) return false;
 
         // Count the flip toward the chain limit — prevents infinite flip cycles

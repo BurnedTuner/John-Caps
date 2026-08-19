@@ -383,6 +383,7 @@ public class Cap : MonoBehaviour
     public void BeginPush(Vector2 direction, float distance, float duration)
     {
         if (_isImmutable) return;
+        if (_hasLeftGame) return; // don't push caps that left the field
         if (_state != CapState.Idle) return;
         if (_stackBase != null) return;
         if (float.IsNaN(distance) || distance <= 0.0001f) return;
@@ -413,6 +414,7 @@ public class Cap : MonoBehaviour
     public void BeginFlipInPlace(float duration, System.Action<Cap, Vector2, float> onFlipped = null)
     {
         if (_isImmutable) return;
+        if (_hasLeftGame) return; // don't flip caps that left the field
         if (_state != CapState.Idle && _state != CapState.Pushed) return;
         if (_stackBase != null) return;
         if (!IsFinite(GroundPosition)) return;
@@ -570,6 +572,15 @@ public class Cap : MonoBehaviour
             _landingYaw = right.sqrMagnitude > 0.001f ? Mathf.Atan2(right.x, right.z) * Mathf.Rad2Deg - 90f : 0f;
             _state = CapState.Idle;
             transform.position = _throwEnd;
+
+            // Bug fix: if the landing position is off the field, don't fire
+            // onLanded — the cap flew off the edge. CapFieldBoundary.LateUpdate
+            // will handle the fall. Firing onLanded here would trigger
+            // ResolveLanding → effects (bomb, flipper) on a cap that's
+            // about to leave the game.
+            if (!IsLandingOnField())
+                return;
+
             onLanded?.Invoke(this, GroundPosition, _landingForce);
         }
     }
@@ -591,6 +602,12 @@ public class Cap : MonoBehaviour
             GroundPosition = _flyStart + _flyDirection * _flyTotalDistance;
             if (!IsFinite(GroundPosition)) GroundPosition = _flyStart;
 
+            // Bug fix: if the landing position is off the field, don't fire
+            // onFlipped/onLanded — the cap flew off the edge. CapFieldBoundary
+            // will handle the fall. Firing callbacks here would trigger effects
+            // (bomb, flipper) and chain reactions on a cap that's leaving the game.
+            bool landedOffField = !IsLandingOnField();
+
             // Toggle IsHeads on every landing (including peel-off continuation
             // flights). Each peel-off cap flips once per iteration it survives:
             // iteration 1 → flipped once, iteration 2 → flipped twice (back to
@@ -602,12 +619,12 @@ public class Cap : MonoBehaviour
                 _stackAbove[i].IsHeads = !_stackAbove[i].IsHeads;
             }
 
-            // Always invoke onFlipped — the flipper effect needs to trigger on
-            // BOTH heads and tails landings (the ShouldTrigger check in
-            // BuildCommands filters by side). Previously this only fired when
-            // IsHeads was true, which meant flipper effects configured for Tails
-            // or Either never triggered.
-            onFlipped?.Invoke(this, GroundPosition, _landingForce);
+            // Only fire onFlipped if the cap landed on the field. If it flew
+            // off the edge, don't trigger flip effects (bomb, flipper).
+            if (!landedOffField)
+            {
+                onFlipped?.Invoke(this, GroundPosition, _landingForce);
+            }
 
             // Flatten: extract Y from the current post-flip rotation using
             // the RIGHT vector (not forward — forward is reversed by the 180°
@@ -641,9 +658,8 @@ public class Cap : MonoBehaviour
 
             // For flip-in-place (travel distance = 0), don't call onLanded —
             // the cap didn't move, so there are no chain reactions to resolve.
-            // Calling onLanded with force 0 would trigger ResolveLanding which
-            // could cause issues (trying to stack on caps at the same position).
-            if (_flyTotalDistance > 0f)
+            // Also skip if the cap landed off the field.
+            if (_flyTotalDistance > 0f && !landedOffField)
                 onLanded?.Invoke(this, GroundPosition, _landingForce);
         }
     }
@@ -999,6 +1015,23 @@ public class Cap : MonoBehaviour
     static bool IsFinite(Quaternion q) =>
         !float.IsNaN(q.x) && !float.IsNaN(q.y) && !float.IsNaN(q.z) && !float.IsNaN(q.w) &&
         !float.IsInfinity(q.x) && !float.IsInfinity(q.y) && !float.IsInfinity(q.z) && !float.IsInfinity(q.w);
+
+    /// <summary>
+    /// Checks if the cap's current GroundPosition is on the field. Used by
+    /// StepThrow and StepFly to determine whether to fire onLanded/onFlipped —
+    /// if the cap landed off the field, its effects should NOT trigger.
+    /// </summary>
+    bool IsLandingOnField()
+    {
+        // Cache the field boundary on first use.
+        if (_fieldBoundary == null)
+            _fieldBoundary = FindFirstObjectByType<CapFieldBoundary>();
+        if (_fieldBoundary == null)
+            return true; // no boundary → assume on field
+        return _fieldBoundary.Supports(GroundPosition, _parameters != null ? _parameters.Radius : 0.5f);
+    }
+
+    private static CapFieldBoundary _fieldBoundary;
 
     void ApplyOutline()
     {

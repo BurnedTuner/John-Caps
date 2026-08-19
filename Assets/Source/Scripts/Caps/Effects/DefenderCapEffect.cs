@@ -105,6 +105,10 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius
     {
         if (_cap == null) return false;
 
+        // A cap that has left the game (fell off the field) should not have
+        // an active defender zone, even though LeaveGame sets state to Idle.
+        if (_cap.HasLeftGame) return false;
+
         // Hand caps are unregistered from CapRegistry — they're NOT "on field"
         // even though their state is Idle. This check excludes them.
         if (!CapRegistry.Contains(_cap)) return false;
