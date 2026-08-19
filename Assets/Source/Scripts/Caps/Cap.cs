@@ -33,6 +33,14 @@ public class Cap : MonoBehaviour
     [SerializeField] private Color _playerOutlineColor = new Color(0.05f, 0.9f, 0.85f, 1f);
     [SerializeField] private Color _opponentOutlineColor = new Color(1f, 0.2f, 0.05f, 1f);
 
+    [Header("Team rim materials")]
+    [Tooltip("Material for the rim/side of the cap when owned by the Player.")]
+    [SerializeField] private Material _playerRimMaterial;
+    [Tooltip("Material for the rim/side of the cap when owned by the Opponent.")]
+    [SerializeField] private Material _opponentRimMaterial;
+    [Tooltip("Fallback material for the rim/side when the cap is Neutral.")]
+    [SerializeField] private Material _neutralRimMaterial;
+
     [Header("Cap parameters")]
     [SerializeField] private CapParameters _parameters = new CapParameters();
     public CapParameters Parameters => _parameters;
@@ -174,6 +182,7 @@ public class Cap : MonoBehaviour
         _overrideMaterialTimer = 0f;
         ApplyVisuals();
         ApplyOutline();
+        ApplyRimMaterial();
     }
 
     /// <summary>
@@ -242,6 +251,7 @@ public class Cap : MonoBehaviour
 
         ApplyVisuals();
         ApplyOutline();
+        ApplyRimMaterial();
     }
 
     public void SetImmutable(bool value) => _isImmutable = value;
@@ -259,6 +269,7 @@ public class Cap : MonoBehaviour
     {
         _owner = owner;
         ApplyOutline();
+        ApplyRimMaterial();
     }
 
     public void BeginHeld(Vector3 basePos)
@@ -1009,6 +1020,29 @@ public class Cap : MonoBehaviour
         _outlineRenderer.SetPropertyBlock(_outlineProperties);
     }
 
+    /// <summary>
+    /// Sets the rim renderer's material based on the cap's owner.
+    /// Player → _playerRimMaterial, Opponent → _opponentRimMaterial,
+    /// Neutral → _neutralRimMaterial (fallback — unlike the outline which
+    /// turns off for neutral). If the specific material is null, falls back
+    /// to the neutral material. If that's also null, the rim keeps whatever
+    /// material it had originally.
+    /// </summary>
+    void ApplyRimMaterial()
+    {
+        if (_rimRenderer == null) return;
+
+        Material target = _owner switch
+        {
+            CapOwner.Player => _playerRimMaterial ?? _neutralRimMaterial,
+            CapOwner.Opponent => _opponentRimMaterial ?? _neutralRimMaterial,
+            _ => _neutralRimMaterial,
+        };
+
+        if (target != null && _rimRenderer.sharedMaterial != target)
+            _rimRenderer.sharedMaterial = target;
+    }
+
     void Awake()
     {
         // Find the OutlineRenderer if not assigned.
@@ -1082,6 +1116,7 @@ public class Cap : MonoBehaviour
         }
 
         ApplyOutline();
+        ApplyRimMaterial();
     }
 
     /// <summary>
@@ -1097,7 +1132,11 @@ public class Cap : MonoBehaviour
             _originalMaterials[mr] = (Material[])mr.sharedMaterials.Clone();
     }
 
-    void OnValidate() => ApplyOutline();
+    void OnValidate()
+    {
+        ApplyOutline();
+        ApplyRimMaterial();
+    }
 
     void OnDestroy()
     {

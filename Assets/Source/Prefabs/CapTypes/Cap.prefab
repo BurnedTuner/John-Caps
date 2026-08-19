@@ -50,6 +50,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _stableId: 0
   _owner: 0
+  _initialIsHeads: 1
   _topRenderer: {fileID: 778941114169733653}
   _bottomRenderer: {fileID: 376556644052359217}
   _rimRenderer: {fileID: 5262984797595299007}
@@ -57,6 +58,9 @@ MonoBehaviour:
   _outlineWidth: 0.08
   _playerOutlineColor: {r: 0.05, g: 0.9, b: 0.85, a: 1}
   _opponentOutlineColor: {r: 1, g: 0.2, b: 0.05, a: 1}
+  _playerRimMaterial: {fileID: 2100000, guid: 71adcb4c86bf3174cb21141b158cde66, type: 2}
+  _opponentRimMaterial: {fileID: 2100000, guid: 4c4a4e77af626b64ab5227ab0b2bb9cb, type: 2}
+  _neutralRimMaterial: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
   _parameters:
     Radius: 1
     ThrowPower: 7
@@ -299,9 +303,13 @@ PrefabInstance:
       value: Middle
       objectReference: {fileID: 0}
     - target: {fileID: -6902573867230041995, guid: ce9927baccfd41c48a00deb7bf884f1b, type: 3}
+      propertyPath: m_CastShadows
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -6902573867230041995, guid: ce9927baccfd41c48a00deb7bf884f1b, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 40e2988a4593ef14b8b067fd420d87a1, type: 2}
+      objectReference: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
     - target: {fileID: -6733177361254619370, guid: ce9927baccfd41c48a00deb7bf884f1b, type: 3}
       propertyPath: m_Name
       value: Bottom
