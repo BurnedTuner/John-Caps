@@ -68,6 +68,11 @@ public sealed class TurnController : MonoBehaviour
              "Turn it off for a sandbox that never ends.")]
     [SerializeField] private bool _endMatchWhenSideWipedOut = true;
 
+    [Tooltip("If > 0, the match ends when a side has knocked out this many enemy caps. " +
+             "0 = disabled (use the wipe-out condition instead). " +
+             "Player kills = opponent losses, and vice versa — they are the same metric.")]
+    [Min(0)] [SerializeField] private int _killTarget;
+
     [Tooltip("A cap buried under another one still counts as being on the field, so covering a side's " +
              "last cap does not beat it. Turn it off to treat a buried cap as out of the game.")]
     [SerializeField] private bool _stackedCapsCountAsOnField = true;
@@ -103,12 +108,36 @@ public sealed class TurnController : MonoBehaviour
     /// </summary>
     public event System.Action<ExtraTurnInfo> ExtraTurnEarned;
 
+    /// <summary>
+    /// Raised when a cap is knocked off the field. Parameters:
+    /// (killedOwner, playerKills, opponentKills).
+    /// killedOwner is the owner of the cap that was knocked off.
+    /// playerKills = opponent caps knocked off by the player (= opponent losses).
+    /// opponentKills = player caps knocked off by the opponent (= player losses).
+    /// UI binds to this to update kill count displays.
+    /// </summary>
+    public event System.Action<CapOwner, int, int> KillCountChanged;
+
     // Knockouts are tallied from CapFieldBoundary.OnCapLeftField as they happen, not by diffing cap
     // counts before and after the turn. A diff cannot tell a knockout from a cap that merely landed
     // in a stack, because Cap.AddToStack also removes it from CapRegistry.
     private int _playerCapsLostThisTurn;
     private int _opponentCapsLostThisTurn;
     private int _neutralCapsLostThisTurn;
+
+    // Cumulative kill counts (persist across turns, reset on board reset).
+    // Player kills = opponent caps knocked off = opponent losses.
+    // Opponent kills = player caps knocked off = player losses.
+    // They are the SAME metric viewed from each side's perspective.
+    private int _playerKills;
+    private int _opponentKills;
+
+    /// <summary>Total enemy caps the player has knocked off (= opponent losses).</summary>
+    public int PlayerKills => _playerKills;
+    /// <summary>Total enemy caps the opponent has knocked off (= player losses).</summary>
+    public int OpponentKills => _opponentKills;
+    /// <summary>The kill target (0 = disabled).</summary>
+    public int KillTarget => _killTarget;
 
     private float _turnElapsed;
     private bool _restartRequested;
@@ -349,9 +378,34 @@ public sealed class TurnController : MonoBehaviour
 
         switch (cap.Owner)
         {
-            case CapOwner.Player: _playerCapsLostThisTurn++; break;
-            case CapOwner.Opponent: _opponentCapsLostThisTurn++; break;
-            default: _neutralCapsLostThisTurn++; break;
+            case CapOwner.Player:
+                _playerCapsLostThisTurn++;
+                _opponentKills++; // opponent killed a player cap = player lost one
+                break;
+            case CapOwner.Opponent:
+                _opponentCapsLostThisTurn++;
+                _playerKills++; // player killed an opponent cap = opponent lost one
+                break;
+            default:
+                _neutralCapsLostThisTurn++;
+                break;
+        }
+
+        // Notify UI listeners.
+        KillCountChanged?.Invoke(cap.Owner, _playerKills, _opponentKills);
+
+        // Check kill-target win condition: player reached the kill target.
+        if (_killTarget > 0 && _playerKills >= _killTarget && CurrentPhase != TurnPhase.MatchOver)
+        {
+            FinishMatch(CapOwner.Player);
+            return;
+        }
+
+        // Check kill-target win condition: opponent reached the kill target.
+        if (_killTarget > 0 && _opponentKills >= _killTarget && CurrentPhase != TurnPhase.MatchOver)
+        {
+            FinishMatch(CapOwner.Opponent);
+            return;
         }
     }
 
@@ -376,6 +430,8 @@ public sealed class TurnController : MonoBehaviour
         _playerCapsLostThisTurn = 0;
         _opponentCapsLostThisTurn = 0;
         _neutralCapsLostThisTurn = 0;
+        _playerKills = 0;
+        _opponentKills = 0;
         _turnElapsed = 0f;
         _opponentTurnPending = false;
         _restartRequested = true;
