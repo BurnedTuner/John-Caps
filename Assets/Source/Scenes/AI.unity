@@ -1577,13 +1577,29 @@ PrefabInstance:
       propertyPath: PredictionDepth
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 732878909461025891, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1386064479566221289, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1800930899156425945, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: _fieldBoundary
       value: 
       objectReference: {fileID: 1945879164}
+    - target: {fileID: 2678166587463744163, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3809033516813011136, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_Name
       value: BasicScene
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102214176743280137, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6576823205662733966, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1653,10 +1669,10 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 2430325198386952488, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      insertIndex: -1
+      insertIndex: 1
       addedObject: {fileID: 883278203}
     - targetCorrespondingSourceObject: {fileID: 2430325198386952488, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      insertIndex: -1
+      insertIndex: 2
       addedObject: {fileID: 252220674}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 7235197627595899799, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}

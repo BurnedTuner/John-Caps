@@ -455,64 +455,88 @@ public sealed class CapThrower : MonoBehaviour
         float deadZoneRadius = capRadius * Mathf.Max(0f, _tuning.AimDeadZoneMultiplier);
         float dt = Time.deltaTime;
 
-        if (TryGetFieldPoint(out Vector3 point, out _))
+        if (GameSettings.IsAccelerationAimEnabled())
         {
-            Vector2 cursorPoint = CapMath.ToXZ(point);
-
-            // Compute distance from current aim point to cursor.
-            Vector2 toCursor = cursorPoint - _aimPoint;
-            float distanceToCursor = toCursor.magnitude;
-
-            if (distanceToCursor <= deadZoneRadius)
+            // --- Acceleration-based aim system (new) ---
+            if (TryGetFieldPoint(out Vector3 point, out _))
             {
-                // Cursor is inside the dead zone (landing circle) — stop immediately.
-                _aimVelocity = Vector2.zero;
+                Vector2 cursorPoint = CapMath.ToXZ(point);
+
+                // Compute distance from current aim point to cursor.
+                Vector2 toCursor = cursorPoint - _aimPoint;
+                float distanceToCursor = toCursor.magnitude;
+
+                if (distanceToCursor <= deadZoneRadius)
+                {
+                    // Cursor is inside the dead zone (landing circle) — stop immediately.
+                    _aimVelocity = Vector2.zero;
+                }
+                else
+                {
+                    // Cursor is outside the dead zone — accelerate toward it.
+                    Vector2 direction = toCursor / distanceToCursor;
+                    float overshoot = distanceToCursor - deadZoneRadius;
+                    float acceleration = overshoot * _tuning.AimAcceleration;
+                    _aimVelocity += direction * acceleration * dt;
+
+                    // Apply damping.
+                    _aimVelocity *= Mathf.Max(0f, 1f - _tuning.AimDamping * dt);
+
+                    // Move aim point.
+                    _aimPoint += _aimVelocity * dt;
+
+                    // Check for overshoot: if the aim point crossed past the cursor
+                    // (ended up inside the dead zone or on the other side), clamp it
+                    // to the dead zone edge and zero velocity.
+                    Vector2 toCursorAfter = cursorPoint - _aimPoint;
+                    float distanceAfter = toCursorAfter.magnitude;
+                    if (distanceAfter <= deadZoneRadius)
+                    {
+                        if (distanceAfter > 0.0001f)
+                        {
+                            Vector2 edgeDirection = toCursorAfter / distanceAfter;
+                            _aimPoint = cursorPoint - edgeDirection * deadZoneRadius;
+                        }
+                        else
+                        {
+                            _aimPoint = cursorPoint;
+                        }
+                        _aimVelocity = Vector2.zero;
+                    }
+                }
             }
             else
             {
-                // Cursor is outside the dead zone — accelerate toward it.
-                Vector2 direction = toCursor / distanceToCursor;
-                float overshoot = distanceToCursor - deadZoneRadius;
-                float acceleration = overshoot * _tuning.AimAcceleration;
-                _aimVelocity += direction * acceleration * dt;
-
-                // Apply damping.
+                // Cursor not on field — apply damping only.
                 _aimVelocity *= Mathf.Max(0f, 1f - _tuning.AimDamping * dt);
-
-                // Move aim point.
-                _aimPoint += _aimVelocity * dt;
-
-                // Check for overshoot: if the aim point crossed past the cursor
-                // (ended up inside the dead zone or on the other side), clamp it
-                // to the dead zone edge and zero velocity. This prevents the aim
-                // point from stopping too late when moving fast.
-                Vector2 toCursorAfter = cursorPoint - _aimPoint;
-                float distanceAfter = toCursorAfter.magnitude;
-                if (distanceAfter <= deadZoneRadius)
-                {
-                    // Overshot — clamp to the edge of the dead zone (the point
-                    // on the dead zone circle closest to the cursor, in the
-                    // direction the aim point was moving).
-                    if (distanceAfter > 0.0001f)
-                    {
-                        Vector2 edgeDirection = toCursorAfter / distanceAfter;
-                        _aimPoint = cursorPoint - edgeDirection * deadZoneRadius;
-                    }
-                    else
-                    {
-                        // Aim point is exactly on the cursor — leave it there.
-                        _aimPoint = cursorPoint;
-                    }
-                    _aimVelocity = Vector2.zero;
-                }
             }
         }
         else
         {
-            // Cursor not on field — apply damping only.
-            _aimVelocity *= Mathf.Max(0f, 1f - _tuning.AimDamping * dt);
+            // --- Legacy aim system (aim point follows cursor exactly) ---
+            _aimVelocity = Vector2.zero;
+            if (TryGetFieldPoint(out Vector3 legacyPoint, out bool legacyAllowed))
+            {
+                if (legacyAllowed)
+                {
+                    _aimPoint = CapMath.ToXZ(legacyPoint);
+                    _lastAllowedAimPoint = _aimPoint;
+                    _hasLastAllowedAimPoint = true;
+                    _isDirectAimAllowed = true;
+                }
+                else if (_hasLastAllowedAimPoint)
+                {
+                    Vector2 legacyCursor = CapMath.ToXZ(legacyPoint);
+                    _aimPoint = ClampToZoneBoundary(_lastAllowedAimPoint, legacyCursor, capRadius);
+                    _lastAllowedAimPoint = _aimPoint;
+                    _isDirectAimAllowed = true;
+                }
+            }
+            // Skip the acceleration system's zone clamping below (already handled).
+            goto aimClampDone;
         }
 
+        aimClampDone:
         // Clamp to zone boundaries: if the aim point entered a restricted zone,
         // clamp it back to the boundary and zero out velocity to prevent buildup.
         Vector3 aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);

@@ -38,6 +38,8 @@ public class AudioManager : MonoBehaviour
         _poolIndex = (_poolIndex + 1) % PoolSize;
         src.transform.position = pos;
         src.pitch = pitch;
-        src.PlayOneShot(clip, Mathf.Clamp01(volume));
+        // Multiply the per-sound volume by the global SFX volume from GameSettings.
+        float sfxVolume = GameSettings.GetSfxVolume();
+        src.PlayOneShot(clip, Mathf.Clamp01(volume * sfxVolume));
     }
 }
