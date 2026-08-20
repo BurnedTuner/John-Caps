@@ -20,8 +20,16 @@ public enum FlipperTriggerSide
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Cap))]
-public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius
+public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbility
 {
+    [Header("Sticker")]
+    [Tooltip("Icon sprite shown as a sticker above the cap.")]
+    [SerializeField] private Sprite _stickerSprite;
+
+    public Sprite StickerSprite => _stickerSprite;
+    public string Description =>
+        $"Когда приземляется лицом вверх, переворачивает все фишки в радиусе {_radius:F0}.";
+
     [Header("Trigger")]
     [Tooltip("Which side the flipper must land on to trigger. " +
              "Heads = triggers when it lands heads-up. Tails = triggers when tails-up. " +

@@ -23,7 +23,7 @@ PrefabInstance:
     - target: {fileID: 5262984797595299007, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: a385197ef7f643642bc38a82b5747afa, type: 2}
+      objectReference: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
     - target: {fileID: 6703822240632803327, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -89,4 +89,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 52777b93bd919064698242bbbfc819b9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _stickerSprite: {fileID: 21300000, guid: 003f0b8a82357db4e865c4d357eb1a16, type: 3}
   PredictionDepthBonus: 3

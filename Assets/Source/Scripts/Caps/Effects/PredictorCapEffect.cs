@@ -13,8 +13,16 @@ using UnityEngine;
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Cap))]
-public sealed class PredictorCapEffect : MonoBehaviour
+public sealed class PredictorCapEffect : MonoBehaviour, ICapAbility
 {
+    [Header("Sticker")]
+    [Tooltip("Icon sprite shown as a sticker above the cap.")]
+    [SerializeField] private Sprite _stickerSprite;
+
+    public Sprite StickerSprite => _stickerSprite;
+    public string Description =>
+        $"Когда целишься этой фишкой, видишь на {PredictionDepthBonus} отскока дальше";
+
     [Tooltip("Extra prediction depth levels granted while aiming with this cap. " +
              "0 = no bonus (same as not having the component). " +
              "2 = the player sees 2 more flip trajectories than usual.")]

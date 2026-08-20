@@ -425,6 +425,18 @@ public class CapHand : MonoBehaviour
         // through the throw, flight, and landing.
         if (!CapRegistry.Contains(cap))
             CapRegistry.Register(cap);
+
+        // Re-create a collider if one was destroyed by InstantiateCap.
+        // Hand caps have their colliders destroyed to prevent physics overlaps
+        // while in hand. When thrown, the cap needs a collider again so that
+        // raycasts (for sticker hover, aim detection, etc.) can hit it.
+        if (cap.GetComponent<Collider>() == null)
+        {
+            float radius = cap.Parameters != null ? cap.Parameters.Radius : 0.5f;
+            var collider = cap.gameObject.AddComponent<SphereCollider>();
+            collider.radius = radius;
+            collider.isTrigger = false;
+        }
     }
 
     static void DestroyCollidersRecursive(GameObject obj)

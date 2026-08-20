@@ -109,7 +109,7 @@ PrefabInstance:
     - target: {fileID: 5262984797595299007, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: b13aa1ad0094f6841920d4a278327b70, type: 2}
+      objectReference: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
     - target: {fileID: 6703822240632803327, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -178,6 +178,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dda505bbddc5c8e4eaf556b228f2465e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _stickerSprite: {fileID: 21300000, guid: 4b21d0c28c792b346971fe68bae8c8a5, type: 3}
   ZoneRadius: 5
   TriggerSide: 0
   ZoneVisual: {fileID: 6837880708427706511}

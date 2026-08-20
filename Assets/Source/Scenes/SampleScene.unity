@@ -384,9 +384,25 @@ PrefabInstance:
       propertyPath: PredictContinuedChain
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 732878909461025891, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1386064479566221289, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2678166587463744163, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3809033516813011136, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_Name
       value: BasicScene
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102214176743280137, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6576823205662733966, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_LocalPosition.x

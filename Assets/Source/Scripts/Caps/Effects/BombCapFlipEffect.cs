@@ -16,8 +16,16 @@ public enum BombTriggerSide
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Cap))]
-public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius
+public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbility
 {
+    [Header("Sticker")]
+    [Tooltip("Icon sprite shown as a sticker above the cap.")]
+    [SerializeField] private Sprite _stickerSprite;
+
+    public Sprite StickerSprite => _stickerSprite;
+    public string Description =>
+        $"Когда приземляется лицом вверх отталкивает от себя все фишки в радиусе {_radius:F0}";
+
     [Header("Trigger")]
     [Tooltip("Which side the bomb must land on to trigger the explosion. " +
              "Heads = bomb explodes when it lands heads-up. Tails = explodes when tails-up. " +

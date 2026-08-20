@@ -878,6 +878,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+--- !u!223 &579678071 stripped
+Canvas:
+  m_CorrespondingSourceObject: {fileID: 6473719227755864547, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+  m_PrefabInstance: {fileID: 1945879161}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &656311912
 GameObject:
   m_ObjectHideFlags: 0
@@ -2066,6 +2071,30 @@ PrefabInstance:
     - target: {fileID: 4102214176743280137, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_AnchorMax.y
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: _uiCanvas
+      value: 
+      objectReference: {fileID: 579678071}
+    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: _stickerAngleStep
+      value: 40
+      objectReference: {fileID: 0}
+    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: _fieldStickerScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: _handStickerOffset
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: _fieldStickerOffset
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: _stickerHeightOffset
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6576823205662733966, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_LocalPosition.x

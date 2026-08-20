@@ -33,8 +33,16 @@ public enum DefenderTriggerSide
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Cap))]
-public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius
+public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbility
 {
+    [Header("Sticker")]
+    [Tooltip("Icon sprite shown as a sticker above the cap.")]
+    [SerializeField] private Sprite _stickerSprite;
+
+    public Sprite StickerSprite => _stickerSprite;
+    public string Description =>
+        $"Когда лежит лицом вверх, не дает противнику бросить фишку в зону радиусом {ZoneRadius:F0}.";
+
     [Header("Zone")]
     [Tooltip("Radius of the no-aim zone around the cap, measured from the cap's center on the XZ plane. " +
              "Any part of a thrown cap touching this radius blocks the throw.")]
