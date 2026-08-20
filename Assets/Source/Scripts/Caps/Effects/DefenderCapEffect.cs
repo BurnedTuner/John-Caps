@@ -39,14 +39,24 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     [Tooltip("Icon sprite shown as a sticker above the cap.")]
     [SerializeField] private Sprite _stickerSprite;
 
+    [Header("Level")]
+    [Tooltip("Ability level (1-3). Higher levels = larger radius.")]
+    [Range(1, 3)] [SerializeField] private int _level = 1;
+
+    [Header("Level Parameters")]
+    [Tooltip("Zone radius at level 1.")]
+    [SerializeField] private float _zoneRadiusL1 = 2f;
+    [Tooltip("Zone radius at level 2.")]
+    [SerializeField] private float _zoneRadiusL2 = 3f;
+    [Tooltip("Zone radius at level 3.")]
+    [SerializeField] private float _zoneRadiusL3 = 4f;
+
     public Sprite StickerSprite => _stickerSprite;
+    public int Level => _level;
     public string Description =>
         $"Когда лежит лицом вверх, не дает противнику бросить фишку в зону радиусом {ZoneRadius:F0}.";
 
-    [Header("Zone")]
-    [Tooltip("Radius of the no-aim zone around the cap, measured from the cap's center on the XZ plane. " +
-             "Any part of a thrown cap touching this radius blocks the throw.")]
-    [Min(0.01f)] public float ZoneRadius = 2f;
+    public float ZoneRadius => _level switch { 2 => _zoneRadiusL2, 3 => _zoneRadiusL3, _ => _zoneRadiusL1 };
 
     [Tooltip("Which side the cap must be showing for the zone to be active. " +
              "Heads = zone active when cap is heads-up. Tails = active when tails-up. " +
@@ -88,7 +98,10 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
 
     void OnValidate()
     {
-        ZoneRadius = Mathf.Max(0.01f, ZoneRadius);
+        _zoneRadiusL1 = Mathf.Max(0.01f, _zoneRadiusL1);
+        _zoneRadiusL2 = Mathf.Max(0.01f, _zoneRadiusL2);
+        _zoneRadiusL3 = Mathf.Max(0.01f, _zoneRadiusL3);
+        _level = Mathf.Clamp(_level, 1, 3);
         ZoneVisualBaseSize = Mathf.Max(0.01f, ZoneVisualBaseSize);
     }
 

@@ -26,24 +26,32 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
     [Tooltip("Icon sprite shown as a sticker above the cap.")]
     [SerializeField] private Sprite _stickerSprite;
 
+    [Header("Level")]
+    [Tooltip("Ability level (1-3). Higher levels = larger radius.")]
+    [Range(1, 3)] [SerializeField] private int _level = 1;
+
+    [Header("Level Parameters")]
+    [Tooltip("Radius at level 1.")]
+    [SerializeField] private float _radiusL1 = 3f;
+    [Tooltip("Radius at level 2.")]
+    [SerializeField] private float _radiusL2 = 4f;
+    [Tooltip("Radius at level 3.")]
+    [SerializeField] private float _radiusL3 = 5f;
+
     public Sprite StickerSprite => _stickerSprite;
+    public int Level => _level;
     public string Description =>
-        $"Когда приземляется лицом вверх, переворачивает все фишки в радиусе {_radius:F0}.";
+        $"Когда приземляется лицом вверх, переворачивает все фишки в радиусе {Radius:F0}.";
+
+    public float Radius => _level switch { 2 => _radiusL2, 3 => _radiusL3, _ => _radiusL1 };
+
+    public float EffectRadius => Radius;
 
     [Header("Trigger")]
     [Tooltip("Which side the flipper must land on to trigger. " +
              "Heads = triggers when it lands heads-up. Tails = triggers when tails-up. " +
              "Either = triggers on any landing.")]
     public FlipperTriggerSide TriggerSide = FlipperTriggerSide.Heads;
-
-    [SerializeField, Min(0.01f)]
-    [Tooltip("Radius on the XZ plane, measured between cap centres. " +
-             "Caps inside this radius are flipped in place.")]
-    private float _radius = 3f;
-
-    public float Radius => _radius;
-
-    public float EffectRadius => _radius;
 
     public Color ZoneColor => new Color(0.8f, 0.3f, 1f, 0.35f); // purple
 
@@ -66,10 +74,9 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
         ICapEffectQuery query,
         ICapEffectCommandSink commands)
     {
-        if (flipEvent.Source == null || _radius <= 0f) return;
+        if (flipEvent.Source == null || Radius <= 0f) return;
         if (!ShouldTrigger(flipEvent.Source.IsHeads)) return;
-        // RadialFlipCommand — flips caps in place (no movement, no peel-off).
-        commands.Add(new RadialFlipCommand(flipEvent.Source, flipEvent.Position, _radius));
+        commands.Add(new RadialFlipCommand(flipEvent.Source, flipEvent.Position, Radius));
     }
 
     /// <summary>
@@ -92,14 +99,17 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
     /// </summary>
     public override bool TryGetRadialLaunch(out float radius, out float force)
     {
-        radius = _radius;
+        radius = Radius;
         force = 1f;
-        return _radius > 0f;
+        return Radius > 0f;
     }
 
     void OnValidate()
     {
-        _radius = Mathf.Max(0.01f, _radius);
+        _radiusL1 = Mathf.Max(0.01f, _radiusL1);
+        _radiusL2 = Mathf.Max(0.01f, _radiusL2);
+        _radiusL3 = Mathf.Max(0.01f, _radiusL3);
+        _level = Mathf.Clamp(_level, 1, 3);
     }
 
     public override void PlayFeedback(Vector3 position, float force)

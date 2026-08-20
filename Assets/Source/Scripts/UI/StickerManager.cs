@@ -238,6 +238,12 @@ public class StickerManager : MonoBehaviour
                 RectTransform srt = stickerObj.transform as RectTransform;
                 if (srt != null) srt.sizeDelta = new Vector2(64f, 64f);
                 stickerObj.SetActive(true);
+
+                // Set level badge via StickerView component.
+                StickerView view = stickerObj.GetComponent<StickerView>();
+                if (view == null)
+                    view = stickerObj.AddComponent<StickerView>();
+                view.SetLevel(_cachedAbilities[i].Level);
             }
         }
 

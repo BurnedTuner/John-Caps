@@ -22,30 +22,39 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
     [Tooltip("Icon sprite shown as a sticker above the cap.")]
     [SerializeField] private Sprite _stickerSprite;
 
+    [Header("Level")]
+    [Tooltip("Ability level (1-3). Higher levels = stronger parameters.")]
+    [Range(1, 3)] [SerializeField] private int _level = 1;
+
+    [Header("Level Parameters")]
+    [Tooltip("Radius at level 1.")]
+    [SerializeField] private float _radiusL1 = 3f;
+    [Tooltip("Radius at level 2.")]
+    [SerializeField] private float _radiusL2 = 4f;
+    [Tooltip("Radius at level 3.")]
+    [SerializeField] private float _radiusL3 = 5f;
+    [Tooltip("Force at level 1.")]
+    [SerializeField] private float _forceL1 = 3f;
+    [Tooltip("Force at level 2.")]
+    [SerializeField] private float _forceL2 = 4f;
+    [Tooltip("Force at level 3.")]
+    [SerializeField] private float _forceL3 = 5f;
+
     public Sprite StickerSprite => _stickerSprite;
+    public int Level => _level;
     public string Description =>
-        $"Когда приземляется лицом вверх отталкивает от себя все фишки в радиусе {_radius:F0}";
+        $"Когда приземляется лицом вверх отталкивает от себя все фишки в радиусе {Radius:F0} (сила {Force:F0})";
 
-    [Header("Trigger")]
-    [Tooltip("Which side the bomb must land on to trigger the explosion. " +
-             "Heads = bomb explodes when it lands heads-up. Tails = explodes when tails-up. " +
-             "Either = explodes on any landing.")]
-    public BombTriggerSide TriggerSide = BombTriggerSide.Heads;
+    public float Radius => _level switch { 2 => _radiusL2, 3 => _radiusL3, _ => _radiusL1 };
+    public float Force => _level switch { 2 => _forceL2, 3 => _forceL3, _ => _forceL1 };
 
-    [SerializeField, Min(0.01f)]
-    [Tooltip("Explosion radius on the XZ plane, measured between cap centres.")]
-    private float _radius = 3f;
-
-    [SerializeField, Min(0f)]
-    [Tooltip("Flat launch force applied equally to every available cap inside Radius.")]
-    private float _force = 3f;
-
-    public float Radius => _radius;
-    public float Force => _force;
-
-    public float EffectRadius => _radius;
+    public float EffectRadius => Radius;
 
     public Color ZoneColor => Color.red;
+
+    [Header("Trigger")]
+    [Tooltip("Which side the bomb must land on to trigger the explosion.")]
+    public BombTriggerSide TriggerSide = BombTriggerSide.Heads;
 
     [Header("Feedback")]
     public GameObject ExplosionVFX;
@@ -66,11 +75,9 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
         ICapEffectQuery query,
         ICapEffectCommandSink commands)
     {
-        if (flipEvent.Source == null || _radius <= 0f || _force <= 0f) return;
+        if (flipEvent.Source == null || Radius <= 0f || Force <= 0f) return;
         if (!ShouldTrigger(flipEvent.Source.IsHeads)) return;
-        // Use RadialPushCommand instead of RadialLaunchCommand — the bomb
-        // PUSHES caps away (slides them) without flipping them.
-        commands.Add(new RadialPushCommand(flipEvent.Source, flipEvent.Position, _radius, _force));
+        commands.Add(new RadialPushCommand(flipEvent.Source, flipEvent.Position, Radius, Force));
     }
 
     /// <summary>
@@ -93,15 +100,20 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
     /// </summary>
     public override bool TryGetRadialLaunch(out float radius, out float force)
     {
-        radius = _radius;
-        force = _force;
-        return _radius > 0f && _force > 0f;
+        radius = Radius;
+        force = Force;
+        return Radius > 0f && Force > 0f;
     }
 
     void OnValidate()
     {
-        _radius = Mathf.Max(0.01f, _radius);
-        _force = Mathf.Max(0f, _force);
+        _radiusL1 = Mathf.Max(0.01f, _radiusL1);
+        _radiusL2 = Mathf.Max(0.01f, _radiusL2);
+        _radiusL3 = Mathf.Max(0.01f, _radiusL3);
+        _forceL1 = Mathf.Max(0f, _forceL1);
+        _forceL2 = Mathf.Max(0f, _forceL2);
+        _forceL3 = Mathf.Max(0f, _forceL3);
+        _level = Mathf.Clamp(_level, 1, 3);
     }
 
     public override void PlayFeedback(Vector3 position, float force)

@@ -19,12 +19,22 @@ public sealed class PredictorCapEffect : MonoBehaviour, ICapAbility
     [Tooltip("Icon sprite shown as a sticker above the cap.")]
     [SerializeField] private Sprite _stickerSprite;
 
+    [Header("Level")]
+    [Tooltip("Ability level (1-3). Higher levels = more prediction depth.")]
+    [Range(1, 3)] [SerializeField] private int _level = 1;
+
+    [Header("Level Parameters")]
+    [Tooltip("Prediction depth bonus at level 1.")]
+    [SerializeField] private int _depthBonusL1 = 2;
+    [Tooltip("Prediction depth bonus at level 2.")]
+    [SerializeField] private int _depthBonusL2 = 4;
+    [Tooltip("Prediction depth bonus at level 3.")]
+    [SerializeField] private int _depthBonusL3 = 6;
+
     public Sprite StickerSprite => _stickerSprite;
+    public int Level => _level;
     public string Description =>
         $"Когда целишься этой фишкой, видишь на {PredictionDepthBonus} отскока дальше";
 
-    [Tooltip("Extra prediction depth levels granted while aiming with this cap. " +
-             "0 = no bonus (same as not having the component). " +
-             "2 = the player sees 2 more flip trajectories than usual.")]
-    [Min(0)] public int PredictionDepthBonus = 2;
+    public int PredictionDepthBonus => _level switch { 2 => _depthBonusL2, 3 => _depthBonusL3, _ => _depthBonusL1 };
 }
