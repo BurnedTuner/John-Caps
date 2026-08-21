@@ -2,8 +2,9 @@ Shader "John Caps/Cap Inverted Hull"
 {
     Properties
     {
-        [PerRendererData] _OutlineColor("Outline Color", Color) = (0, 1, 1, 1)
-        [PerRendererData] _OutlineWidth("Outline Width", Float) = 0.035
+        _OutlineColor("Outline Color", Color) = (0, 1, 1, 1)
+        _OutlineWidth("Outline Width", Float) = 0.035
+        _BottomCutoff("Bottom Cutoff", Range(0, 1)) = 0.3
     }
 
     SubShader
@@ -35,6 +36,7 @@ Shader "John Caps/Cap Inverted Hull"
             CBUFFER_START(UnityPerMaterial)
                 half4 _OutlineColor;
                 float _OutlineWidth;
+                float _BottomCutoff;
             CBUFFER_END
 
             struct Attributes
@@ -63,9 +65,6 @@ Shader "John Caps/Cap Inverted Hull"
 
                 float3 positionOS = input.positionOS.xyz;
 
-                // The built-in Cylinder duplicates rim vertices and gives them hard normals.
-                // Reconstructing the shell direction from position keeps those duplicates
-                // together and avoids cracks between the caps and the side wall.
                 float3 radialOS = float3(positionOS.x, 0.0, positionOS.z);
                 float3 verticalOS = float3(0.0, sign(positionOS.y), 0.0);
                 float3 radialWS = OutlineSafeNormalize(
@@ -73,7 +72,15 @@ Shader "John Caps/Cap Inverted Hull"
                 float3 verticalWS = OutlineSafeNormalize(TransformObjectToWorldDir(verticalOS));
 
                 float3 positionWS = TransformObjectToWorld(positionOS);
-                positionWS += (radialWS + verticalWS) * max(_OutlineWidth, 0.0);
+
+                // Reduce vertical expansion for bottom-facing vertices so the
+                // outline doesn't sink below the floor. The _BottomCutoff value
+                // (0-1) controls how much of the bottom is suppressed:
+                // 0 = full expansion (original behavior), 1 = no downward expansion.
+                float downFactor = saturate(-verticalOS.y * _BottomCutoff);
+                float3 expansion = radialWS + verticalWS * (1.0 - downFactor);
+
+                positionWS += expansion * max(_OutlineWidth, 0.0);
                 output.positionCS = TransformWorldToHClip(positionWS);
                 return output;
             }

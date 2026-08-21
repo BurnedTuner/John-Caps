@@ -179,6 +179,19 @@ public class StickerManager : MonoBehaviour
             }
         }
 
+        // Update hover outline state on ALL field caps (not just those with stickers).
+        if (_hoveredCap != null && !_hoveredCap.HasLeftGame)
+            _hoveredCap.SetHovered(true);
+
+        // Clear hover on all previously hovered caps (except the current one).
+        IReadOnlyList<Cap> registryCaps = CapRegistry.AllCaps;
+        for (int i = 0; i < registryCaps.Count; i++)
+        {
+            Cap cap = registryCaps[i];
+            if (cap == null || cap == _hoveredCap || cap.HasLeftGame) continue;
+            cap.SetHovered(false);
+        }
+
         foreach (Cap cap in _visibleThisFrame)
             EnsurePanelForCap(cap);
 

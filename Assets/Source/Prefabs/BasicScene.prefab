@@ -881,13 +881,15 @@ MonoBehaviour:
   _stickerPanelPrefab: {fileID: 860850351159368765, guid: 46bde78944cc4a7418fd452338f6a1ff, type: 3}
   _stickerImagePrefab: {fileID: 4925237290050560511, guid: 1f467aa50722e6745bf6f7c26b0a2702, type: 3}
   _tooltipPrefab: {fileID: 7142023367980369850, guid: 2f8c085562ef29c428dd8bba1ebb0a48, type: 3}
+  _uiCanvas: {fileID: 0}
   _playerCamera: {fileID: 3790606329344974558}
   _handCamera: {fileID: 3037818553459505959}
   _capThrower: {fileID: 5175839692357260753}
   _capHand: {fileID: 1573795055034367174}
   _gameManager: {fileID: 0}
-  _stickerHeightOffset: 1.5
-  _hoverPadding: 30
+  _referenceDistance: 10
+  _stickerAngleStep: 45
+  _stickerHoverRadius: 40
   _hintOffset: {x: 0, y: 200}
   _handStickerScale: 1
   _fieldStickerScale: 0.5
@@ -2099,9 +2101,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   orbitTarget: {fileID: 5179878750837385394}
   orbitCenter: {x: 0, y: 0, z: 0}
-  distance: 15
-  minDistance: 5
-  maxDistance: 30
+  distance: 27
   panSpeed: 10
   accelerationCurve:
     serializedVersion: 2
@@ -2128,12 +2128,13 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   limitPan: 1
-  minPan: {x: -15, y: 0, z: -15}
-  maxPan: {x: 15, y: 0, z: 15}
-  lookSensitivity: 0.2
-  minPitch: 10
+  minPan: {x: 0, y: 0, z: 0}
+  maxPan: {x: 0, y: 0, z: 0}
+  yawSensitivity: 0.3
+  pitchSensitivity: 0.3
+  wheelPitchSensitivity: 300
+  minPitch: 45
   maxPitch: 85
-  zoomSpeed: 10
   resetDuration: 0.5
   resetYaw: 0
   resetPitch: 85

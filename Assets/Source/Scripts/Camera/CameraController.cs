@@ -14,8 +14,6 @@ public class CameraController : MonoBehaviour
 
     [Tooltip("Starting distance from target")]
     public float distance = 15f;
-    public float minDistance = 5f;
-    public float maxDistance = 30f;
 
     [Header("Movement (Panning)")]
     public float panSpeed = 10f;
@@ -28,12 +26,14 @@ public class CameraController : MonoBehaviour
     public Vector3 maxPan = new Vector3(15f, 0f, 15f);
 
     [Header("Rotation (RMB + Mouse)")]
-    public float lookSensitivity = 0.3f;
+    [Tooltip("Sensitivity for yaw (left/right) via RMB. Set to 0 to disable.")]
+    public float yawSensitivity = 0.3f;
+    [Tooltip("Sensitivity for pitch (up/down) via RMB. Set to 0 to disable.")]
+    public float pitchSensitivity = 0.3f;
+    [Tooltip("Sensitivity for pitch via mouse wheel. Scroll up = closer to top-down.")]
+    public float wheelPitchSensitivity = 30f;
     public float minPitch = 10f;
     public float maxPitch = 85f;
-
-    [Header("Zoom (Mouse Wheel)")]
-    public float zoomSpeed = 5f;
 
     [Header("Reset (T Key)")]
     public float resetDuration = 0.5f;
@@ -68,12 +68,14 @@ public class CameraController : MonoBehaviour
         else
             _currentOrbitCenter = orbitCenter;
 
-        Vector3 dir = _camera.transform.position - _currentOrbitCenter;
-        _currentDistance = dir.magnitude;
-        if (_currentDistance < 0.1f) _currentDistance = distance;
+        // Always use the serialized distance field — it's the camera's
+        // distance from the orbit center. No zoom, so it never changes.
+        _currentDistance = distance;
 
+        // Derive yaw/pitch from the camera's initial position relative to center.
+        Vector3 dir = _camera.transform.position - _currentOrbitCenter;
         _yaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
-        _pitch = Mathf.Asin(dir.y / _currentDistance) * Mathf.Rad2Deg;
+        _pitch = Mathf.Asin(dir.y / Mathf.Max(0.1f, dir.magnitude)) * Mathf.Rad2Deg;
 
         UpdateCameraTransform();
         UpdateDirectionVectors();
@@ -101,18 +103,19 @@ public class CameraController : MonoBehaviour
             Vector2 delta = mouse.delta.ReadValue();
             if (delta.sqrMagnitude > 0.001f)
             {
-                _yaw += delta.x * lookSensitivity;
-                _pitch -= delta.y * lookSensitivity;
+                _yaw += delta.x * yawSensitivity;
+                _pitch -= delta.y * pitchSensitivity;
                 _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
             }
         }
 
+        // Mouse wheel controls pitch (scroll up = closer to top-down).
         Vector2 scroll = mouse.scroll.ReadValue();
         if (Mathf.Abs(scroll.y) > 0.001f)
         {
             float direction = Mathf.Sign(scroll.y);
-            _currentDistance -= direction * zoomSpeed * Time.deltaTime;
-            _currentDistance = Mathf.Clamp(_currentDistance, minDistance, maxDistance);
+            _pitch += direction * wheelPitchSensitivity * Time.deltaTime;
+            _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
         }
 
         UpdateCameraTransform();

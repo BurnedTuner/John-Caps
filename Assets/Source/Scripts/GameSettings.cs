@@ -18,7 +18,7 @@ public class GameSettings : MonoBehaviour
     [Header("Aim System")]
     [Tooltip("If true, uses the acceleration-based aim system (dead zone + velocity). " +
              "If false, uses the legacy aim system (aim point follows cursor exactly).")]
-    public bool UseAccelerationAim = true;
+    public bool UseAccelerationAim = false;
 
     [Header("Background Music")]
     [Tooltip("Audio clip for background music. Played on a looping AudioSource.")]

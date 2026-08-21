@@ -30,8 +30,12 @@ public class Cap : MonoBehaviour
     [Header("Team outline")]
     [SerializeField] private MeshRenderer _outlineRenderer;
     [SerializeField, Min(0f)] private float _outlineWidth = 0.035f;
+    [Tooltip("Extra outline width when this cap is hovered by the cursor.")]
+    [SerializeField, Min(0f)] private float _hoverOutlineBoost = 0.02f;
     [SerializeField] private Color _playerOutlineColor = new Color(0.05f, 0.9f, 0.85f, 1f);
     [SerializeField] private Color _opponentOutlineColor = new Color(1f, 0.2f, 0.05f, 1f);
+
+    private bool _isHovered;
 
     [Header("Team rim materials")]
     [Tooltip("Material for the rim/side of the cap when owned by the Player.")]
@@ -1044,13 +1048,26 @@ public class Cap : MonoBehaviour
         _outlineRenderer.enabled = hasOutline;
         if (!hasOutline) return;
 
+        float width = _isHovered ? _outlineWidth + _hoverOutlineBoost : _outlineWidth;
+
         _outlineProperties ??= new MaterialPropertyBlock();
         _outlineRenderer.GetPropertyBlock(_outlineProperties);
         _outlineProperties.SetColor(
             OutlineColorId,
             _owner == CapOwner.Player ? _playerOutlineColor : _opponentOutlineColor);
-        _outlineProperties.SetFloat(OutlineWidthId, _outlineWidth);
+        _outlineProperties.SetFloat(OutlineWidthId, width);
         _outlineRenderer.SetPropertyBlock(_outlineProperties);
+    }
+
+    /// <summary>
+    /// Sets the hover state for outline width boost. Called by StickerManager
+    /// when the cursor enters/leaves the cap.
+    /// </summary>
+    public void SetHovered(bool hovered)
+    {
+        if (_isHovered == hovered) return;
+        _isHovered = hovered;
+        ApplyOutline();
     }
 
     /// <summary>
