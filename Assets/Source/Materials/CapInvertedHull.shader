@@ -4,7 +4,8 @@ Shader "John Caps/Cap Inverted Hull"
     {
         _OutlineColor("Outline Color", Color) = (0, 1, 1, 1)
         _OutlineWidth("Outline Width", Float) = 0.035
-        _BottomCutoff("Bottom Cutoff", Range(0, 1)) = 0.3
+        _VerticalScale("Vertical Scale", Range(0, 1)) = 1.0
+        _BottomCutoff("Bottom Cutoff", Range(0, 1)) = 1.0
     }
 
     SubShader
@@ -36,6 +37,7 @@ Shader "John Caps/Cap Inverted Hull"
             CBUFFER_START(UnityPerMaterial)
                 half4 _OutlineColor;
                 float _OutlineWidth;
+                float _VerticalScale;
                 float _BottomCutoff;
             CBUFFER_END
 
@@ -73,12 +75,15 @@ Shader "John Caps/Cap Inverted Hull"
 
                 float3 positionWS = TransformObjectToWorld(positionOS);
 
-                // Reduce vertical expansion for bottom-facing vertices so the
-                // outline doesn't sink below the floor. The _BottomCutoff value
-                // (0-1) controls how much of the bottom is suppressed:
-                // 0 = full expansion (original behavior), 1 = no downward expansion.
-                float downFactor = saturate(-verticalOS.y * _BottomCutoff);
-                float3 expansion = radialWS + verticalWS * (1.0 - downFactor);
+                // _VerticalScale reduces the vertical expansion for ALL vertices
+                // (both top and bottom), making the outline shorter.
+                // _BottomCutoff additionally suppresses the bottom (downward)
+                // expansion so it doesn't sink below the floor.
+                //   isBottom = 1 for bottom vertices, 0 for top.
+                float isBottom = max(0.0, -sign(positionOS.y));
+                float verticalAmount = _VerticalScale * (1.0 - isBottom * _BottomCutoff);
+
+                float3 expansion = radialWS + verticalWS * verticalAmount;
 
                 positionWS += expansion * max(_OutlineWidth, 0.0);
                 output.positionCS = TransformWorldToHClip(positionWS);
