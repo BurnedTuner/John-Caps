@@ -449,6 +449,26 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     bool IsLandingSupported(Cap landedCap, Vector2 landingPosition) =>
         _fieldBoundary == null || _fieldBoundary.Supports(landingPosition, landedCap.Parameters.Radius);
 
+    /// <summary>
+    /// True when a cap of <paramref name="radius"/> placed at <paramref name="groundPoint"/>
+    /// would still rest on the field (i.e., it would NOT fall off). Exposed so the aim
+    /// preview can recolor trajectory lines whose predicted landing point lies off the
+    /// field. When no field boundary is assigned, returns true (assume supported —
+    /// matches the runtime behavior in <see cref="IsLandingSupported"/>).
+    ///
+    /// IMPORTANT — radius semantics:
+    /// The runtime REMOVAL test in <c>CapFieldBoundary.LateUpdate</c> calls
+    /// <c>Supports(cap.GroundPosition, 0f)</c> — i.e., it only checks the cap's
+    /// CENTER. A cap whose center is on the field but whose body overhangs the
+    /// edge is NOT removed by the boundary. To match that behavior, pass 0 for
+    /// <paramref name="radius"/>. Passing the cap's actual radius instead tests
+    /// "any part of the cap touches the field", which is the
+    /// <see cref="IsLandingSupported"/> semantics (used to decide whether to
+    /// play a table-impact sound) — NOT the fall-off semantics.
+    /// </summary>
+    public bool IsPointSupported(Vector2 groundPoint, float radius) =>
+        _fieldBoundary == null || _fieldBoundary.Supports(groundPoint, radius);
+
     void ApplyPush(Cap landedCap, Vector2 landingPosition)
     {
         for (int i = 0; i < CapRegistry.AllCaps.Count; i++)

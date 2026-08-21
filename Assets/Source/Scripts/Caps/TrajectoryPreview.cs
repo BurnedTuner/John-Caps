@@ -31,6 +31,18 @@ public class TrajectoryPreview : MonoBehaviour
     [Tooltip("Color for the bomb explosion radius circles.")]
     public Color BombRadiusColor = new Color(1f, 0.2f, 0.1f, 0.35f);
 
+    [Tooltip("Color used for the throw ARC when the thrown cap will land OFF the field " +
+             "(i.e., fall off the table). Overrides ArcColor for the arc line only.")]
+    public Color FallOffColor = new Color(1f, 0.18f, 0.18f, 0.95f);
+
+    [Tooltip("Color used for the landing circle when the thrown cap will land OFF the field. " +
+             "Overrides LandingCircleColor for the landing circle only.")]
+    public Color FallOffLandingCircleColor = new Color(1f, 0.25f, 0.25f, 0.7f);
+
+    [Tooltip("Color used for prediction lines (chain/stack) and their end circles when the " +
+             "predicted cap will land OFF the field. Overrides the depth-based color.")]
+    public Color FallOffPredictionColor = new Color(1f, 0.22f, 0.22f, 0.95f);
+
     private LineRenderer _arcLine;
     private LineRenderer _landingCircle;
     private readonly List<LineRenderer> _predictionLines = new();
@@ -125,7 +137,10 @@ public class TrajectoryPreview : MonoBehaviour
         CapTuning tuning,
         IReadOnlyList<CapPrediction> fullPredictions,
         IReadOnlyList<CapPrediction> continuationPredictions,
-        IReadOnlyList<(Vector3 center, float radius, Color color)> bombZones)
+        IReadOnlyList<(Vector3 center, float radius, Color color)> bombZones,
+        bool thrownCapWillFallOff = false,
+        IReadOnlyList<bool> fullPredictionsFallOff = null,
+        IReadOnlyList<bool> continuationPredictionsFallOff = null)
     {
         EnsureLineRenderers();
 
@@ -134,8 +149,9 @@ public class TrajectoryPreview : MonoBehaviour
         // --- Arc (parabolic from spawn to aim) ---
         int samples = Mathf.Max(2, tuning.ArcSamples);
         _arcLine.enabled = true;
-        _arcLine.startColor = ArcColor;
-        _arcLine.endColor = ArcColor;
+        Color arcColor = thrownCapWillFallOff ? FallOffColor : ArcColor;
+        _arcLine.startColor = arcColor;
+        _arcLine.endColor = arcColor;
         _arcLine.positionCount = samples;
         for (int i = 0; i < samples; i++)
         {
@@ -146,7 +162,8 @@ public class TrajectoryPreview : MonoBehaviour
         }
 
         // --- Landing circle (thrown cap's landing spot) ---
-        DrawCircle(_landingCircle, aim3D, slammerRadius, LandingCircleColor);
+        Color landingColor = thrownCapWillFallOff ? FallOffLandingCircleColor : LandingCircleColor;
+        DrawCircle(_landingCircle, aim3D, slammerRadius, landingColor);
 
         // --- Full prediction lines + end circles ---
         int fullCount = fullPredictions.Count;
@@ -155,7 +172,8 @@ public class TrajectoryPreview : MonoBehaviour
 
         for (int i = 0; i < fullCount; i++)
         {
-            DrawPrediction(fullPredictions[i], i);
+            bool fallOff = fullPredictionsFallOff != null && i < fullPredictionsFallOff.Count && fullPredictionsFallOff[i];
+            DrawPrediction(fullPredictions[i], i, fallOff);
         }
         for (int i = fullCount; i < _predictionLines.Count; i++)
             _predictionLines[i].enabled = false;
@@ -173,7 +191,8 @@ public class TrajectoryPreview : MonoBehaviour
         bool hasPrecedingFull = fullPredictions.Count > 0;
         for (int i = 0; i < contCount; i++)
         {
-            DrawContinuation(continuationPredictions[i], i, hasPrecedingFull);
+            bool fallOff = continuationPredictionsFallOff != null && i < continuationPredictionsFallOff.Count && continuationPredictionsFallOff[i];
+            DrawContinuation(continuationPredictions[i], i, hasPrecedingFull, fallOff);
         }
         for (int i = contCount; i < _continuationLines.Count; i++)
             _continuationLines[i].enabled = false;
@@ -228,10 +247,11 @@ public class TrajectoryPreview : MonoBehaviour
         _ghostPool?.Clear();
     }
 
-    void DrawPrediction(CapPrediction prediction, int lineIndex)
+    void DrawPrediction(CapPrediction prediction, int lineIndex, bool willFallOff)
     {
         float depthBlend = Mathf.Clamp01(prediction.Depth / 5f);
-        Color color = Color.Lerp(DirectHitColor, DeepChainColor, depthBlend);
+        Color baseColor = Color.Lerp(DirectHitColor, DeepChainColor, depthBlend);
+        Color color = willFallOff ? FallOffPredictionColor : baseColor;
         Color fadedColor = new Color(color.r, color.g, color.b, 0.2f);
 
         // --- Prediction line ---
@@ -270,12 +290,13 @@ public class TrajectoryPreview : MonoBehaviour
     ///   - Chain/Direct: FIRST HALF (start → midpoint). Each chain cap has
     ///     its own distinct start position, so the first half is meaningful.
     /// </summary>
-    void DrawContinuation(CapPrediction prediction, int lineIndex, bool hasPrecedingFull)
+    void DrawContinuation(CapPrediction prediction, int lineIndex, bool hasPrecedingFull, bool willFallOff)
     {
         var line = _continuationLines[lineIndex];
         line.enabled = true;
-        line.startColor = ContinuationColor;
-        line.endColor = ContinuationColor;
+        Color color = willFallOff ? FallOffPredictionColor : ContinuationColor;
+        line.startColor = color;
+        line.endColor = color;
 
         Vector3 start = CapMath.FromXZ(prediction.StartPosition, 0.05f);
         Vector3 mid = CapMath.FromXZ(

@@ -25,8 +25,9 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BottomCutoff: 1
+    - _BottomCutoff: 0
     - _OutlineWidth: 0.4
+    - _VerticalScale: 0
     m_Colors:
     - _OutlineColor: {r: 0, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

@@ -102,6 +102,14 @@ public sealed class CapThrower : MonoBehaviour
     private readonly List<CapPrediction> _continuationPredictions = new();
     private readonly List<(Vector3 center, float radius, Color color)> _bombZones = new();
 
+    // Parallel fall-off flags. For each prediction in _fullPredictions /
+    // _continuationPredictions, true means the predicted cap's EndPosition is
+    // outside the field (it will fall off the table). Recolored in
+    // TrajectoryPreview.Show() so the player can see at a glance which throws
+    // will lose a cap.
+    private readonly List<bool> _fullPredictionsFallOff = new();
+    private readonly List<bool> _continuationPredictionsFallOff = new();
+
     private CapTuning _tuning;
     private Vector2 _aimPoint;
     private Vector2 _aimVelocity;
@@ -616,6 +624,42 @@ public sealed class CapThrower : MonoBehaviour
         return predictor != null ? predictor.PredictionDepthBonus : 0;
     }
 
+    /// <summary>
+    /// True when a cap of <paramref name="radius"/> placed at
+    /// <paramref name="groundPoint"/> would land OFF the field (i.e., would
+    /// fall off the table). Mirrors the runtime test done by
+    /// <c>CapFieldBoundary.Supports</c> via <c>CapTurnResolver.IsPointSupported</c>.
+    /// Returns false when no resolver is available so the preview falls back to
+    /// the safe “supported” assumption.
+    ///
+    /// NOTE: the radius argument is kept for API symmetry but the runtime
+    /// fall-off test in <c>CapFieldBoundary.LateUpdate</c> calls
+    /// <c>Supports(cap.GroundPosition, 0f)</c> — i.e., it only checks the
+    /// CENTER. A cap whose center is on the field but whose body overhangs the
+    /// edge is NOT removed. Callers that want to match the runtime should pass
+    /// 0 for the radius.
+    /// </summary>
+    bool IsPointSupportedByField(Vector2 groundPoint, float radius)
+    {
+        if (_turnResolver == null) return true;
+        return _turnResolver.IsPointSupported(groundPoint, radius);
+    }
+
+    /// <summary>
+    /// True when this prediction's end position is outside the field, i.e. the
+    /// predicted cap would fall off the table after the chain reaction.
+    ///
+    /// Matches the runtime removal test in <c>CapFieldBoundary.LateUpdate</c>,
+    /// which is <c>!Supports(cap.GroundPosition, 0f)</c> — center only. A cap
+    /// that straddles the edge (body overlaps, center on the field) does NOT
+    /// fall off, so we pass 0 for the radius here, NOT pred.Cap.Parameters.Radius.
+    /// </summary>
+    bool PredictionWillFallOff(CapPrediction pred)
+    {
+        if (pred.Cap == null) return false;
+        return !IsPointSupportedByField(pred.EndPosition, 0f);
+    }
+
     void UpdateAimPreview()
     {
         if (!_isDirectAimAllowed)
@@ -659,6 +703,8 @@ public sealed class CapThrower : MonoBehaviour
         // add its PredictionDepthBonus to the effective depth.
         _fullPredictions.Clear();
         _continuationPredictions.Clear();
+        _fullPredictionsFallOff.Clear();
+        _continuationPredictionsFallOff.Clear();
 
         int depth = _tuning.PredictionDepth + GetHeldCapPredictionBonus();
         for (int i = 0; i < _predictionResults.Count; i++)
@@ -667,6 +713,7 @@ public sealed class CapThrower : MonoBehaviour
             if (pred.Depth < depth)
             {
                 _fullPredictions.Add(pred);
+                _fullPredictionsFallOff.Add(PredictionWillFallOff(pred));
             }
             else if (pred.Depth == depth)
             {
@@ -677,7 +724,10 @@ public sealed class CapThrower : MonoBehaviour
                     ? _tuning.PredictContinuedStack
                     : _tuning.PredictContinuedChain;
                 if (show)
+                {
                     _continuationPredictions.Add(pred);
+                    _continuationPredictionsFallOff.Add(PredictionWillFallOff(pred));
+                }
             }
             // else: Depth > depth → hidden, drop.
         }
@@ -717,6 +767,15 @@ public sealed class CapThrower : MonoBehaviour
             }
         }
 
+        // The thrown cap itself will fall off when its aim point (the cap's
+        // CENTER) is outside the field. The runtime removal test in
+        // CapFieldBoundary.LateUpdate is Supports(cap.GroundPosition, 0f) —
+        // center only, NOT the cap's radius. Passing 0 here matches that test.
+        // When no resolver is wired up yet (sandbox scenes), assume supported —
+        // same fall-through behavior as the runtime.
+        bool thrownCapWillFallOff = _turnResolver != null
+            && !IsPointSupportedByField(_aimPoint, 0f);
+
         TrajectoryPreview?.Show(
             ThrowOriginPos,
             _aimPoint,
@@ -724,7 +783,10 @@ public sealed class CapThrower : MonoBehaviour
             _tuning,
             _fullPredictions,
             _continuationPredictions,
-            _bombZones);
+            _bombZones,
+            thrownCapWillFallOff,
+            _fullPredictionsFallOff,
+            _continuationPredictionsFallOff);
 
         // Ghosts only for full predictions (not continuations).
         TrajectoryPreview?.ShowGhosts(_fullPredictions);
@@ -776,6 +838,8 @@ public sealed class CapThrower : MonoBehaviour
         _predictionResults.Clear();
         _fullPredictions.Clear();
         _continuationPredictions.Clear();
+        _fullPredictionsFallOff.Clear();
+        _continuationPredictionsFallOff.Clear();
         _isDirectAimAllowed = false;
         _hasLastAllowedAimPoint = false;
         _aimVelocity = Vector2.zero;
@@ -951,6 +1015,8 @@ public sealed class CapThrower : MonoBehaviour
         _predictionResults.Clear();
         _fullPredictions.Clear();
         _continuationPredictions.Clear();
+        _fullPredictionsFallOff.Clear();
+        _continuationPredictionsFallOff.Clear();
         _isDirectAimAllowed = false;
         _hasLastAllowedAimPoint = false;
         _aimVelocity = Vector2.zero;
