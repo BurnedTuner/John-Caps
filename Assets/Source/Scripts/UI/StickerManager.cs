@@ -64,6 +64,7 @@ public class StickerManager : MonoBehaviour
     {
         public GameObject Panel;
         public List<Vector2> StickerScreenPositions;
+        public float StickerVisualScale;
     }
 
     void Awake()
@@ -366,6 +367,9 @@ public class StickerManager : MonoBehaviour
                 stickerRT.localScale = new Vector3(finalScale, finalScale, 1f);
             }
 
+            // Store the visual scale for hover-radius scaling.
+            data.StickerVisualScale = finalScale;
+
             _panelPool[cap] = data;
         }
     }
@@ -387,7 +391,11 @@ public class StickerManager : MonoBehaviour
             for (int i = 0; i < data.StickerScreenPositions.Count; i++)
             {
                 float d = Vector2.Distance(mousePos, data.StickerScreenPositions[i]);
-                if (d <= _stickerHoverRadius)
+
+                // Scale hover radius by the sticker's visual scale so smaller
+                // stickers have smaller hover areas.
+                float hoverRadius = _stickerHoverRadius * data.StickerVisualScale;
+                if (d <= hoverRadius)
                 {
                     _isHoveringSticker = true;
                     _hoveredCap = cap;
