@@ -132,6 +132,8 @@ internal sealed class CapEffectResolver
     {
         if (command.Source == null || command.Radius <= 0f || command.Force <= 0f) return;
 
+        Cap sourceStackBase = command.Source.StackBase;
+
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
         for (int i = 0; i < _targets.Count; i++)
@@ -139,6 +141,10 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
+            // The cap the source LANDED ON is now its stack base. It must not
+            // be affected by the source's own effect — it is pinned under the
+            // source and should not be pushed/flipped/launched away.
+            if (target == sourceStackBase) continue;
 
             Vector2 offset = target.GroundPosition - command.Origin;
             Vector2 dir = offset.sqrMagnitude > 0.000001f ? offset.normalized : Vector2.right;
@@ -163,6 +169,8 @@ internal sealed class CapEffectResolver
     {
         if (command.Source == null || command.Radius <= 0f) return;
 
+        Cap sourceStackBase = command.Source.StackBase;
+
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
         for (int i = 0; i < _targets.Count; i++)
@@ -170,6 +178,10 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
+            // The cap the source LANDED ON is now its stack base. It must not
+            // be affected by the source's own effect — it is pinned under the
+            // source and should not be pushed/flipped/launched away.
+            if (target == sourceStackBase) continue;
 
             bool found = _resolved.TryGetValue(target, out ResolvedTarget resolved);
             if (!found)
@@ -193,6 +205,8 @@ internal sealed class CapEffectResolver
     {
         if (command.Source == null || command.Radius <= 0f || command.Force <= 0f) return;
 
+        Cap sourceStackBase = command.Source.StackBase;
+
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
         for (int i = 0; i < _targets.Count; i++)
@@ -200,6 +214,10 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
+            // The cap the source LANDED ON is now its stack base. It must not
+            // be affected by the source's own effect — it is pinned under the
+            // source and should not be pushed/flipped/launched away.
+            if (target == sourceStackBase) continue;
 
             Vector2 offset = target.GroundPosition - command.Origin;
             Vector2 dir = offset.sqrMagnitude > 0.000001f ? offset.normalized : Vector2.right;

@@ -106,6 +106,13 @@ public class Cap : MonoBehaviour
     private CapFlipEffect[] _flipEffects;
     internal CapFlipEffect[] FlipEffects => _flipEffects;
 
+    // Per-turn trigger counter for THIS cap's flipper effect (if any). Bounded
+    // per turn so two overlapping flippers can't ping-pong a cap forever.
+    // Incremented by FlipperCapEffect.BuildCommands via TryConsumeFlipperTrigger,
+    // reset by CapTurnResolver.TryStartThrow for every cap in CapRegistry.
+    private int _flipperTriggersThisTurn;
+    public int FlipperTriggersThisTurn => _flipperTriggersThisTurn;
+
     private CapTuning _tuning;
     private List<MeshRenderer> _meshRenderers = new();
     private Dictionary<MeshRenderer, Material[]> _originalMaterials = new();
@@ -259,6 +266,25 @@ public class Cap : MonoBehaviour
     }
 
     public void SetImmutable(bool value) => _isImmutable = value;
+
+    /// <summary>
+    /// If this cap has not yet reached <paramref name="maxPerTurn"/> flipper
+    /// triggers this turn, increment the counter and return true. Otherwise
+    /// return false — the flipper effect should silently skip emitting its
+    /// command. This is the per-flipper circuit breaker that stops two
+    /// overlapping flippers from bouncing a cap back and forth forever.
+    /// </summary>
+    public bool TryConsumeFlipperTrigger(int maxPerTurn)
+    {
+        if (maxPerTurn <= 0) return true; // 0 or negative = unlimited
+        if (_flipperTriggersThisTurn >= maxPerTurn) return false;
+        _flipperTriggersThisTurn++;
+        return true;
+    }
+
+    /// <summary>Reset the per-turn flipper trigger counter. Called by
+    /// CapTurnResolver at the start of each throw.</summary>
+    public void ResetFlipperTriggerCount() => _flipperTriggersThisTurn = 0;
 
     /// <summary>
     /// Marks this cap as factory-created (not scene-placed). Called by

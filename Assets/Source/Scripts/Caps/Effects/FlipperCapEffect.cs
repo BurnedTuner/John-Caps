@@ -76,6 +76,21 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
     {
         if (flipEvent.Source == null || Radius <= 0f) return;
         if (!ShouldTrigger(flipEvent.Source.IsHeads)) return;
+
+        // Per-turn trigger limit. Without this, two flippers with overlapping
+        // radii ping-pong a cap forever: A flips B → B finishes flip → B's
+        // flipper effect fires → flips A back → A finishes flip → A's flipper
+        // effect fires → flips B back → repeat. The global MaximumChainLength
+        // eventually stops it, but at 24 * ~0.4s animation that's ~10s of "looks
+        // infinite" before the turn ends. This per-flipper counter is the real
+        // circuit breaker — each flipper gets up to MaxFlipperTriggersPerTurn
+        // triggers per throw, then goes silent for the rest of the turn.
+        // Counter is reset on each new throw by CapTurnResolver.TryStartThrow.
+        CapTuning tuning = CapTuning.Instance;
+        if (tuning != null
+            && !flipEvent.Source.TryConsumeFlipperTrigger(tuning.MaxFlipperTriggersPerTurn))
+            return;
+
         commands.Add(new RadialFlipCommand(flipEvent.Source, flipEvent.Position, Radius));
     }
 

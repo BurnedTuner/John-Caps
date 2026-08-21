@@ -39,6 +39,15 @@ public class CapTuning : MonoBehaviour
     [Min(0f)] public float ChainContactDelay = 0.08f;
     [Range(1, 64)] public int MaximumChainLength = 24;
 
+    [Tooltip("Max times a single flipper cap can trigger its flip effect during one " +
+             "throw/turn. Prevents the infinite loop that happens when two or more " +
+             "flippers have overlapping radii: A flips B, B finishes its flip and fires " +
+             "its flipper effect, which flips A back, A fires its flipper effect, which " +
+             "flips B back... and so on. Each flipper gets up to N triggers per turn " +
+             "before going silent for the rest of the turn. The counter is reset on " +
+             "every new throw. Set to 0 for unlimited (legacy behaviour).")]
+    [Min(0)] public int MaxFlipperTriggersPerTurn = 3;
+
     [Header("Flip animation (launched cap)")]
     [Min(0.05f)] public float CapFlipDuration = 0.52f;
     [Min(0f)] public float CapFlipApexHeight = 0.65f;

@@ -84,6 +84,16 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
         _landingHits.Clear();
         _stackTargets.Clear();
 
+        // Reset every cap's per-turn flipper trigger counter — each new throw
+        // gets a fresh budget. Without this, two overlapping flippers that
+        // survived the previous turn would start the next turn already capped.
+        for (int i = 0; i < CapRegistry.AllCaps.Count; i++)
+        {
+            Cap cap = CapRegistry.AllCaps[i];
+            if (cap != null)
+                cap.ResetFlipperTriggerCount();
+        }
+
         _throwingCap = request.Cap;
         _throwingCap.transform.position = request.StartPosition;
         _throwingCap.SetImmutable(true);
