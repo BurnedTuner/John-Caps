@@ -8,7 +8,7 @@ using UnityEngine.InputSystem;
 /// </summary>
 public sealed class CapThrower : MonoBehaviour
 {
-    public enum State { Idle, Aiming, WaitingForResolution }
+    public enum State { Idle, Aiming, PrecisionAiming, WaitingForResolution }
 
     [Header("References")]
     public Camera PlayerCamera;
@@ -32,10 +32,26 @@ public sealed class CapThrower : MonoBehaviour
              "original hand position, the drag is cancelled (cap returns to hand).")]
     [Min(10f)] public float CancelDragRadiusPixels = 120f;
 
+    [Header("Precision Aim Mode (WASD nudge)")]
+    [Tooltip("Base speed (world units / second) of WASD aim adjustment in precision mode. " +
+             "Multiplied by the acceleration curve below, exactly like the camera WASD.")]
+    [Min(0f)] public float PrecisionAimSpeed = 6f;
+
+    [Tooltip("Acceleration curve for precision-mode WASD. X = seconds held, Y = speed multiplier 0-1. " +
+             "Mirrors CameraController.accelerationCurve so the feel matches the camera WASD.")]
+    public AnimationCurve PrecisionAimAccelerationCurve = AnimationCurve.EaseInOut(0f, 0f, 2f, 1f);
+
     public State CurrentState { get; private set; } = State.Idle;
     public bool TurnInputEnabled { get; private set; } = true;
     public CapTurnResolver TurnResolver => _turnResolver;
     public CapHand Hand => _hand;
+
+    /// <summary>
+    /// True when the player is actively aiming (regular drag OR precision mode).
+    /// Used by PauseMenu to yield ESC to the thrower instead of opening the
+    /// settings menu mid-aim.
+    /// </summary>
+    public bool IsAiming => CurrentState == State.Aiming || CurrentState == State.PrecisionAiming;
 
     /// <summary>
     /// The cap currently held/grabbed by the player. Returns null if no cap is held.
@@ -112,7 +128,6 @@ public sealed class CapThrower : MonoBehaviour
 
     private CapTuning _tuning;
     private Vector2 _aimPoint;
-    private Vector2 _aimVelocity;
     private bool _isDirectAimAllowed;
     private float _throwForce;
     private Cap _heldCap;
@@ -131,6 +146,12 @@ public sealed class CapThrower : MonoBehaviour
     private Vector3 _grabViewport;
     private float _grabDepth;
     private bool _hasGrab;
+
+    // Precision-mode WASD nudge state. Mirrors CameraController's WASD
+    // acceleration: input direction + an accel timer that drives an
+    // AnimationCurve to ramp the speed from 0 to full.
+    private float _precisionAccelTimer;
+    private Vector2 _precisionInputDir;
 
 
     void Awake()
@@ -208,6 +229,34 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
+        // Global hotkey: Q toggles precision aim mode. Works in any state
+        // (Idle, Aiming, etc.) so the player can flip it mid-aim if they
+        // change their mind before releasing LMB. GameSettings holds the
+        // persisted state so the UI toggle and this key stay in sync.
+        //
+        // IMPORTANT: if the player is ALREADY in PrecisionAiming, toggling Q
+        // does NOT exit the current precision session. The setting is updated
+        // (so the NEXT throw won't use precision mode if toggled off), but the
+        // current session continues until the player confirms (Space) or
+        // cancels (ESC). This matches the user spec: "if precision mode is
+        // toggled while in precision mode, we dont exit out of it, the next
+        // throw will just not be in precision mode".
+        if (Keyboard.current?.qKey.wasPressedThisFrame == true
+            && GameSettings.Instance != null)
+        {
+            bool newValue = !GameSettings.Instance.PrecisionAimEnabled;
+            GameSettings.Instance.SetPrecisionAimEnabled(newValue);
+            // Sync the UI toggle so it visually matches. PauseMenu listens for
+            // the toggle's onValueChanged event, so setting .isOn without
+            // suppress_dispatch fires the listener and stays in sync with the
+            // GameSettings value (which we just set — the listener is a
+            // no-op redundant call). Without this, the toggle would show the
+            // old state until the player opens the pause menu.
+            PauseMenu pm = FindFirstObjectByType<PauseMenu>();
+            if (pm != null)
+                pm.SyncPrecisionAimToggle(newValue);
+        }
+
         switch (CurrentState)
         {
             case State.Idle:
@@ -216,6 +265,9 @@ public sealed class CapThrower : MonoBehaviour
                 break;
             case State.Aiming:
                 UpdateAiming();
+                break;
+            case State.PrecisionAiming:
+                UpdatePrecisionAiming();
                 break;
         }
     }
@@ -392,7 +444,6 @@ public sealed class CapThrower : MonoBehaviour
         _heldCapOriginalPos = cap.transform.position; // hand position (for cancel detection)
         _cursorLeftHandArea = false;
         _hasLastAllowedAimPoint = false;
-        _aimVelocity = Vector2.zero;
 
         // Capture the cap's viewport position and depth at click time.
         // Throughout aiming, ThrowOriginPos recomputes the world position
@@ -417,7 +468,6 @@ public sealed class CapThrower : MonoBehaviour
         }
 
         _aimPoint = CapMath.ToXZ(_heldCapOriginalPos);
-        _aimVelocity = Vector2.zero;
         _isDirectAimAllowed = false;
         TrajectoryPreview?.Hide();
         cap.BeginHeld(_heldCapOriginalPos);
@@ -460,91 +510,29 @@ public sealed class CapThrower : MonoBehaviour
         _heldCap.StepSimulation(Time.deltaTime, null);
 
         float capRadius = _heldCap != null ? _heldCap.Parameters.Radius : 0.5f;
-        float deadZoneRadius = capRadius * Mathf.Max(0f, _tuning.AimDeadZoneMultiplier);
-        float dt = Time.deltaTime;
 
-        if (GameSettings.IsAccelerationAimEnabled())
+        // Aim point follows the cursor exactly (legacy behavior — no acceleration,
+        // no dead zone). When the cursor is over a restricted zone
+        // (ScoringZone / DefenderCapEffect), the aim point freezes at the last
+        // allowed position so the trajectory preview stays visible.
+        if (TryGetFieldPoint(out Vector3 point, out bool isAllowed))
         {
-            // --- Acceleration-based aim system (new) ---
-            if (TryGetFieldPoint(out Vector3 point, out _))
+            if (isAllowed)
+            {
+                _aimPoint = CapMath.ToXZ(point);
+                _lastAllowedAimPoint = _aimPoint;
+                _hasLastAllowedAimPoint = true;
+                _isDirectAimAllowed = true;
+            }
+            else if (_hasLastAllowedAimPoint)
             {
                 Vector2 cursorPoint = CapMath.ToXZ(point);
-
-                // Compute distance from current aim point to cursor.
-                Vector2 toCursor = cursorPoint - _aimPoint;
-                float distanceToCursor = toCursor.magnitude;
-
-                if (distanceToCursor <= deadZoneRadius)
-                {
-                    // Cursor is inside the dead zone (landing circle) — stop immediately.
-                    _aimVelocity = Vector2.zero;
-                }
-                else
-                {
-                    // Cursor is outside the dead zone — accelerate toward it.
-                    Vector2 direction = toCursor / distanceToCursor;
-                    float overshoot = distanceToCursor - deadZoneRadius;
-                    float acceleration = overshoot * _tuning.AimAcceleration;
-                    _aimVelocity += direction * acceleration * dt;
-
-                    // Apply damping.
-                    _aimVelocity *= Mathf.Max(0f, 1f - _tuning.AimDamping * dt);
-
-                    // Move aim point.
-                    _aimPoint += _aimVelocity * dt;
-
-                    // Check for overshoot: if the aim point crossed past the cursor
-                    // (ended up inside the dead zone or on the other side), clamp it
-                    // to the dead zone edge and zero velocity.
-                    Vector2 toCursorAfter = cursorPoint - _aimPoint;
-                    float distanceAfter = toCursorAfter.magnitude;
-                    if (distanceAfter <= deadZoneRadius)
-                    {
-                        if (distanceAfter > 0.0001f)
-                        {
-                            Vector2 edgeDirection = toCursorAfter / distanceAfter;
-                            _aimPoint = cursorPoint - edgeDirection * deadZoneRadius;
-                        }
-                        else
-                        {
-                            _aimPoint = cursorPoint;
-                        }
-                        _aimVelocity = Vector2.zero;
-                    }
-                }
-            }
-            else
-            {
-                // Cursor not on field — apply damping only.
-                _aimVelocity *= Mathf.Max(0f, 1f - _tuning.AimDamping * dt);
+                _aimPoint = ClampToZoneBoundary(_lastAllowedAimPoint, cursorPoint, capRadius);
+                _lastAllowedAimPoint = _aimPoint;
+                _isDirectAimAllowed = true;
             }
         }
-        else
-        {
-            // --- Legacy aim system (aim point follows cursor exactly) ---
-            _aimVelocity = Vector2.zero;
-            if (TryGetFieldPoint(out Vector3 legacyPoint, out bool legacyAllowed))
-            {
-                if (legacyAllowed)
-                {
-                    _aimPoint = CapMath.ToXZ(legacyPoint);
-                    _lastAllowedAimPoint = _aimPoint;
-                    _hasLastAllowedAimPoint = true;
-                    _isDirectAimAllowed = true;
-                }
-                else if (_hasLastAllowedAimPoint)
-                {
-                    Vector2 legacyCursor = CapMath.ToXZ(legacyPoint);
-                    _aimPoint = ClampToZoneBoundary(_lastAllowedAimPoint, legacyCursor, capRadius);
-                    _lastAllowedAimPoint = _aimPoint;
-                    _isDirectAimAllowed = true;
-                }
-            }
-            // Skip the acceleration system's zone clamping below (already handled).
-            goto aimClampDone;
-        }
 
-        aimClampDone:
         // Clamp to zone boundaries: if the aim point entered a restricted zone,
         // clamp it back to the boundary and zero out velocity to prevent buildup.
         Vector3 aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);
@@ -554,7 +542,6 @@ public sealed class CapThrower : MonoBehaviour
             {
                 _aimPoint = ClampToZoneBoundary(_lastAllowedAimPoint, _aimPoint, capRadius);
             }
-            _aimVelocity = Vector2.zero;
         }
 
         // Check if the (possibly clamped) aim point is now allowed.
@@ -586,7 +573,150 @@ public sealed class CapThrower : MonoBehaviour
         UpdateAimPreview();
 
         if (!Mouse.current.leftButton.isPressed)
+        {
+            // If precision mode is enabled, transition to PrecisionAiming
+            // instead of firing immediately. The player can nudge the aim
+            // point with WASD and confirm with Space (or cancel with ESC).
+            if (GameSettings.IsPrecisionAimEnabled())
+            {
+                EnterPrecisionAiming();
+                return;
+            }
             Fire();
+        }
+    }
+
+    /// <summary>
+    /// Transition from Aiming into PrecisionAiming. The cap stays held, the
+    /// trajectory preview stays visible, but LMB is no longer required — the
+    /// player can take their hand off the mouse and use WASD to nudge the aim
+    /// point. Space confirms the throw, ESC cancels (and PauseMenu yields ESC
+    /// to us while we're in this state).
+    /// </summary>
+    void EnterPrecisionAiming()
+    {
+        // If the drag was never valid (no allowed aim point, or drag distance
+        // too short), don't enter precision mode — just fire/cancel as usual.
+        // This matches the legacy Fire() guard and prevents entering a dead
+        // state with no valid aim point to nudge.
+        if (!_isDirectAimAllowed || GetDragDistance() < _tuning.MinimumDragDistance)
+        {
+            Fire();
+            return;
+        }
+
+        _precisionAccelTimer = 0f;
+        _precisionInputDir = Vector2.zero;
+        CurrentState = State.PrecisionAiming;
+    }
+
+    /// <summary>
+    /// Precision-mode update: WASD nudges the aim point using the same
+    /// acceleration curve as the camera WASD (input dir + accel timer →
+    /// AnimationCurve → speed). Space confirms the throw, ESC cancels.
+    /// RMB is ignored (user spec: "the rmb does not cancel the aim").
+    /// The cursor-follow / dead-zone logic from UpdateAiming is OFF — the
+    /// aim point only moves when the player presses WASD.
+    /// </summary>
+    void UpdatePrecisionAiming()
+    {
+        if (Mouse.current == null || _heldCap == null || Keyboard.current == null)
+        {
+            CancelAiming();
+            return;
+        }
+
+        // ESC cancels the throw (PauseMenu yields ESC to us while in this state).
+        if (Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            CancelAiming();
+            return;
+        }
+
+        // Space confirms the throw.
+        if (Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
+            Fire();
+            return;
+        }
+
+        // Keep the held cap at its hand slot (same as UpdateAiming).
+        if (_hand != null)
+        {
+            Vector3 slotPos = _hand.GetCapSlotPosition(_heldCap);
+            if (slotPos.sqrMagnitude > 0.0001f)
+                _heldCapOriginalPos = slotPos;
+        }
+        _heldCap.UpdateHeldBasePosition(_heldCapOriginalPos);
+        _heldCap.StepSimulation(Time.deltaTime, null);
+
+        float capRadius = _heldCap != null ? _heldCap.Parameters.Radius : 0.5f;
+        float dt = Time.deltaTime;
+
+        // --- WASD aim nudge (camera-style acceleration) ---
+        // Read raw input direction in screen-space (W=forward, S=back, A=left, D=right).
+        Vector2 inputDir = Vector2.zero;
+        if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) inputDir.y += 1f;
+        if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) inputDir.y -= 1f;
+        if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) inputDir.x += 1f;
+        if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) inputDir.x -= 1f;
+
+        if (inputDir.sqrMagnitude > 0.001f)
+        {
+            inputDir.Normalize();
+            _precisionAccelTimer += dt;
+        }
+        else
+        {
+            _precisionAccelTimer = 0f;
+        }
+
+        if (_precisionAccelTimer > 0f && PrecisionAimAccelerationCurve != null
+            && PrecisionAimAccelerationCurve.length > 0)
+        {
+            // Project the screen-space input direction onto the world ground plane
+            // using the PlayerCamera's basis. This makes W visually "forward" from
+            // the player's viewpoint, regardless of camera yaw.
+            Vector3 camRightFlat = PlayerCamera != null ? PlayerCamera.transform.right : Vector3.right;
+            camRightFlat.y = 0f;
+            camRightFlat = camRightFlat.sqrMagnitude > 0.001f ? camRightFlat.normalized : Vector3.right;
+            Vector3 camFwdFlat = PlayerCamera != null ? PlayerCamera.transform.forward : Vector3.forward;
+            camFwdFlat.y = 0f;
+            camFwdFlat = camFwdFlat.sqrMagnitude > 0.001f ? camFwdFlat.normalized : Vector3.forward;
+
+            Vector3 worldDir = (camRightFlat * inputDir.x + camFwdFlat * inputDir.y);
+            if (worldDir.sqrMagnitude > 0.001f)
+                worldDir.Normalize();
+
+            float curveTime = Mathf.Min(_precisionAccelTimer,
+                PrecisionAimAccelerationCurve.keys[PrecisionAimAccelerationCurve.length - 1].time);
+            float speedMultiplier = PrecisionAimAccelerationCurve.Evaluate(curveTime);
+            float currentSpeed = PrecisionAimSpeed * speedMultiplier;
+
+            _aimPoint += new Vector2(worldDir.x, worldDir.z) * currentSpeed * dt;
+        }
+
+        // Clamp to zone boundaries (same logic as UpdateAiming — keeps the aim
+        // point out of restricted zones and resets _isDirectAimAllowed).
+        Vector3 aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);
+        if (OverlapsAimBlockingZone(aimPoint3D, capRadius))
+        {
+            if (_hasLastAllowedAimPoint)
+                _aimPoint = ClampToZoneBoundary(_lastAllowedAimPoint, _aimPoint, capRadius);
+        }
+        aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);
+        if (!OverlapsAimBlockingZone(aimPoint3D, capRadius))
+        {
+            _lastAllowedAimPoint = _aimPoint;
+            _hasLastAllowedAimPoint = true;
+            _isDirectAimAllowed = true;
+        }
+        else
+        {
+            _isDirectAimAllowed = _hasLastAllowedAimPoint;
+        }
+
+        UpdateAimPreview();
     }
 
     /// <summary>
@@ -820,7 +950,7 @@ public sealed class CapThrower : MonoBehaviour
     public void SetTurnInputEnabled(bool enabled)
     {
         TurnInputEnabled = enabled;
-        if (!enabled && CurrentState == State.Aiming)
+        if (!enabled && (CurrentState == State.Aiming || CurrentState == State.PrecisionAiming))
             CancelAiming();
     }
 
@@ -830,7 +960,7 @@ public sealed class CapThrower : MonoBehaviour
     /// </summary>
     public void AbortTurn()
     {
-        if (CurrentState == State.Aiming)
+        if (CurrentState == State.Aiming || CurrentState == State.PrecisionAiming)
             CancelAiming();
 
         TrajectoryPreview?.Hide();
@@ -842,7 +972,6 @@ public sealed class CapThrower : MonoBehaviour
         _continuationPredictionsFallOff.Clear();
         _isDirectAimAllowed = false;
         _hasLastAllowedAimPoint = false;
-        _aimVelocity = Vector2.zero;
         CurrentState = State.Idle;
     }
 
@@ -1019,7 +1148,6 @@ public sealed class CapThrower : MonoBehaviour
         _continuationPredictionsFallOff.Clear();
         _isDirectAimAllowed = false;
         _hasLastAllowedAimPoint = false;
-        _aimVelocity = Vector2.zero;
         CurrentState = State.Idle;
 
         // Reset the hand: destroy all hand caps, restore deck from template, refill.

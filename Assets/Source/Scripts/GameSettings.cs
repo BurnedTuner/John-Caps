@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Global game settings singleton. Stores player preferences like volume
-/// sliders and aim system toggle. Place on a persistent GameObject in the scene.
+/// sliders and precision aim toggle. Place on a persistent GameObject in the scene.
 ///
 /// The PauseMenu UI binds its sliders/toggles to the Set* methods.
 /// AudioManager and CapThrower read the values at runtime.
@@ -15,10 +15,12 @@ public class GameSettings : MonoBehaviour
     [Range(0f, 1f)] public float SfxVolume = 1f;
     [Range(0f, 1f)] public float BgmVolume = 0.5f;
 
-    [Header("Aim System")]
-    [Tooltip("If true, uses the acceleration-based aim system (dead zone + velocity). " +
-             "If false, uses the legacy aim system (aim point follows cursor exactly).")]
-    public bool UseAccelerationAim = false;
+    [Header("Precision Aim Mode")]
+    [Tooltip("If true, releasing LMB while aiming enters precision mode: WASD nudges the " +
+             "aim point (camera-style acceleration curve), Space confirms the throw, " +
+             "ESC cancels. If false, releasing LMB throws immediately. " +
+             "Toggled at runtime via the on-screen UI or the Q key.")]
+    public bool PrecisionAimEnabled = false;
 
     [Header("Background Music")]
     [Tooltip("Audio clip for background music. Played on a looping AudioSource.")]
@@ -60,10 +62,10 @@ public class GameSettings : MonoBehaviour
             _bgmSource.volume = BgmVolume;
     }
 
-    /// <summary>Called by the aim system toggle. Switches between acceleration and legacy aim.</summary>
-    public void SetUseAccelerationAim(bool value)
+    /// <summary>Called by the precision-mode UI toggle. Enables/disables precision aim mode.</summary>
+    public void SetPrecisionAimEnabled(bool value)
     {
-        UseAccelerationAim = value;
+        PrecisionAimEnabled = value;
     }
 
     /// <summary>The current SFX volume (0-1). AudioManager reads this when playing sounds.</summary>
@@ -72,6 +74,6 @@ public class GameSettings : MonoBehaviour
     /// <summary>The current BGM volume (0-1).</summary>
     public static float GetBgmVolume() => Instance != null ? Instance.BgmVolume : 0.5f;
 
-    /// <summary>True if the acceleration-based aim system is active.</summary>
-    public static bool IsAccelerationAimEnabled() => Instance != null ? Instance.UseAccelerationAim : true;
+    /// <summary>True if precision aim mode is enabled (WASD nudge after LMB release).</summary>
+    public static bool IsPrecisionAimEnabled() => Instance != null ? Instance.PrecisionAimEnabled : false;
 }

@@ -746,7 +746,6 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 7776129883487210053}
   - {fileID: 5347413821239265837}
   - {fileID: 8228879745279183565}
   m_Father: {fileID: 2430325198386952488}
@@ -1273,6 +1272,7 @@ RectTransform:
   m_Children:
   - {fileID: 5458706960568819426}
   - {fileID: 5401804838032405828}
+  - {fileID: 7776129883487210053}
   - {fileID: 2669650406946822657}
   m_Father: {fileID: 6576823205662733966}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -1359,7 +1359,8 @@ MonoBehaviour:
   _panel: {fileID: 3814777952034125499}
   _sfxSlider: {fileID: 4061535034541366456}
   _bgmSlider: {fileID: 7006151192020697570}
-  _aimToggle: {fileID: 4305230607483756535}
+  _precisionAimToggle: {fileID: 4305230607483756535}
+  _capThrower: {fileID: 5175839692357260753}
   _toggleKey: 60
 --- !u!1 &5300244432209759014
 GameObject:
@@ -1536,7 +1537,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   SfxVolume: 1
   BgmVolume: 0.5
-  UseAccelerationAim: 1
+  PrecisionAimEnabled: 0
   BgmClip: {fileID: 8300000, guid: 6e9895040bab0b74580c7cb8e72a6586, type: 3}
 --- !u!1 &5669343902273094906
 GameObject:
@@ -1600,19 +1601,17 @@ MonoBehaviour:
   ChainDeflection: 0.65
   ChainContactDelay: 0.08
   MaximumChainLength: 50
+  MaxFlipperTriggersPerTurn: 3
   CapFlipDuration: 0.52
   CapFlipApexHeight: 0.65
   SettleDelay: 0.22
-  PredictionDepth: 2
+  PredictionDepth: 1
   PredictContinuedChain: 0
   PredictContinuedStack: 1
   ArcSamples: 24
   GhostMaterial: {fileID: 2100000, guid: c1d495c1c9de15d4fb976690c694e48e, type: 2}
   GhostAlpha: 0.35
   GhostYOffset: 0.02
-  AimDeadZoneMultiplier: 0.1
-  AimAcceleration: 30
-  AimDamping: 4
 --- !u!1 &5836545003993129573
 GameObject:
   m_ObjectHideFlags: 0
@@ -1982,7 +1981,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: SMOOTH AIM
+  m_text: PRECISION MODE
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -2009,7 +2008,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 39.25
+  m_fontSize: 34.05
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -2563,6 +2562,31 @@ MonoBehaviour:
   ThrowOwner: 1
   PlayerHandLayer: 3
   CancelDragRadiusPixels: 120
+  PrecisionAimSpeed: 6
+  PrecisionAimAccelerationCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 2
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!114 &1573795055034367174
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2608,14 +2632,14 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8320623904868346179}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 5916656176230619989}
   - {fileID: 2894948748523298369}
-  m_Father: {fileID: 5458706960568819426}
+  m_Father: {fileID: 2430325198386952488}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}

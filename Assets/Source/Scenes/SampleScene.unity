@@ -473,6 +473,18 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5110580450739520556, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_text
+      value: PRECISION MODE
+      objectReference: {fileID: 0}
+    - target: {fileID: 5110580450739520556, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_fontSize
+      value: 34.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 5175839692357260753, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: PrecisionAimAccelerationCurve.m_Curve.Array.data[0].value
+      value: 0.1
+      objectReference: {fileID: 0}
     - target: {fileID: 6576823205662733966, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_LocalPosition.x
       value: -3.2676153
