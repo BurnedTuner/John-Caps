@@ -166,31 +166,60 @@ public class StickerManager : MonoBehaviour
             }
             else
             {
-                // Also show hovered field cap stickers (if any).
-                Cap hovered = GetHoveredFieldCap();
-                if (hovered != null)
+                // Try hand caps FIRST — they render on the HandCamera overlay,
+                // which sits on top of the PlayerCamera view. A hand cap under
+                // the cursor should win over a field cap at the same screen
+                // position (the field cap is hidden behind the hand overlay).
+                Cap hoveredHand = GetHoveredHandCap();
+                if (hoveredHand != null)
                 {
-                    _hoveredCap = hovered;
-                    _visibleThisFrame.Add(hovered);
+                    _hoveredCap = hoveredHand;
+                    _visibleThisFrame.Add(hoveredHand);
                 }
                 else
                 {
-                    _hoveredCap = null;
+                    // Also show hovered field cap stickers (if any).
+                    Cap hovered = GetHoveredFieldCap();
+                    if (hovered != null)
+                    {
+                        _hoveredCap = hovered;
+                        _visibleThisFrame.Add(hovered);
+                    }
+                    else
+                    {
+                        _hoveredCap = null;
+                    }
                 }
             }
         }
 
-        // Update hover outline state on ALL field caps (not just those with stickers).
+        // Update hover outline state on ALL caps (field + hand — not just
+        // those with stickers). Hand caps are NOT in CapRegistry, so the
+        // clear loop below must also walk CapHand to clear hover on hand caps
+        // when the cursor leaves them. Without that, a hand cap's hover boost
+        // would stick forever once set.
         if (_hoveredCap != null && !_hoveredCap.HasLeftGame)
             _hoveredCap.SetHovered(true);
 
         // Clear hover on all previously hovered caps (except the current one).
+        // Field caps live in CapRegistry...
         IReadOnlyList<Cap> registryCaps = CapRegistry.AllCaps;
         for (int i = 0; i < registryCaps.Count; i++)
         {
             Cap cap = registryCaps[i];
             if (cap == null || cap == _hoveredCap || cap.HasLeftGame) continue;
             cap.SetHovered(false);
+        }
+        // ...and hand caps live in CapHand. Both must be cleared, otherwise a
+        // hand cap keeps its hover outline after the cursor leaves it.
+        if (_capHand != null)
+        {
+            for (int i = 0; i < _capHand.HandSize; i++)
+            {
+                Cap cap = _capHand.GetHandCap(i);
+                if (cap == null || cap == _hoveredCap || cap.HasLeftGame) continue;
+                cap.SetHovered(false);
+            }
         }
 
         foreach (Cap cap in _visibleThisFrame)
@@ -507,6 +536,26 @@ public class StickerManager : MonoBehaviour
             return cap;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Returns the hand cap under the cursor, or null. Hand caps render on the
+    /// HandCamera overlay (not the PlayerCamera), so we use CapHand's existing
+    /// screen-distance test against the HandCamera. Without this, hovering a
+    /// hand cap would never set _hoveredCap and the hover outline would never
+    /// grow until the player hovered a sticker image (which uses a separate
+    /// screen-distance test against sticker positions).
+    /// </summary>
+    Cap GetHoveredHandCap()
+    {
+        if (_capHand == null || Mouse.current == null) return null;
+        if (_capThrower != null && _capThrower.CurrentState == CapThrower.State.Aiming) return null;
+
+        Camera capCam = _handCamera != null ? _handCamera : _playerCamera;
+        if (capCam == null) return null;
+
+        Vector2 mousePos = Mouse.current.position.ReadValue();
+        return _capHand.GetCapUnderScreenPosition(mousePos, capCam);
     }
 
     void ClearAllPanels()
