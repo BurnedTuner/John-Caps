@@ -145,6 +145,19 @@ internal sealed class CapEffectResolver
             // be affected by the source's own effect — it is pinned under the
             // source and should not be pushed/flipped/launched away.
             if (target == sourceStackBase) continue;
+            // Also skip the cap the source landed on when the stack base
+            // hasn't been set yet. This happens for chain-launched caps:
+            // ResolvePendingFlipEffects runs BEFORE ResolvePendingLandings,
+            // so the landing hasn't resolved and AddToStack hasn't run →
+            // sourceStackBase is null. Without this check, the cap gets
+            // pushed by the effect, then when the landing tries to launch it
+            // the cap is busy and the launch fails — leaving them overlapping.
+            // The cap the source landed on is at the source's landing position
+            // (= command.Origin), within half its own radius.
+            float landedThreshold = target.Parameters.Radius * 0.5f;
+            if ((target.GroundPosition - command.Origin).sqrMagnitude
+                < landedThreshold * landedThreshold)
+                continue;
 
             Vector2 offset = target.GroundPosition - command.Origin;
             Vector2 dir = offset.sqrMagnitude > 0.000001f ? offset.normalized : Vector2.right;
@@ -182,6 +195,20 @@ internal sealed class CapEffectResolver
             // be affected by the source's own effect — it is pinned under the
             // source and should not be pushed/flipped/launched away.
             if (target == sourceStackBase) continue;
+            // Also skip the cap the source landed on when the stack base
+            // hasn't been set yet. This happens for chain-launched caps:
+            // ResolvePendingFlipEffects runs BEFORE ResolvePendingLandings,
+            // so the landing hasn't resolved and AddToStack hasn't run →
+            // sourceStackBase is null. Without this check, the cap gets
+            // flipped in place by the flipper effect, then when the landing
+            // tries to launch it the cap is busy and the launch fails —
+            // leaving them overlapping.
+            // The cap the source landed on is at the source's landing position
+            // (= command.Origin), within half its own radius.
+            float landedThreshold = target.Parameters.Radius * 0.5f;
+            if ((target.GroundPosition - command.Origin).sqrMagnitude
+                < landedThreshold * landedThreshold)
+                continue;
 
             bool found = _resolved.TryGetValue(target, out ResolvedTarget resolved);
             if (!found)
@@ -218,6 +245,13 @@ internal sealed class CapEffectResolver
             // be affected by the source's own effect — it is pinned under the
             // source and should not be pushed/flipped/launched away.
             if (target == sourceStackBase) continue;
+            // Also skip the cap the source landed on when the stack base
+            // hasn't been set yet (chain-launched caps — see MergeFlip for
+            // the full explanation).
+            float landedThreshold = target.Parameters.Radius * 0.5f;
+            if ((target.GroundPosition - command.Origin).sqrMagnitude
+                < landedThreshold * landedThreshold)
+                continue;
 
             Vector2 offset = target.GroundPosition - command.Origin;
             Vector2 dir = offset.sqrMagnitude > 0.000001f ? offset.normalized : Vector2.right;
