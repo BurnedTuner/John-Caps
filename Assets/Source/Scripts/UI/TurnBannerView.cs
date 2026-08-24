@@ -193,7 +193,7 @@ public sealed class TurnBannerView : MonoBehaviour
         ShowBanner();
     }
 
-    void HandleMatchFinished(CapOwner winner)
+    void HandleMatchFinished(CapOwner winner, MatchEndReason reason)
     {
         // The match result caption takes over from here.
         HideBanner();

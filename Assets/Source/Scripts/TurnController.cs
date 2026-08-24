@@ -1,6 +1,25 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Why the match ended. Passed to MatchFinished listeners so the UI can show
+/// a reason string (e.g., "Reached kill target", "All enemy caps knocked off",
+/// "No caps left to throw").
+/// </summary>
+public enum MatchEndReason
+{
+    /// <summary>Unknown / not set. Should never be used in practice.</summary>
+    Unknown = 0,
+    /// <summary>The winning side reached the kill target.</summary>
+    KillTarget,
+    /// <summary>The winning side knocked all enemy caps off the field.</summary>
+    EnemyWipedOut,
+    /// <summary>The losing side ran out of caps to throw (hand + deck empty).</summary>
+    NoCapsLeft,
+    /// <summary>Both sides ran out of caps — no winner.</summary>
+    Draw,
+}
+
 /// <summary>Details of an extra turn earned by knocking enemy caps off the field.</summary>
 public readonly struct ExtraTurnInfo
 {
@@ -99,7 +118,7 @@ public sealed class TurnController : MonoBehaviour
     public int ConsecutiveTurns { get; private set; }
 
     public event System.Action<CapOwner> TurnStarted;
-    public event System.Action<CapOwner> MatchFinished;
+    public event System.Action<CapOwner, MatchEndReason> MatchFinished;
 
     /// <summary>
     /// Raised just before an extra turn starts, i.e. when a side knocked enemy caps off and therefore
@@ -289,13 +308,13 @@ public sealed class TurnController : MonoBehaviour
             // been counts as the one that ran out, which is the one that just failed to act.
             if (!CanThrow(owner))
             {
-                FinishMatch(WinnerByExhaustion(owner));
+                FinishMatch(WinnerByExhaustion(owner), MatchEndReason.NoCapsLeft);
                 return;
             }
 
             if (!CanThrow(Other(owner)))
             {
-                FinishMatch(WinnerByExhaustion(Other(owner)));
+                FinishMatch(WinnerByExhaustion(Other(owner)), MatchEndReason.NoCapsLeft);
                 return;
             }
         }
@@ -306,7 +325,7 @@ public sealed class TurnController : MonoBehaviour
             CapOwner other = Other(owner);
             if (!CanThrow(other))
             {
-                FinishMatch(CapOwner.Neutral);
+                FinishMatch(CapOwner.Neutral, MatchEndReason.Draw);
                 return;
             }
 
@@ -397,14 +416,14 @@ public sealed class TurnController : MonoBehaviour
         // Check kill-target win condition: player reached the kill target.
         if (_killTarget > 0 && _playerKills >= _killTarget && CurrentPhase != TurnPhase.MatchOver)
         {
-            FinishMatch(CapOwner.Player);
+            FinishMatch(CapOwner.Player, MatchEndReason.KillTarget);
             return;
         }
 
         // Check kill-target win condition: opponent reached the kill target.
         if (_killTarget > 0 && _opponentKills >= _killTarget && CurrentPhase != TurnPhase.MatchOver)
         {
-            FinishMatch(CapOwner.Opponent);
+            FinishMatch(CapOwner.Opponent, MatchEndReason.KillTarget);
             return;
         }
     }
@@ -460,19 +479,62 @@ public sealed class TurnController : MonoBehaviour
     {
         if (!_endMatchWhenSideWipedOut) return false;
 
-        if (IsWipedOut(CapOwner.Player, counts.Player))
+        // WIN conditions take PRIORITY over LOSE conditions.
+        // The side whose turn just ended (CurrentTurn) is the one that ACTED.
+        // Check if THEY knocked out all enemy caps (WIN) before checking if
+        // they themselves are wiped out or out of caps (LOSE).
+        //
+        // This handles the scenario: player throws their last cap, it knocks
+        // off all enemy caps AND the player's cap also flies off. Both sides
+        // are wiped out, but the player should WIN because they knocked out
+        // all enemies. Without this priority, the player-wipeout check would
+        // fire first and the opponent would win — wrong.
+        //
+        // Kill-count win condition is already handled in HandleCapLeftField
+        // (runs before TryFinishMatch), so it has the highest priority.
+
+        CapOwner other = Other(CurrentTurn);
+        int otherCapsOnField = other == CapOwner.Player ? counts.Player : counts.Opponent;
+        int currentCapsOnField = CurrentTurn == CapOwner.Player ? counts.Player : counts.Opponent;
+
+        // 1. WIN: the other side is wiped out (current player knocked off all enemies).
+        if (IsWipedOut(other, otherCapsOnField))
         {
-            FinishMatch(CapOwner.Opponent);
+            FinishMatch(CurrentTurn, MatchEndReason.EnemyWipedOut);
             return true;
         }
 
-        if (IsWipedOut(CapOwner.Opponent, counts.Opponent))
+        // 2. LOSE: the current player is wiped out (no caps on field).
+        if (IsWipedOut(CurrentTurn, currentCapsOnField))
         {
-            FinishMatch(CapOwner.Player);
+            FinishMatch(other, MatchEndReason.EnemyWipedOut);
+            return true;
+        }
+
+        // 3. LOSE: no caps left in hand AND deck (exhaustion).
+        // Only checked for the side whose turn just ended — the other side
+        // hasn't had a chance to throw yet, so it's not their turn to lose.
+        if (!SideHasCapsLeft(CurrentTurn))
+        {
+            FinishMatch(other, MatchEndReason.NoCapsLeft);
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// True if the given side has at least one cap available to throw — either
+    /// a cap currently held, in the hand, or remaining in the deck. Used by the
+    /// "no caps left" lose condition in <see cref="TryFinishMatch"/>.
+    /// </summary>
+    bool SideHasCapsLeft(CapOwner owner)
+    {
+        if (owner == CapOwner.Player)
+            return _playerThrower != null && _playerThrower.HasCapToThrow;
+        if (owner == CapOwner.Opponent)
+            return _opponentThrower != null && _opponentThrower.HasCapToThrow;
+        return true; // Neutral never loses by exhaustion.
     }
 
     /// <summary>
@@ -487,14 +549,14 @@ public sealed class TurnController : MonoBehaviour
         return owner == CapOwner.Player ? _playerEverHadCaps : _opponentEverHadCaps;
     }
 
-    void FinishMatch(CapOwner winner)
+    void FinishMatch(CapOwner winner, MatchEndReason reason = MatchEndReason.Unknown)
     {
         Winner = winner;
         CurrentPhase = TurnPhase.MatchOver;
         _playerThrower?.SetTurnInputEnabled(false);
 
-        Debug.Log($"[TurnController] Match over. Winner: {winner}. Press R to reset the board.", this);
-        MatchFinished?.Invoke(winner);
+        Debug.Log($"[TurnController] Match over. Winner: {winner}. Reason: {reason}. Press R to reset the board.", this);
+        MatchFinished?.Invoke(winner, reason);
     }
 
     /// <summary>

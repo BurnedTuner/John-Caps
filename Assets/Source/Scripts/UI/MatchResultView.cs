@@ -22,12 +22,37 @@ public sealed class MatchResultView : MonoBehaviour
     [Tooltip("Optional smaller line under the caption, e.g. how to restart.")]
     [SerializeField] private TMP_Text _hintText;
 
+    [Tooltip("Optional text field showing WHY the match ended (e.g., 'Reached kill target', 'All enemy caps knocked off').")]
+    [SerializeField] private TMP_Text _reasonText;
+
     [Header("Messages")]
     [SerializeField] private string _playerVictoryMessage = "ПОБЕДА";
     [SerializeField] private string _opponentVictoryMessage = "ПОРАЖЕНИЕ";
     [Tooltip("Shown when neither side could finish the match, e.g. nobody had a cap left to throw.")]
     [SerializeField] private string _drawMessage = "НИЧЬЯ";
     [SerializeField] private string _hintMessage = "R — начать заново";
+
+    [Header("Reason messages — Player wins")]
+    [Tooltip("Shown when the PLAYER wins by reaching the kill target.")]
+    [SerializeField] private string _playerKillTargetReason = "Вы достигли лимита убийств";
+    [Tooltip("Shown when the PLAYER wins by knocking all enemy caps off the field.")]
+    [SerializeField] private string _playerEnemyWipedOutReason = "Все фишки противника сбиты";
+    [Tooltip("Shown when the PLAYER wins because the opponent ran out of caps to throw.")]
+    [SerializeField] private string _playerNoCapsLeftReason = "У противника закончились фишки";
+
+    [Header("Reason messages — Opponent wins")]
+    [Tooltip("Shown when the OPPONENT wins by reaching the kill target.")]
+    [SerializeField] private string _opponentKillTargetReason = "Противник достиг лимита убийств";
+    [Tooltip("Shown when the OPPONENT wins by knocking all player caps off the field.")]
+    [SerializeField] private string _opponentEnemyWipedOutReason = "Все ваши фишки сбиты";
+    [Tooltip("Shown when the OPPONENT wins because the player ran out of caps to throw.")]
+    [SerializeField] private string _opponentNoCapsLeftReason = "У вас закончились фишки";
+
+    [Header("Reason messages — Draw")]
+    [Tooltip("Shown when both sides ran out of caps (draw).")]
+    [SerializeField] private string _drawReason = "Оба игрока без фишек";
+    [Tooltip("Shown when the reason is unknown.")]
+    [SerializeField] private string _unknownReason = "";
 
     [Header("Colours")]
     [SerializeField] private Color _victoryColor = new Color(0.25f, 1f, 0.6f);
@@ -130,7 +155,7 @@ public sealed class MatchResultView : MonoBehaviour
         if (t >= 1f) _isAnimating = false;
     }
 
-    void HandleMatchFinished(CapOwner winner)
+    void HandleMatchFinished(CapOwner winner, MatchEndReason reason)
     {
         if (_resultText != null)
         {
@@ -151,6 +176,25 @@ public sealed class MatchResultView : MonoBehaviour
 
         if (_hintText != null)
             _hintText.text = _hintMessage;
+
+        if (_reasonText != null)
+        {
+            // Pick the reason text based on BOTH the winner AND the reason.
+            // Player and opponent have different texts for the same reason
+            // (e.g., "You reached the kill target" vs "Opponent reached the
+            // kill target"). Draw is neutral — same text regardless.
+            _reasonText.text = (winner, reason) switch
+            {
+                (CapOwner.Player, MatchEndReason.KillTarget) => _playerKillTargetReason,
+                (CapOwner.Player, MatchEndReason.EnemyWipedOut) => _playerEnemyWipedOutReason,
+                (CapOwner.Player, MatchEndReason.NoCapsLeft) => _playerNoCapsLeftReason,
+                (CapOwner.Opponent, MatchEndReason.KillTarget) => _opponentKillTargetReason,
+                (CapOwner.Opponent, MatchEndReason.EnemyWipedOut) => _opponentEnemyWipedOutReason,
+                (CapOwner.Opponent, MatchEndReason.NoCapsLeft) => _opponentNoCapsLeftReason,
+                (_, MatchEndReason.Draw) => _drawReason,
+                _ => _unknownReason
+            };
+        }
 
         Show();
     }
