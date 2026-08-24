@@ -272,8 +272,8 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
                     // didn't actually trigger (ShouldTrigger returned false).
                     bool shouldTrigger = effect switch
                     {
-                        BombCapFlipEffect bomb => bomb.ShouldTrigger(sourceCap.IsHeads),
-                        FlipperCapEffect flipper => flipper.ShouldTrigger(sourceCap.IsHeads),
+                        BombCapFlipEffect bomb => bomb.ShouldTrigger(sourceCap.IsFace),
+                        FlipperCapEffect flipper => flipper.ShouldTrigger(sourceCap.IsFace),
                         _ => true, // unknown effects: play feedback (backward compat)
                     };
                     if (shouldTrigger)
@@ -444,12 +444,12 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
             // need to know whether to play feedback.
             if (effect is BombCapFlipEffect bomb)
             {
-                if (bomb.ShouldTrigger(landedCap.IsHeads))
+                if (bomb.ShouldTrigger(landedCap.IsFace))
                     bomb.PlayFeedback(CapMath.FromXZ(landingPosition, 0f), landingForce);
             }
             else if (effect is FlipperCapEffect flipper)
             {
-                if (flipper.ShouldTrigger(landedCap.IsHeads))
+                if (flipper.ShouldTrigger(landedCap.IsFace))
                     flipper.PlayFeedback(CapMath.FromXZ(landingPosition, 0f), landingForce);
             }
         }

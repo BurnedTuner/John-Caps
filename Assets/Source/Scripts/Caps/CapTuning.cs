@@ -10,8 +10,8 @@ public class CapTuning : MonoBehaviour
     public static CapTuning Instance { get; private set; }
 
     [Header("Materials (fallback — used when a cap's own material is null)")]
-    public Material HeadsMaterial;
-    public Material TailsMaterial;
+    public Material FaceMaterial;
+    public Material BackMaterial;
 
     [Header("Cap Geometry")]
     public float CapThickness = 0.05f;

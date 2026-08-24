@@ -88,7 +88,7 @@ public sealed class CapBoardSimulation
     struct CapRuntime
     {
         public Vector2 Position;
-        public bool IsHeads;
+        public bool IsFace;
         public bool IsOnField;
         public bool IsStacked;
 
@@ -228,7 +228,7 @@ public sealed class CapBoardSimulation
         _baseline[_boardCount] = new CapRuntime
         {
             Position = position,
-            IsHeads = cap.IsHeads,
+            IsFace = cap.IsFace,
             IsOnField = true,
             IsStacked = baseIndex >= 0,
             LaunchedGeneration = -1
@@ -250,7 +250,7 @@ public sealed class CapBoardSimulation
         // entry can never be read back as leftovers from an earlier turn.
         _baseline[_slammerIndex] = new CapRuntime
         {
-            IsHeads = true,
+            IsFace = true,
             IsOnField = true,
             LaunchedGeneration = -1
         };
@@ -314,11 +314,11 @@ public sealed class CapBoardSimulation
         if (_slammerIndex >= 0)
         {
             // The thrown cap arrives face up and does not flip on landing: Cap.StepThrow reports the
-            // landing without touching IsHeads, so a thrown bomb does not detonate on arrival.
+            // landing without touching IsFace, so a thrown bomb does not detonate on arrival.
             _runtime[_slammerIndex] = new CapRuntime
             {
                 Position = landingPoint,
-                IsHeads = true,
+                IsFace = true,
                 IsOnField = true,
                 IsStacked = false,
                 LaunchedGeneration = -1
@@ -483,7 +483,7 @@ public sealed class CapBoardSimulation
             Hit hit = _hits[i];
             if (effectType == RadialEffectType.Flip)
             {
-                // Flip in place: toggle IsHeads, no movement, no chain reaction.
+                // Flip in place: toggle IsFace, no movement, no chain reaction.
                 ActivateFlip(hit.Index);
             }
             else
@@ -495,13 +495,13 @@ public sealed class CapBoardSimulation
     }
 
     /// <summary>
-    /// Flips a cap in place (toggle IsHeads) without moving it. Does NOT queue
+    /// Flips a cap in place (toggle IsFace) without moving it. Does NOT queue
     /// a chain-reaction landing — the flipper doesn't cause chain reactions
     /// (caps don't move, so they can't hit other caps).
     /// </summary>
     void ActivateFlip(int index)
     {
-        _runtime[index].IsHeads = !_runtime[index].IsHeads;
+        _runtime[index].IsFace = !_runtime[index].IsFace;
         // NOTE: no position change, no landing queued.
     }
 
@@ -514,7 +514,7 @@ public sealed class CapBoardSimulation
     {
         Vector2 destination = _runtime[index].Position + direction * travelDistance;
         _runtime[index].Position = destination;
-        // NOTE: IsHeads is NOT toggled — push doesn't flip.
+        // NOTE: IsFace is NOT toggled — push doesn't flip.
         _runtime[index].LaunchedGeneration = -1; // not launched, so can be hit again
 
         _runtime[index].IsOnField = _boundary == null || _boundary.Supports(destination, 0f);
@@ -530,7 +530,7 @@ public sealed class CapBoardSimulation
 
         Vector2 destination = _runtime[index].Position + direction * travelDistance;
         _runtime[index].Position = destination;
-        _runtime[index].IsHeads = !_runtime[index].IsHeads;
+        _runtime[index].IsFace = !_runtime[index].IsFace;
         _runtime[index].LaunchedGeneration = generation + 1;
 
         // CapFieldBoundary removes a cap once its centre leaves the field. The cap stops being a
@@ -544,7 +544,7 @@ public sealed class CapBoardSimulation
             Position = destination,
             Force = force,
             Generation = generation + 1,
-            FiresEffect = _runtime[index].IsHeads && _profiles[index].HasRadialEffect
+            FiresEffect = _runtime[index].IsFace && _profiles[index].HasRadialEffect
         });
     }
 

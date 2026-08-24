@@ -133,7 +133,6 @@ internal sealed class CapEffectResolver
         if (command.Source == null || command.Radius <= 0f || command.Force <= 0f) return;
 
         Cap sourceStackBase = command.Source.StackBase;
-        Cap sourceFindBase = command.Source.FindStackBase();
 
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
@@ -143,15 +142,18 @@ internal sealed class CapEffectResolver
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
             // The cap the source LANDED ON is now its stack base. It must not
-            // be affected by the source's own effect.
+            // be affected by the source's own effect — it is pinned under the
+            // source and should not be pushed/flipped/launched away.
             if (target == sourceStackBase) continue;
-            // Exclude ALL caps in the same stack as the source. A bomb/flipper
-            // in a stack should NOT push/flip other stacked caps — they're
-            // physically stacked on top of each other.
-            if (target.FindStackBase() == sourceFindBase) continue;
             // Also skip the cap the source landed on when the stack base
-            // hasn't been set yet (chain-launched caps — see MergeFlip for
-            // the full explanation).
+            // hasn't been set yet. This happens for chain-launched caps:
+            // ResolvePendingFlipEffects runs BEFORE ResolvePendingLandings,
+            // so the landing hasn't resolved and AddToStack hasn't run →
+            // sourceStackBase is null. Without this check, the cap gets
+            // pushed by the effect, then when the landing tries to launch it
+            // the cap is busy and the launch fails — leaving them overlapping.
+            // The cap the source landed on is at the source's landing position
+            // (= command.Origin), within half its own radius.
             float landedThreshold = target.Parameters.Radius * 0.5f;
             if ((target.GroundPosition - command.Origin).sqrMagnitude
                 < landedThreshold * landedThreshold)
@@ -181,7 +183,6 @@ internal sealed class CapEffectResolver
         if (command.Source == null || command.Radius <= 0f) return;
 
         Cap sourceStackBase = command.Source.StackBase;
-        Cap sourceFindBase = command.Source.FindStackBase();
 
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
@@ -190,8 +191,20 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
+            // The cap the source LANDED ON is now its stack base. It must not
+            // be affected by the source's own effect — it is pinned under the
+            // source and should not be pushed/flipped/launched away.
             if (target == sourceStackBase) continue;
-            if (target.FindStackBase() == sourceFindBase) continue;
+            // Also skip the cap the source landed on when the stack base
+            // hasn't been set yet. This happens for chain-launched caps:
+            // ResolvePendingFlipEffects runs BEFORE ResolvePendingLandings,
+            // so the landing hasn't resolved and AddToStack hasn't run →
+            // sourceStackBase is null. Without this check, the cap gets
+            // flipped in place by the flipper effect, then when the landing
+            // tries to launch it the cap is busy and the launch fails —
+            // leaving them overlapping.
+            // The cap the source landed on is at the source's landing position
+            // (= command.Origin), within half its own radius.
             float landedThreshold = target.Parameters.Radius * 0.5f;
             if ((target.GroundPosition - command.Origin).sqrMagnitude
                 < landedThreshold * landedThreshold)
@@ -220,7 +233,6 @@ internal sealed class CapEffectResolver
         if (command.Source == null || command.Radius <= 0f || command.Force <= 0f) return;
 
         Cap sourceStackBase = command.Source.StackBase;
-        Cap sourceFindBase = command.Source.FindStackBase();
 
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
@@ -229,8 +241,13 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
+            // The cap the source LANDED ON is now its stack base. It must not
+            // be affected by the source's own effect — it is pinned under the
+            // source and should not be pushed/flipped/launched away.
             if (target == sourceStackBase) continue;
-            if (target.FindStackBase() == sourceFindBase) continue;
+            // Also skip the cap the source landed on when the stack base
+            // hasn't been set yet (chain-launched caps — see MergeFlip for
+            // the full explanation).
             float landedThreshold = target.Parameters.Radius * 0.5f;
             if ((target.GroundPosition - command.Origin).sqrMagnitude
                 < landedThreshold * landedThreshold)

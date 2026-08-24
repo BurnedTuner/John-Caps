@@ -84,7 +84,7 @@ public sealed class OpponentCapPool : MonoBehaviour
         if (prefab == null) return null;
 
         Vector3 spawnPosition = SpawnPosition;
-        Cap cap = CapFactory.Create(prefab, CapMath.ToXZ(spawnPosition), isHeads: true, _owner);
+        Cap cap = CapFactory.Create(prefab, CapMath.ToXZ(spawnPosition), isFace: true, _owner);
         if (cap != null)
         {
             cap.transform.position = spawnPosition;

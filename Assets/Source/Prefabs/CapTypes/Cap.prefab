@@ -314,11 +314,11 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: 23e7a75d3e6f5be49ab61963627d3c99, type: 2}
     - target: {fileID: -6733177361254619370, guid: ce9927baccfd41c48a00deb7bf884f1b, type: 3}
       propertyPath: m_Name
-      value: Bottom
+      value: Back
       objectReference: {fileID: 0}
     - target: {fileID: -5568371526223589888, guid: ce9927baccfd41c48a00deb7bf884f1b, type: 3}
       propertyPath: m_Name
-      value: Top
+      value: Face
       objectReference: {fileID: 0}
     - target: {fileID: -1439730007547781893, guid: ce9927baccfd41c48a00deb7bf884f1b, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'

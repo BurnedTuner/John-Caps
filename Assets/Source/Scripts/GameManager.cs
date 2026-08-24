@@ -57,14 +57,14 @@ public class GameManager : MonoBehaviour
                 surfaceY = hit.point.y;
 
             Vector2 groundPos = new Vector2(x, z);
-            bool heads = Random.value > 0.5f;
+            bool face = Random.value > 0.5f;
             CapOwner owner = i < playerCaps
                 ? CapOwner.Player
                 : i < playerCaps + opponentCaps
                     ? CapOwner.Opponent
                     : CapOwner.Neutral;
 
-            CapFactory.Create(GetAmbientCapPrefab(), groundPos, heads, owner);
+            CapFactory.Create(GetAmbientCapPrefab(), groundPos, face, owner);
         }
     }
 

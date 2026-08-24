@@ -27,11 +27,11 @@ public class CapParameters
     [Min(0.05f)] public float PushDuration = 0.25f;
 
     [Header("Materials (per-cap)")]
-    [Tooltip("Material shown when this cap is heads-up.")]
-    public Material HeadsMaterial;
+    [Tooltip("Material shown when this cap is face-up.")]
+    public Material FaceMaterial;
 
-    [Tooltip("Material shown when this cap is tails-up.")]
-    public Material TailsMaterial;
+    [Tooltip("Material shown when this cap is back-up.")]
+    public Material BackMaterial;
 
     public float GetContactFactor(float normalizedOffset)
     {

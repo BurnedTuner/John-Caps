@@ -413,7 +413,7 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        // F or RMB while hovering a hand cap flips it (toggles IsHeads).
+        // F or RMB while hovering a hand cap flips it (toggles IsFace).
         // RMB also starts camera orbit in CameraController, but a single click
         // won't cause visible orbit — and the flip is more useful.
         bool fPressed = Keyboard.current?.fKey.wasPressedThisFrame == true;
@@ -811,9 +811,7 @@ public sealed class CapThrower : MonoBehaviour
             CapRegistry.AllCaps,
             _directHitSeeds,
             _tuning,
-            _predictionResults,
-            _heldCap,
-            _aimPoint);
+            _predictionResults);
 
         // Split predictions by depth:
         //   Depth < PredictionDepth  → full (trajectory + ghost)
@@ -871,7 +869,7 @@ public sealed class CapThrower : MonoBehaviour
             var effects = _heldCap.GetComponents<ICapEffectRadius>();
             for (int e = 0; e < effects.Length; e++)
             {
-                if (effects[e].ShouldTriggerOnSide(_heldCap.IsHeads))
+                if (effects[e].ShouldTriggerOnSide(_heldCap.IsFace))
                 {
                     _bombZones.Add((CapMath.FromXZ(_aimPoint, 0f),
                                     effects[e].EffectRadius,
@@ -887,8 +885,8 @@ public sealed class CapThrower : MonoBehaviour
             for (int e = 0; e < effects.Length; e++)
             {
                 // For predicted caps: the effect triggers when the cap FLIPS
-                // (chain reaction). The cap's side after flipping = WillLandHeads.
-                if (effects[e].ShouldTriggerOnSide(pred.WillLandHeads))
+                // (chain reaction). The cap's side after flipping = WillLandFace.
+                if (effects[e].ShouldTriggerOnSide(pred.WillLandFace))
                 {
                     _bombZones.Add((CapMath.FromXZ(pred.EndPosition, 0f),
                                     effects[e].EffectRadius,
@@ -1101,7 +1099,7 @@ public sealed class CapThrower : MonoBehaviour
                 direction,
                 inheritedForce,
                 travelDistance,
-                willLandHeads: !cap.IsHeads,
+                willLandFace: !cap.IsFace,
                 source: PredictionSource.Direct));
         }
     }

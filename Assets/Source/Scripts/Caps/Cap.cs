@@ -12,17 +12,17 @@ public class Cap : MonoBehaviour
     [SerializeField] private CapOwner _owner = CapOwner.Neutral;
 
     [Tooltip("Initial side of the cap when placed in the scene. " +
-             "Checked = heads-up, unchecked = tails-up. " +
+             "Checked = face-up, unchecked = back-up. " +
              "Only used for scene-placed caps (ignored for factory-created caps).")]
-    [SerializeField] private bool _initialIsHeads = true;
+    [SerializeField] private bool _initialIsFace = true;
 
     public int StableId => _stableId;
     public CapOwner Owner => _owner;
 
     [Header("Coin Parts (assign in prefab)")]
-    [Tooltip("The renderer for the TOP face of the coin (heads side).")]
+    [Tooltip("The renderer for the TOP face of the coin (face side).")]
     [SerializeField] private MeshRenderer _topRenderer;
-    [Tooltip("The renderer for the BOTTOM face of the coin (tails side).")]
+    [Tooltip("The renderer for the BOTTOM face of the coin (back side).")]
     [SerializeField] private MeshRenderer _bottomRenderer;
     [Tooltip("The renderer for the RIM (edge) of the coin.")]
     [SerializeField] private MeshRenderer _rimRenderer;
@@ -65,7 +65,7 @@ public class Cap : MonoBehaviour
     public float GetContactFactor(float normalizedOffset) => _parameters.GetContactFactor(normalizedOffset);
 
     public Vector2 GroundPosition { get; private set; }
-    public bool IsHeads { get; internal set; } = true;
+    public bool IsFace { get; internal set; } = true;
     public bool IsBusy => _state != CapState.Idle && _state != CapState.Parked;
     public bool IsThrowable => !_hasLeftGame && _state == CapState.Idle && _stackBase == null;
     public bool CanFlip => !_hasLeftGame && (_state == CapState.Idle || _state == CapState.Pushed) && _stackBase == null;
@@ -108,11 +108,11 @@ public class Cap : MonoBehaviour
 
     /// <summary>
     /// Returns the rotation that shows the requested side facing up.
-    /// Identity = heads up, 180° X rotation = tails up.
+    /// Identity = face up, 180° X rotation = back up.
     /// Used by the ghost-preview system to show which side the cap will land on.
     /// </summary>
-    public Quaternion GetLandingRotation(bool willLandHeads) =>
-        willLandHeads ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
+    public Quaternion GetLandingRotation(bool willLandFace) =>
+        willLandFace ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
 
     private bool _isImmutable;
     private bool _hasLeftGame;
@@ -188,11 +188,11 @@ public class Cap : MonoBehaviour
     private float _peelForce;
     private System.Action<Cap, Vector2, float> _pendingLandedCallback;
 
-    public void Configure(int id, bool isHeads, CapOwner owner = CapOwner.Neutral)
+    public void Configure(int id, bool isFace, CapOwner owner = CapOwner.Neutral)
     {
         _stableId = id;
         _owner = owner;
-        IsHeads = isHeads;
+        IsFace = isFace;
         Vector3 pos = transform.position;
         GroundPosition = IsFinite(pos) ? CapMath.ToXZ(pos) : Vector2.zero;
         _state = CapState.Idle;
@@ -211,7 +211,7 @@ public class Cap : MonoBehaviour
 
     /// <summary>
     /// Regenerates a scene-placed cap for board reset: restores its initial
-    /// position, rotation, and IsHeads; resets state to Idle; re-registers in
+    /// position, rotation, and IsFace; resets state to Idle; re-registers in
     /// CapRegistry; and reapplies visuals. Called by GameManager.ResetBoard
     /// instead of destroying the cap.
     /// </summary>
@@ -241,7 +241,7 @@ public class Cap : MonoBehaviour
         // Restore initial transform (the cap may have moved during play).
         transform.position = _initialPosition;
         transform.rotation = _initialRotation;
-        IsHeads = _initialIsHeads;
+        IsFace = _initialIsFace;
 
         // Re-extract _landingYaw from the restored rotation so ApplyVisuals
         // preserves the designer-set yaw (same logic as Awake).
@@ -444,11 +444,11 @@ public class Cap : MonoBehaviour
 
     /// <summary>
     /// Flips this cap IN PLACE — plays the flip animation (180° around the
-    /// lateral axis) but does NOT move the cap. Toggles IsHeads. For stacks,
+    /// lateral axis) but does NOT move the cap. Toggles IsFace. For stacks,
     /// ALL caps in the stack flip together (no peel-off, no scatter).
     ///
-    /// The cap ends up at the same GroundPosition, same yaw, but with IsHeads
-    /// toggled. Stacked caps also toggle IsHeads.
+    /// The cap ends up at the same GroundPosition, same yaw, but with IsFace
+    /// toggled. Stacked caps also toggle IsFace.
     ///
     /// Used by the FlipperCapEffect (RadialFlipCommand).
     /// </summary>
@@ -470,7 +470,7 @@ public class Cap : MonoBehaviour
         _flyElapsed = 0f;
         _flyDuration = Mathf.Max(0.01f, duration);
         _landingForce = 0f;
-        _isPeeling = false; // Peel-off is handled separately for flip-in-place
+        _isPeeling = false; // NO peel-off — the stack flips as a unit
         _state = CapState.Flying;
 
         // Capture stacked caps' start rotations for the flip animation.
@@ -503,7 +503,7 @@ public class Cap : MonoBehaviour
         // rotation (Euler(0, _landingYaw, 0) * sideRot). Setting it now prevents
         // a one-frame visual snap from the tilted rotation to the flat rotation.
         // _landingYaw was already extracted in StepThrow/StepFly before this runs.
-        Quaternion incomingSideRot = incoming.IsHeads
+        Quaternion incomingSideRot = incoming.IsFace
             ? Quaternion.identity
             : Quaternion.Euler(180f, 0f, 0f);
         incoming.transform.rotation = Quaternion.Euler(0f, incoming._landingYaw, 0f) * incomingSideRot;
@@ -520,13 +520,7 @@ public class Cap : MonoBehaviour
         }
         incoming._stackBase = head;
         head._stackAbove.Add(incoming);
-        // KEEP the incoming cap registered in CapRegistry — stacked caps are
-        // still "on field" (counted by CountCapsOnField, visible to defender
-        // checks, checked by CapFieldBoundary). The cap's CanFlip/IsThrowable
-        // return false while stacked (because _stackBase != null), so it
-        // won't be hit directly or pushed by nearby landings.
-        if (!CapRegistry.Contains(incoming))
-            CapRegistry.Register(incoming);
+        CapRegistry.Unregister(incoming);
 
         incoming._state = CapState.Idle;
         // Position the cap on top of the base. ApplyVisuals will handle this too,
@@ -614,7 +608,7 @@ public class Cap : MonoBehaviour
         if (_throwElapsed >= _throwDuration)
         {
             // Flatten: extract Y from the current rotation using the RIGHT vector
-            // (not forward — forward is reversed when the cap is tails-up due to
+            // (not forward — forward is reversed when the cap is back-up due to
             // the 180° X flip, which also applies to hand-flipped caps).
             // Right is 90° clockwise from forward.
             Vector3 right = Vector3.ProjectOnPlane(transform.rotation * Vector3.right, Vector3.up);
@@ -657,33 +651,22 @@ public class Cap : MonoBehaviour
             // (bomb, flipper) and chain reactions on a cap that's leaving the game.
             bool landedOffField = !IsLandingOnField();
 
-            // Toggle IsHeads on every landing (including peel-off continuation
+            // Toggle IsFace on every landing (including peel-off continuation
             // flights). Each peel-off cap flips once per iteration it survives:
             // iteration 1 → flipped once, iteration 2 → flipped twice (back to
             // original), etc. This produces the alternating pattern:
             // 2-stack [h,h] → [t,h], 3-stack [h,h,h] → [t,h,t], etc.
-            IsHeads = !IsHeads;
+            IsFace = !IsFace;
             for (int i = 0; i < _stackAbove.Count; i++)
             {
-                _stackAbove[i].IsHeads = !_stackAbove[i].IsHeads;
+                _stackAbove[i].IsFace = !_stackAbove[i].IsFace;
             }
 
             // Only fire onFlipped if the cap landed on the field. If it flew
             // off the edge, don't trigger flip effects (bomb, flipper).
             if (!landedOffField)
             {
-                // Fire onFlipped for the BASE cap.
                 onFlipped?.Invoke(this, GroundPosition, _landingForce);
-
-                // Fire onFlipped for EVERY cap in the stack. Each stacked cap
-                // has its own flipper/bomb effect that should trigger when it
-                // lands the correct side up. The CapEffectResolver excludes
-                // same-stack caps from the effect radius so a bomb in the stack
-                // doesn't push other stacked caps.
-                for (int i = 0; i < _stackAbove.Count; i++)
-                {
-                    onFlipped?.Invoke(_stackAbove[i], GroundPosition, _landingForce);
-                }
             }
 
             // Flatten: extract Y from the current post-flip rotation using
@@ -884,7 +867,7 @@ public class Cap : MonoBehaviour
     /// </summary>
     public void FlipInHand()
     {
-        IsHeads = !IsHeads;
+        IsFace = !IsFace;
         _handFlipYaw = (_handFlipYaw + 180f) % 360f;
     }
 
@@ -923,13 +906,13 @@ public class Cap : MonoBehaviour
         if (_state == CapState.Parked && _stackBase == null)
             return;
 
-        // Base rotation: identity if heads-up, 180° X-flip if tails-up.
+        // Base rotation: identity if face-up, 180° X-flip if back-up.
         // This is applied to ALL non-flying states so the 3D model shows the
         // correct face. Flying state overrides this with its own flip animation.
         // The landing Y rotation (_landingYaw) is composed on top so the cap
         // keeps facing the direction it landed in, instead of snapping to a
         // default Y orientation.
-        Quaternion sideRot = IsHeads ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
+        Quaternion sideRot = IsFace ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
         Quaternion yawRot = Quaternion.Euler(0f, _landingYaw, 0f);
         Quaternion flatRot = yawRot * sideRot; // flat + correct side + landing Y
 
@@ -941,7 +924,7 @@ public class Cap : MonoBehaviour
             float yOff = _tuning != null ? _tuning.CapThickness : 0.1f;
             int myIndex = _stackBase._stackAbove.IndexOf(this) + 1;
             // Use world up, not the base's local up. The base's rotation may
-            // include a 180° X flip (tails-up), which would invert local up to
+            // include a 180° X flip (back-up), which would invert local up to
             // point down — stacking the cap BELOW the base instead of above.
             // Stacked caps always sit above the base in world space, regardless
             // of the base's side.
@@ -982,7 +965,7 @@ public class Cap : MonoBehaviour
                     pos = _heldBasePos + Vector3.up * _heldCurrentHeight;
                     // Held caps: don't override rotation. CapHand.LayoutHand sets
                     // the rotation to face the camera, and we preserve it here.
-                    // Only the side (IsHeads) is encoded — LayoutHand already
+                    // Only the side (IsFace) is encoded — LayoutHand already
                     // applies sideRot in its rotation.
                     rot = transform.rotation;
                     break;
@@ -1189,7 +1172,7 @@ public class Cap : MonoBehaviour
         // Auto-register scene-placed caps: if _stableId is 0 (the default for a
         // cap placed in the scene editor, not created via CapFactory.Create),
         // initialize it now and register in CapRegistry. This lets designers
-        // place cap prefabs in the scene with Owner/IsHeads set in the
+        // place cap prefabs in the scene with Owner/IsFace set in the
         // inspector — no extra component needed.
         if (_stableId == 0)
         {
@@ -1197,15 +1180,15 @@ public class Cap : MonoBehaviour
             _initialPosition = transform.position;
             _initialRotation = transform.rotation;
 
-            // Set IsHeads from the serialized _initialIsHeads field (inspector).
-            IsHeads = _initialIsHeads;
+            // Set IsFace from the serialized _initialIsFace field (inspector).
+            IsFace = _initialIsFace;
 
             // Extract _landingYaw from the cap's initial transform rotation so
             // the designer-set yaw is preserved. Without this, Configure →
             // ApplyVisuals computes flatRot = Euler(0, _landingYaw=0, 0) * sideRot,
             // resetting the yaw to 0.
             // Use the RIGHT vector (not forward — forward is reversed by the 180°
-            // X flip when tails-up, right is not). Right is 90° clockwise from forward.
+            // X flip when back-up, right is not). Right is 90° clockwise from forward.
             Vector3 right = Vector3.ProjectOnPlane(transform.rotation * Vector3.right, Vector3.up);
             _landingYaw = right.sqrMagnitude > 0.001f
                 ? Mathf.Atan2(right.x, right.z) * Mathf.Rad2Deg - 90f
@@ -1213,7 +1196,7 @@ public class Cap : MonoBehaviour
 
             Vector3 pos = transform.position;
             GroundPosition = IsFinite(pos) ? CapMath.ToXZ(pos) : Vector2.zero;
-            Configure(CapFactory.NextStableId(), IsHeads, _owner);
+            Configure(CapFactory.NextStableId(), IsFace, _owner);
             // Configure doesn't register (it's called by CapFactory.Create which
             // does the registration). Register here for scene-placed caps.
             if (!CapRegistry.Contains(this))

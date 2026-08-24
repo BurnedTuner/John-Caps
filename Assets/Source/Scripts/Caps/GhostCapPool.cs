@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 /// Each ghost is a clone of a real Cap's visual GameObject with all behavior
 /// components stripped (Cap, CapFlipEffect, Rigidbody, Collider, etc.) — only
 /// MeshFilter + MeshRenderer remain. The sharedMaterial is swapped for a
-/// transparent clone of the source cap's resolved heads/tails material.
+/// transparent clone of the source cap's resolved face/back material.
 ///
 /// Ghosts are pooled per-Cap and reused across frames. The transparent-material
 /// cache is per-source-material, so each unique material is cloned exactly once
@@ -17,13 +17,10 @@ using UnityEngine.Rendering;
 /// </summary>
 public class GhostCapPool
 {
-    // Keyed by (Cap, index) so a cap can have MULTIPLE ghosts when it
-    // appears in multiple predictions (e.g., peeled off then hit by a
-    // chain reaction → two flights → two ghosts at different positions).
-    private readonly Dictionary<(Cap, int), GameObject> _ghosts = new();
+    private readonly Dictionary<Cap, GameObject> _ghosts = new();
     private readonly Dictionary<Material, Material> _transparentMats = new();
-    private readonly HashSet<(Cap, int)> _usedThisFrame = new();
-    private readonly List<(Cap, int)> _staleKeys = new();
+    private readonly HashSet<Cap> _usedThisFrame = new();
+    private readonly List<Cap> _staleKeys = new();
 
     private Transform _parent;
     private Material _defaultTransparentMat;
@@ -64,10 +61,6 @@ public class GhostCapPool
             return;
         }
 
-        // Track per-cap occurrence count so a cap with multiple predictions
-        // gets a separate ghost for each prediction (keyed by (Cap, index)).
-        var perCapCount = new Dictionary<Cap, int>();
-
         for (int i = 0; i < predictions.Count; i++)
         {
             CapPrediction pred = predictions[i];
@@ -80,14 +73,7 @@ public class GhostCapPool
             bool isStackCap = pred.Cap.StackBase != null || pred.Cap.StackedAbove.Count > 0;
             if (!isStackCap) continue;
 
-            // Assign a per-cap index so multiple ghosts for the same cap
-            // (e.g., peeled off then hit again) get separate entries.
-            if (!perCapCount.TryGetValue(pred.Cap, out int capIndex))
-                capIndex = 0;
-            perCapCount[pred.Cap] = capIndex + 1;
-
-            var key = (pred.Cap, capIndex);
-            GameObject ghost = GetOrCreateGhost(pred.Cap, key);
+            GameObject ghost = GetOrCreateGhost(pred.Cap);
             if (ghost == null) continue;
 
             PositionGhost(ghost, pred);
@@ -96,6 +82,9 @@ public class GhostCapPool
             ghost.SetActive(true);
 
             // Apply transparent materials to ALL sub-meshes of the ghost.
+            // The 3D cap model has 3 material slots (top, bottom, rim). We need
+            // to make all of them transparent so the ghost is see-through from
+            // any angle. Each slot's material is individually cloned + made transparent.
             MeshRenderer[] renderers = ghost.GetComponentsInChildren<MeshRenderer>(true);
             for (int r = 0; r < renderers.Length; r++)
             {
@@ -103,6 +92,7 @@ public class GhostCapPool
                 if (mr == null) continue;
                 if (!mr.enabled) continue; // skip disabled renderers (OutlineRenderer)
 
+                // Get all materials on this renderer and make each one transparent.
                 Material[] currentMats = mr.sharedMaterials;
                 if (currentMats == null || currentMats.Length == 0) continue;
 
@@ -119,20 +109,20 @@ public class GhostCapPool
                     mr.sharedMaterials = transparentMats;
             }
 
-            _usedThisFrame.Add(key);
+            _usedThisFrame.Add(pred.Cap);
         }
 
-        // Hide ghosts whose (Cap, index) key didn't appear in this frame's predictions.
+        // Hide ghosts whose cap didn't appear in this frame's predictions.
         _staleKeys.Clear();
         foreach (var kvp in _ghosts)
         {
-            if (kvp.Key.Item1 == null || kvp.Value == null) { _staleKeys.Add(kvp.Key); continue; }
+            if (kvp.Key == null || kvp.Value == null) { _staleKeys.Add(kvp.Key); continue; }
             if (!_usedThisFrame.Contains(kvp.Key))
                 kvp.Value.SetActive(false);
         }
         for (int i = 0; i < _staleKeys.Count; i++)
         {
-            if (_ghosts.TryGetValue(_staleKeys[i], out GameObject g) && g != null)
+            if (_staleKeys[i] != null && _ghosts.TryGetValue(_staleKeys[i], out GameObject g) && g != null)
                 Object.Destroy(g);
             _ghosts.Remove(_staleKeys[i]);
         }
@@ -178,16 +168,16 @@ public class GhostCapPool
     // Internals
     // -----------------------------------------------------------------------
 
-    GameObject GetOrCreateGhost(Cap cap, (Cap, int) key)
+    GameObject GetOrCreateGhost(Cap cap)
     {
         if (cap == null || cap.gameObject == null) return null;
 
-        if (_ghosts.TryGetValue(key, out GameObject existing) && existing != null)
+        if (_ghosts.TryGetValue(cap, out GameObject existing) && existing != null)
             return existing;
 
-        // Cleanup any stale entries.
+        // Cleanup any stale entries (cap was destroyed but key lingered).
         if (existing == null)
-            _ghosts.Remove(key);
+            _ghosts.Remove(cap);
 
         // Determine a valid scene parent. If _parent is a persistent prefab asset
         // (not a scene instance), Instantiate refuses to use it. Fall back to
@@ -197,7 +187,7 @@ public class GhostCapPool
             validParent = null;
 
         GameObject ghost = Object.Instantiate(cap.gameObject, validParent);
-        ghost.name = $"Ghost_{cap.StableId}_{key.Item2}";
+        ghost.name = $"Ghost_{cap.StableId}";
         ghost.SetActive(false); // created hidden; ShowGhosts activates
 
         // Disable ALL Behaviour components on root and children (Cap, CapFlipEffect,
@@ -245,18 +235,18 @@ public class GhostCapPool
             renderers[i].reflectionProbeUsage = ReflectionProbeUsage.Off;
         }
 
-        _ghosts[key] = ghost;
+        _ghosts[cap] = ghost;
         return ghost;
     }
 
     void PositionGhost(GameObject ghost, CapPrediction pred)
     {
         // Position at the predicted landing point. Rotation shows the predicted
-        // side: identity = heads up, 180° X rotation = tails up.
+        // side: identity = face up, 180° X rotation = back up.
         Vector3 worldPos = CapMath.FromXZ(pred.EndPosition, GhostYOffset);
         ghost.transform.position = worldPos;
         ghost.transform.rotation = pred.Cap != null
-            ? pred.Cap.GetLandingRotation(pred.WillLandHeads)
+            ? pred.Cap.GetLandingRotation(pred.WillLandFace)
             : Quaternion.identity;
     }
 

@@ -5,14 +5,14 @@ using UnityEngine;
 /// </summary>
 public enum FlipperTriggerSide
 {
-    Heads = 0,
-    Tails = 1,
+    Face = 0,
+    Back = 1,
     Either = 2
 }
 
 /// <summary>
 /// Flips nearby caps IN PLACE when this cap finishes a flip OR when it lands
-/// from a hand throw on the trigger side. Flipped caps toggle IsHeads but do
+/// from a hand throw on the trigger side. Flipped caps toggle IsFace but do
 /// NOT move — they stay at their current position. Stacks flip as a unit
 /// (all caps flip, no peel-off, no scatter).
 ///
@@ -49,9 +49,9 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
 
     [Header("Trigger")]
     [Tooltip("Which side the flipper must land on to trigger. " +
-             "Heads = triggers when it lands heads-up. Tails = triggers when tails-up. " +
+             "Face = triggers when it lands face-up. Back = triggers when back-up. " +
              "Either = triggers on any landing.")]
-    public FlipperTriggerSide TriggerSide = FlipperTriggerSide.Heads;
+    public FlipperTriggerSide TriggerSide = FlipperTriggerSide.Face;
 
     public Color ZoneColor => new Color(0.8f, 0.3f, 1f, 0.35f); // purple
 
@@ -75,7 +75,7 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
         ICapEffectCommandSink commands)
     {
         if (flipEvent.Source == null || Radius <= 0f) return;
-        if (!ShouldTrigger(flipEvent.Source.IsHeads)) return;
+        if (!ShouldTrigger(flipEvent.Source.IsFace)) return;
 
         // Per-turn trigger limit. Without this, two flippers with overlapping
         // radii ping-pong a cap forever: A flips B → B finishes flip → B's
@@ -97,12 +97,12 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
     /// <summary>
     /// Returns true if the flipper should trigger given the side it landed on.
     /// </summary>
-    public bool ShouldTrigger(bool landedHeads)
+    public bool ShouldTrigger(bool landedFace)
     {
         return TriggerSide switch
         {
-            FlipperTriggerSide.Heads => landedHeads,
-            FlipperTriggerSide.Tails => !landedHeads,
+            FlipperTriggerSide.Face => landedFace,
+            FlipperTriggerSide.Back => !landedFace,
             FlipperTriggerSide.Either => true,
             _ => false,
         };
@@ -148,5 +148,5 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
         }
     }
 
-    public bool ShouldTriggerOnSide(bool isHeads) => ShouldTrigger(isHeads);
+    public bool ShouldTriggerOnSide(bool isFace) => ShouldTrigger(isFace);
 }

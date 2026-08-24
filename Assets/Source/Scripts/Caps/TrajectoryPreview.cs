@@ -43,13 +43,6 @@ public class TrajectoryPreview : MonoBehaviour
              "predicted cap will land OFF the field. Overrides the depth-based color.")]
     public Color FallOffPredictionColor = new Color(1f, 0.22f, 0.22f, 0.95f);
 
-    [Header("Prediction arc height")]
-    [Tooltip("Base height (world units) of the prediction arc for depth-0 (direct hit).")]
-    [Min(0f)] public float PredictionArcBaseHeight = 0.3f;
-
-    [Tooltip("Additional height per chain depth level. Higher = deeper chains have higher arcs.")]
-    [Min(0f)] public float PredictionArcHeightPerDepth = 0.4f;
-
     private LineRenderer _arcLine;
     private LineRenderer _landingCircle;
     private readonly List<LineRenderer> _predictionLines = new();
@@ -228,7 +221,7 @@ public class TrajectoryPreview : MonoBehaviour
 
     /// <summary>
     /// Show transparent ghost-cap previews at each predicted cap's landing position.
-    /// Each ghost shows the side (heads/tails) the cap will land on, using a
+    /// Each ghost shows the side (face/back) the cap will land on, using a
     /// transparent clone of the cap's own material. Adds on top of the existing
     /// line-based trajectory preview — call after Show().
     /// </summary>
@@ -261,7 +254,7 @@ public class TrajectoryPreview : MonoBehaviour
         Color color = willFallOff ? FallOffPredictionColor : baseColor;
         Color fadedColor = new Color(color.r, color.g, color.b, 0.2f);
 
-        // --- Prediction line (arc) ---
+        // --- Prediction line ---
         var line = _predictionLines[lineIndex];
         line.enabled = true;
         line.startColor = color;
@@ -269,22 +262,9 @@ public class TrajectoryPreview : MonoBehaviour
 
         Vector3 start = CapMath.FromXZ(prediction.StartPosition, 0.05f);
         Vector3 end = CapMath.FromXZ(prediction.EndPosition, 0.05f);
-
-        // Draw the prediction as an arc (parabolic), not a straight line.
-        // Arc height scales with depth: deeper chain reactions fly higher.
-        // This mirrors the throw arc's visual style and makes it clear which
-        // predictions are direct hits (low arc) vs deep chains (high arc).
-        float arcHeight = PredictionArcBaseHeight + prediction.Depth * PredictionArcHeightPerDepth;
-        int samples = Mathf.Max(4, Mathf.CeilToInt(prediction.TravelDistance * 4f));
-        samples = Mathf.Min(samples, 24); // cap for performance
-        line.positionCount = samples;
-        for (int i = 0; i < samples; i++)
-        {
-            float t = (float)i / (samples - 1);
-            Vector3 p = Vector3.Lerp(start, end, t);
-            p.y += arcHeight * Mathf.Sin(t * Mathf.PI);
-            line.SetPosition(i, p);
-        }
+        line.positionCount = 2;
+        line.SetPosition(0, start);
+        line.SetPosition(1, end);
 
         // --- End circle (where this cap will land) ---
         var circle = _endCircles[lineIndex];
@@ -323,35 +303,21 @@ public class TrajectoryPreview : MonoBehaviour
             prediction.StartPosition + prediction.Direction * (prediction.TravelDistance * 0.5f),
             0.05f);
         Vector3 end = CapMath.FromXZ(prediction.EndPosition, 0.05f);
-
-        // Use arc for continuation too, matching DrawPrediction's style.
-        float arcHeight = PredictionArcBaseHeight + prediction.Depth * PredictionArcHeightPerDepth;
-        int samples = 8;
-        line.positionCount = samples;
+        line.positionCount = 2;
 
         bool drawSecondHalf = prediction.Source == PredictionSource.Stack && hasPrecedingFull;
 
         if (drawSecondHalf)
         {
-            // Second half: midpoint → end (arc)
-            for (int i = 0; i < samples; i++)
-            {
-                float t = 0.5f + (float)i / (samples - 1) * 0.5f;
-                Vector3 p = Vector3.Lerp(start, end, t);
-                p.y += arcHeight * Mathf.Sin(t * Mathf.PI);
-                line.SetPosition(i, p);
-            }
+            // Second half: midpoint → end
+            line.SetPosition(0, mid);
+            line.SetPosition(1, end);
         }
         else
         {
-            // First half: start → midpoint (arc)
-            for (int i = 0; i < samples; i++)
-            {
-                float t = (float)i / (samples - 1) * 0.5f;
-                Vector3 p = Vector3.Lerp(start, end, t);
-                p.y += arcHeight * Mathf.Sin(t * Mathf.PI);
-                line.SetPosition(i, p);
-            }
+            // First half: start → midpoint
+            line.SetPosition(0, start);
+            line.SetPosition(1, mid);
         }
     }
 

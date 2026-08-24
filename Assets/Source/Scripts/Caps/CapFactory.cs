@@ -11,7 +11,7 @@ public static class CapFactory
     public static Cap Create(
         Cap prefab,
         Vector2 groundPosition,
-        bool isHeads,
+        bool isFace,
         CapOwner owner = CapOwner.Neutral)
     {
         if (prefab == null)
@@ -30,7 +30,7 @@ public static class CapFactory
         Cap cap = instance.GetComponent<Cap>();
         if (cap == null) cap = instance.gameObject.AddComponent<Cap>();
 
-        cap.Configure(_nextStableId++, isHeads, owner);
+        cap.Configure(_nextStableId++, isFace, owner);
 
         // Awake ran during Instantiate and may have set _isScenePlaced = true
         // (it checks _stableId == 0, but Configure hadn't run yet). Clear it —

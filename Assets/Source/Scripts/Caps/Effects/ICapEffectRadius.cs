@@ -15,10 +15,10 @@ public interface ICapEffectRadius
 
     /// <summary>
     /// True if the effect should be shown/active given the cap's current side.
-    /// For the held cap (throw), this uses the cap's current IsHeads.
+    /// For the held cap (throw), this uses the cap's current IsFace.
     /// For predicted caps (chain), this uses the predicted post-flip side.
     /// </summary>
-    bool ShouldTriggerOnSide(bool isHeads);
+    bool ShouldTriggerOnSide(bool isFace);
 
     /// <summary>
     /// The color to use for the radius circle in the trajectory preview.

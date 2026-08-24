@@ -403,7 +403,7 @@ public class CapHand : MonoBehaviour
         Cap instance = CapFactory.Create(
             prefab,
             CapMath.ToXZ(spawnPos),
-            isHeads: true,
+            isFace: true,
             Owner);
 
         if (instance != null)
@@ -513,9 +513,9 @@ public class CapHand : MonoBehaviour
             Vector3 slotPos = rowCenter + right * (slotOffset * SlotSpacing);
             cap.transform.position = slotPos;
             // Caps face the anchor's forward (toward the camera), with the
-            // correct side up based on IsHeads, plus the hand-flip Y rotation.
+            // correct side up based on IsFace, plus the hand-flip Y rotation.
             Quaternion faceCam = Quaternion.LookRotation(-forward, up);
-            Quaternion sideRot = cap.IsHeads ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
+            Quaternion sideRot = cap.IsFace ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
             Quaternion flipRot = Quaternion.Euler(0f, cap.HandFlipYaw, 0f);
             cap.transform.rotation = faceCam * flipRot * sideRot;
 

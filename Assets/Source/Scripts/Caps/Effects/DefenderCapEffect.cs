@@ -5,8 +5,8 @@ using UnityEngine;
 /// </summary>
 public enum DefenderTriggerSide
 {
-    Heads = 0,
-    Tails = 1,
+    Face = 0,
+    Back = 1,
     Either = 2,
 }
 
@@ -59,9 +59,9 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     public float ZoneRadius => _level switch { 2 => _zoneRadiusL2, 3 => _zoneRadiusL3, _ => _zoneRadiusL1 };
 
     [Tooltip("Which side the cap must be showing for the zone to be active. " +
-             "Heads = zone active when cap is heads-up. Tails = active when tails-up. " +
+             "Face = zone active when cap is face-up. Back = active when back-up. " +
              "Either = always active regardless of side.")]
-    public DefenderTriggerSide TriggerSide = DefenderTriggerSide.Heads;
+    public DefenderTriggerSide TriggerSide = DefenderTriggerSide.Face;
 
     [Header("Visual")]
     [Tooltip("Child GameObject that visualizes the zone (e.g., a transparent ring or cylinder). " +
@@ -139,7 +139,7 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
         if (state != Cap.CapState.Idle && state != Cap.CapState.Pushed) return false;
 
         // Side must match.
-        return ShouldTrigger(_cap.IsHeads);
+        return ShouldTrigger(_cap.IsFace);
     }
 
     /// <summary>
@@ -175,17 +175,17 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     public Color ZoneColor => new Color(0.2f, 0.6f, 1f, 0.3f);
 
     /// <summary>ICapEffectRadius — wraps the private ShouldTrigger for the trajectory preview.</summary>
-    public bool ShouldTriggerOnSide(bool isHeads) => ShouldTrigger(isHeads);
+    public bool ShouldTriggerOnSide(bool isFace) => ShouldTrigger(isFace);
 
     /// <summary>
     /// Returns true if the defender's trigger side matches the cap's current side.
     /// </summary>
-    bool ShouldTrigger(bool landedHeads)
+    bool ShouldTrigger(bool landedFace)
     {
         return TriggerSide switch
         {
-            DefenderTriggerSide.Heads => landedHeads,
-            DefenderTriggerSide.Tails => !landedHeads,
+            DefenderTriggerSide.Face => landedFace,
+            DefenderTriggerSide.Back => !landedFace,
             DefenderTriggerSide.Either => true,
             _ => false,
         };

@@ -5,8 +5,8 @@ using UnityEngine;
 /// </summary>
 public enum BombTriggerSide
 {
-    Heads = 0,
-    Tails = 1,
+    Face = 0,
+    Back = 1,
     Either = 2
 }
 
@@ -54,7 +54,7 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
 
     [Header("Trigger")]
     [Tooltip("Which side the bomb must land on to trigger the explosion.")]
-    public BombTriggerSide TriggerSide = BombTriggerSide.Heads;
+    public BombTriggerSide TriggerSide = BombTriggerSide.Face;
 
     [Header("Feedback")]
     public GameObject ExplosionVFX;
@@ -76,19 +76,19 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
         ICapEffectCommandSink commands)
     {
         if (flipEvent.Source == null || Radius <= 0f || Force <= 0f) return;
-        if (!ShouldTrigger(flipEvent.Source.IsHeads)) return;
+        if (!ShouldTrigger(flipEvent.Source.IsFace)) return;
         commands.Add(new RadialPushCommand(flipEvent.Source, flipEvent.Position, Radius, Force));
     }
 
     /// <summary>
     /// Returns true if the bomb should explode given the side it landed on.
     /// </summary>
-    public bool ShouldTrigger(bool landedHeads)
+    public bool ShouldTrigger(bool landedFace)
     {
         return TriggerSide switch
         {
-            BombTriggerSide.Heads => landedHeads,
-            BombTriggerSide.Tails => !landedHeads,
+            BombTriggerSide.Face => landedFace,
+            BombTriggerSide.Back => !landedFace,
             BombTriggerSide.Either => true,
             _ => false,
         };
@@ -137,5 +137,5 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
         }
     }
 
-    public bool ShouldTriggerOnSide(bool isHeads) => ShouldTrigger(isHeads);
+    public bool ShouldTriggerOnSide(bool isFace) => ShouldTrigger(isFace);
 }
