@@ -45,6 +45,19 @@ public class Cap : MonoBehaviour
     [Tooltip("Fallback material for the rim/side when the cap is Neutral.")]
     [SerializeField] private Material _neutralRimMaterial;
 
+    [Header("Deck UI")]
+    [Tooltip("Unique sprite representing THIS cap in the deck panel UI. Each cap prefab " +
+             "should have its own DeckSprite assigned so the player can visually tell caps " +
+             "apart in the deck. This is NOT a sticker — a cap can have multiple stickers " +
+             "(one per ICapAbility), but only ONE DeckSprite that represents the cap itself. " +
+             "If null, the deck panel falls back to the first sticker sprite or a default.")]
+    [SerializeField] private Sprite _deckSprite;
+    /// <summary>
+    /// Unique sprite for this cap in the deck panel UI. Set in inspector on each cap prefab.
+    /// Falls back to null (caller decides the fallback, e.g. first sticker or default sprite).
+    /// </summary>
+    public Sprite DeckSprite => _deckSprite;
+
     [Header("Cap parameters")]
     [SerializeField] private CapParameters _parameters = new CapParameters();
     public CapParameters Parameters => _parameters;

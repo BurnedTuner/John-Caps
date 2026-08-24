@@ -222,17 +222,10 @@ public sealed class CapThrower : MonoBehaviour
 
     void Update()
     {
-        if (!TurnInputEnabled)
-        {
-            if (CurrentState == State.Idle && Keyboard.current?.rKey.wasPressedThisFrame == true)
-                RequestBoardReset();
-            return;
-        }
-
-        // Global hotkey: Q toggles precision aim mode. Works in any state
-        // (Idle, Aiming, etc.) so the player can flip it mid-aim if they
-        // change their mind before releasing LMB. GameSettings holds the
-        // persisted state so the UI toggle and this key stay in sync.
+        // Global hotkey: Q toggles precision aim mode. Works in ANY state and
+        // ANY turn (including the enemy's turn, when TurnInputEnabled is false).
+        // Precision mode is a preference, not a turn action — the player can
+        // flip it at any time and it takes effect on their next throw.
         //
         // IMPORTANT: if the player is ALREADY in PrecisionAiming, toggling Q
         // does NOT exit the current precision session. The setting is updated
@@ -246,15 +239,20 @@ public sealed class CapThrower : MonoBehaviour
         {
             bool newValue = !GameSettings.Instance.PrecisionAimEnabled;
             GameSettings.Instance.SetPrecisionAimEnabled(newValue);
-            // Sync the UI toggle so it visually matches. PauseMenu listens for
-            // the toggle's onValueChanged event, so setting .isOn without
-            // suppress_dispatch fires the listener and stays in sync with the
-            // GameSettings value (which we just set — the listener is a
-            // no-op redundant call). Without this, the toggle would show the
-            // old state until the player opens the pause menu.
+            // Sync the UI button image so it visually matches. PauseMenu's
+            // SyncPrecisionAimToggle refreshes the button's sprite — without
+            // this, the button would show the old state until the player opens
+            // the pause menu.
             PauseMenu pm = FindFirstObjectByType<PauseMenu>();
             if (pm != null)
                 pm.SyncPrecisionAimToggle(newValue);
+        }
+
+        if (!TurnInputEnabled)
+        {
+            if (CurrentState == State.Idle && Keyboard.current?.rKey.wasPressedThisFrame == true)
+                RequestBoardReset();
+            return;
         }
 
         switch (CurrentState)

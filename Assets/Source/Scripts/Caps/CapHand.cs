@@ -74,6 +74,20 @@ public class CapHand : MonoBehaviour
     /// <summary>Number of cap prefabs remaining in the deck (not yet drawn).</summary>
     public int DeckCount => _deckPrefabs.Count;
 
+    /// <summary>
+    /// Returns the cap prefab at the given index in the live deck (not yet drawn
+    /// into the hand). Returns null if the index is out of range. Used by UI
+    /// panels (e.g., DeckPanelUI) to render each remaining cap's icon/sticker.
+    /// The returned Cap is a PREFAB — it's not instantiated in the scene, so
+    /// callers should only read metadata (Parameters, materials, ICapAbility
+    /// components) off it, not expect it to be visible or interactable.
+    /// </summary>
+    public Cap GetDeckCap(int index)
+    {
+        if (index < 0 || index >= _deckPrefabs.Count) return null;
+        return _deckPrefabs[index];
+    }
+
     /// <summary>Number of non-empty hand slots.</summary>
     public int HandCount
     {
