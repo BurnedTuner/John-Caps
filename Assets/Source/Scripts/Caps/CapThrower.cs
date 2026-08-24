@@ -54,6 +54,12 @@ public sealed class CapThrower : MonoBehaviour
     public bool IsAiming => CurrentState == State.Aiming || CurrentState == State.PrecisionAiming;
 
     /// <summary>
+    /// True ONLY when in PrecisionAiming state (not regular Aiming).
+    /// Used by PrecisionAimUI to show/hide the d-pad + confirm button + spacebar prompt.
+    /// </summary>
+    public bool IsPrecisionAiming => CurrentState == State.PrecisionAiming;
+
+    /// <summary>
     /// The cap currently held/grabbed by the player. Returns null if no cap is held.
     /// Used by TurnController to check if a player has a cap waiting.
     /// </summary>
@@ -152,6 +158,23 @@ public sealed class CapThrower : MonoBehaviour
     // AnimationCurve to ramp the speed from 0 to full.
     private float _precisionAccelTimer;
     private Vector2 _precisionInputDir;
+
+    // Input from on-screen d-pad buttons (set by PrecisionAimUI). Combined with
+    // keyboard WASD input in UpdatePrecisionAiming so both use the same
+    // acceleration curve.
+    private Vector2 _precisionDPadInput;
+
+    /// <summary>
+    /// Sets the on-screen d-pad input direction. Called by PrecisionAimUI when
+    /// a d-pad button is held/released. This input is COMBINED with keyboard
+    /// WASD input in UpdatePrecisionAiming — both use the same acceleration
+    /// curve (_precisionAccelTimer + PrecisionAimAccelerationCurve).
+    /// Pass Vector2.zero when no buttons are held.
+    /// </summary>
+    public void SetDPadInput(Vector2 input)
+    {
+        _precisionDPadInput = input;
+    }
 
 
     void Awake()
@@ -631,8 +654,8 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
-        // Space confirms the throw.
-        if (Keyboard.current.spaceKey.wasPressedThisFrame)
+        // Space or Enter confirms the throw.
+        if (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.enterKey.wasPressedThisFrame)
         {
             Fire();
             return;
@@ -652,12 +675,17 @@ public sealed class CapThrower : MonoBehaviour
         float dt = Time.deltaTime;
 
         // --- WASD aim nudge (camera-style acceleration) ---
-        // Read raw input direction in screen-space (W=forward, S=back, A=left, D=right).
+        // Read raw input direction from BOTH keyboard AND on-screen d-pad buttons.
+        // The on-screen buttons are tracked by PrecisionAimUI and exposed via
+        // the _precisionDPadInput vector. Combining both sources means holding
+        // the on-screen button uses the EXACT SAME acceleration curve as WASD.
         Vector2 inputDir = Vector2.zero;
         if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) inputDir.y += 1f;
         if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) inputDir.y -= 1f;
         if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) inputDir.x += 1f;
         if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) inputDir.x -= 1f;
+        // Add on-screen d-pad input (set by PrecisionAimUI).
+        inputDir += _precisionDPadInput;
 
         if (inputDir.sqrMagnitude > 0.001f)
         {
@@ -950,6 +978,74 @@ public sealed class CapThrower : MonoBehaviour
         TurnInputEnabled = enabled;
         if (!enabled && (CurrentState == State.Aiming || CurrentState == State.PrecisionAiming))
             CancelAiming();
+    }
+
+    /// <summary>
+    /// Confirms the precision aim throw — same as pressing Spacebar/Enter. Called by
+    /// PrecisionAimUI's confirm button. No-op if not in PrecisionAiming state.
+    /// </summary>
+    public void ConfirmPrecisionThrow()
+    {
+        if (CurrentState != State.PrecisionAiming) return;
+        Fire();
+    }
+
+    /// <summary>
+    /// Cancels the precision aim throw — same as pressing ESC. Called by
+    /// PrecisionAimUI's cancel button. No-op if not in PrecisionAiming state.
+    /// </summary>
+    public void CancelPrecisionThrow()
+    {
+        if (CurrentState != State.PrecisionAiming) return;
+        CancelAiming();
+    }
+
+    /// <summary>
+    /// Nudges the aim point in the given screen-space direction for one frame.
+    /// Called by PrecisionAimUI's d-pad buttons. Projects the direction onto
+    /// the world ground plane using the PlayerCamera's basis (same logic as
+    /// WASD in UpdatePrecisionAiming). No-op if not in PrecisionAiming state.
+    /// </summary>
+    public void NudgePrecisionAim(Vector2 screenDir, float nudgeDuration)
+    {
+        if (CurrentState != State.PrecisionAiming || _heldCap == null) return;
+        if (PlayerCamera == null) return;
+
+        // Project screen-space direction onto the world ground plane.
+        Vector3 camRightFlat = PlayerCamera.transform.right;
+        camRightFlat.y = 0f;
+        camRightFlat = camRightFlat.sqrMagnitude > 0.001f ? camRightFlat.normalized : Vector3.right;
+        Vector3 camFwdFlat = PlayerCamera.transform.forward;
+        camFwdFlat.y = 0f;
+        camFwdFlat = camFwdFlat.sqrMagnitude > 0.001f ? camFwdFlat.normalized : Vector3.forward;
+
+        Vector3 worldDir = (camRightFlat * screenDir.x + camFwdFlat * screenDir.y);
+        if (worldDir.sqrMagnitude > 0.001f)
+            worldDir.Normalize();
+
+        // Apply a small nudge. Use the same acceleration curve as WASD but with
+        // a short duration so a single click gives a small, controlled nudge.
+        float dt = nudgeDuration;
+        float capRadius = _heldCap.Parameters.Radius;
+        float currentSpeed = PrecisionAimSpeed * 0.5f; // half speed for button taps
+        _aimPoint += new Vector2(worldDir.x, worldDir.z) * currentSpeed * dt;
+
+        // Clamp to zone boundaries (same logic as UpdatePrecisionAiming).
+        Vector3 aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);
+        if (OverlapsAimBlockingZone(aimPoint3D, capRadius))
+        {
+            if (_hasLastAllowedAimPoint)
+                _aimPoint = ClampToZoneBoundary(_lastAllowedAimPoint, _aimPoint, capRadius);
+        }
+        aimPoint3D = CapMath.FromXZ(_aimPoint, 0f);
+        if (!OverlapsAimBlockingZone(aimPoint3D, capRadius))
+        {
+            _lastAllowedAimPoint = _aimPoint;
+            _hasLastAllowedAimPoint = true;
+            _isDirectAimAllowed = true;
+        }
+
+        UpdateAimPreview();
     }
 
     /// <summary>

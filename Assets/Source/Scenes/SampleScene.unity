@@ -119,6 +119,75 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1001 &179311761
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1606314526006953115, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_Name
+      value: Cap_Defender Variant (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4014704787448097792, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4790228807734362587, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 4c4a4e77af626b64ab5227ab0b2bb9cb, type: 2}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 4.384135
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.12999988
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 6.716197
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6231695173305459355, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8346996880160647550, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
+      propertyPath: _owner
+      value: 2
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: ce5fc562145a2564ea86a5b9ec532e90, type: 3}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -465,14 +534,6 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      propertyPath: _handStickerScale
-      value: 1.5
-      objectReference: {fileID: 0}
-    - target: {fileID: 6573713099137764075, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
-      propertyPath: _stickerAngleStep
-      value: 60
-      objectReference: {fileID: 0}
     - target: {fileID: 6576823205662733966, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: m_LocalPosition.x
       value: -3.2676153
@@ -513,6 +574,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8983622517434604657, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: AmbientCapPrefabs.Array.size
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -527,3 +592,4 @@ SceneRoots:
   - {fileID: 421113198}
   - {fileID: 5916704520658070694}
   - {fileID: 796682254}
+  - {fileID: 179311761}
