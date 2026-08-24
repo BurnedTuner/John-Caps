@@ -470,7 +470,7 @@ public class Cap : MonoBehaviour
         _flyElapsed = 0f;
         _flyDuration = Mathf.Max(0.01f, duration);
         _landingForce = 0f;
-        _isPeeling = false; // NO peel-off — the stack flips as a unit
+        _isPeeling = false; // Peel-off is handled separately for flip-in-place
         _state = CapState.Flying;
 
         // Capture stacked caps' start rotations for the flip animation.
@@ -520,7 +520,13 @@ public class Cap : MonoBehaviour
         }
         incoming._stackBase = head;
         head._stackAbove.Add(incoming);
-        CapRegistry.Unregister(incoming);
+        // KEEP the incoming cap registered in CapRegistry — stacked caps are
+        // still "on field" (counted by CountCapsOnField, visible to defender
+        // checks, checked by CapFieldBoundary). The cap's CanFlip/IsThrowable
+        // return false while stacked (because _stackBase != null), so it
+        // won't be hit directly or pushed by nearby landings.
+        if (!CapRegistry.Contains(incoming))
+            CapRegistry.Register(incoming);
 
         incoming._state = CapState.Idle;
         // Position the cap on top of the base. ApplyVisuals will handle this too,
@@ -666,7 +672,18 @@ public class Cap : MonoBehaviour
             // off the edge, don't trigger flip effects (bomb, flipper).
             if (!landedOffField)
             {
+                // Fire onFlipped for the BASE cap.
                 onFlipped?.Invoke(this, GroundPosition, _landingForce);
+
+                // Fire onFlipped for EVERY cap in the stack. Each stacked cap
+                // has its own flipper/bomb effect that should trigger when it
+                // lands the correct side up. The CapEffectResolver excludes
+                // same-stack caps from the effect radius so a bomb in the stack
+                // doesn't push other stacked caps.
+                for (int i = 0; i < _stackAbove.Count; i++)
+                {
+                    onFlipped?.Invoke(_stackAbove[i], GroundPosition, _landingForce);
+                }
             }
 
             // Flatten: extract Y from the current post-flip rotation using
