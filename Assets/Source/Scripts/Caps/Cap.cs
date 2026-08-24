@@ -19,6 +19,22 @@ public class Cap : MonoBehaviour
     public int StableId => _stableId;
     public CapOwner Owner => _owner;
 
+    /// <summary>
+    /// The EFFECTIVE owner — if the cap is in a stack, the top cap's owner
+    /// determines the effective owner for ALL caps in the stack (defender
+    /// zone ownership, bomb target filtering, etc.). If standalone, returns
+    /// the cap's own _owner.
+    /// </summary>
+    public CapOwner EffectiveOwner
+    {
+        get
+        {
+            Cap baseCap = FindStackBase();
+            Cap topCap = baseCap.GetStackTop();
+            return topCap._owner;
+        }
+    }
+
     [Header("Coin Parts (assign in prefab)")]
     [Tooltip("The renderer for the TOP face of the coin (face side).")]
     [SerializeField] private MeshRenderer _topRenderer;
@@ -520,7 +536,13 @@ public class Cap : MonoBehaviour
         }
         incoming._stackBase = head;
         head._stackAbove.Add(incoming);
-        CapRegistry.Unregister(incoming);
+        // KEEP the incoming cap registered in CapRegistry — stacked caps are
+        // still "on field" (counted by CountCapsOnField, visible to defender
+        // checks, checked by CapFieldBoundary). The cap's CanFlip/IsThrowable
+        // return false while stacked (because _stackBase != null), so it
+        // won't be hit directly or pushed by nearby landings.
+        if (!CapRegistry.Contains(incoming))
+            CapRegistry.Register(incoming);
 
         incoming._state = CapState.Idle;
         // Position the cap on top of the base. ApplyVisuals will handle this too,
@@ -585,6 +607,18 @@ public class Cap : MonoBehaviour
         for (int i = 0; i < _stackAbove.Count; i++)
         {
             _stackAbove[i].ApplyVisuals();
+        }
+
+        // If a flip-in-place restructured the stack (old base became stacked,
+        // old top became new base), the new base's ApplyVisuals hasn't been
+        // called yet. Call it + its stacked caps so everyone is positioned.
+        if (_stackBase != null && _stackBase._stackAbove.Count > 0)
+        {
+            _stackBase.ApplyVisuals();
+            for (int i = 0; i < _stackBase._stackAbove.Count; i++)
+            {
+                _stackBase._stackAbove[i].ApplyVisuals();
+            }
         }
     }
 
@@ -666,7 +700,18 @@ public class Cap : MonoBehaviour
             // off the edge, don't trigger flip effects (bomb, flipper).
             if (!landedOffField)
             {
+                // Fire onFlipped for the BASE cap.
                 onFlipped?.Invoke(this, GroundPosition, _landingForce);
+
+                // Fire onFlipped for EVERY cap in the stack. Each stacked cap
+                // has its own flipper/bomb effect that should trigger when it
+                // lands the correct side up. The CapEffectResolver excludes
+                // same-stack caps from the effect radius so a bomb in the stack
+                // doesn't push other stacked caps.
+                for (int i = 0; i < _stackAbove.Count; i++)
+                {
+                    onFlipped?.Invoke(_stackAbove[i], GroundPosition, _landingForce);
+                }
             }
 
             // Flatten: extract Y from the current post-flip rotation using
@@ -694,6 +739,43 @@ public class Cap : MonoBehaviour
                 _pendingLandedCallback = onLanded;
                 HandleStackPeelOff();
                 return;
+            }
+
+            // Flip-in-place: the whole stack flipped as a unit. The cap that was
+            // on top is now on the bottom (and vice versa). Reverse the
+            // _stackAbove list so ApplyVisuals positions them correctly.
+            // This must happen BEFORE ApplyVisuals is called (which happens via
+            // _state = CapState.Idle → next frame's LateUpdate or immediate
+            // callers). The reversal is only for flip-in-place (travel=0), not
+            // for launches (which go through HandleStackPeelOff above).
+            // Flip-in-place: the whole stack flipped as a unit. A physical 180°
+            // flip inverts the entire stack: old base → top, old top → base.
+            // Build the full stack, reverse it, and reassign base/stacked roles.
+            if (_flyTotalDistance == 0f && _stackAbove.Count > 0)
+            {
+                var fullStack = new List<Cap> { this };
+                for (int i = 0; i < _stackAbove.Count; i++)
+                    fullStack.Add(_stackAbove[i]);
+                fullStack.Reverse();
+
+                Cap newBase = fullStack[0];
+                fullStack.RemoveAt(0);
+
+                _stackAbove.Clear();
+
+                if (newBase != this)
+                {
+                    newBase.GroundPosition = GroundPosition;
+                    newBase._landingYaw = _landingYaw;
+                    _stackBase = newBase;
+                    newBase._stackAbove.Clear();
+                    newBase._stackAbove.AddRange(fullStack);
+                    for (int i = 0; i < newBase._stackAbove.Count; i++)
+                        newBase._stackAbove[i]._stackBase = newBase;
+                    newBase._stackBase = null;
+                    newBase._state = CapState.Idle;
+                    _state = CapState.Idle;
+                }
             }
 
             _isPeeling = false;
@@ -923,37 +1005,22 @@ public class Cap : MonoBehaviour
         {
             float yOff = _tuning != null ? _tuning.CapThickness : 0.1f;
             int myIndex = _stackBase._stackAbove.IndexOf(this) + 1;
-            // Use world up, not the base's local up. The base's rotation may
-            // include a 180° X flip (back-up), which would invert local up to
-            // point down — stacking the cap BELOW the base instead of above.
-            // Stacked caps always sit above the base in world space, regardless
-            // of the base's side.
-            Vector3 localUp = Vector3.up;
-            pos = _stackBase.transform.position + localUp * (yOff * myIndex);
 
-            // During the base's flight (Flying state), stacked caps animate the
-            // SAME 180° flip as the base, but applied on top of THEIR OWN start
-            // rotation (_flyStartRot, captured in BeginLaunch). This prevents the
-            // snap that would occur if they inherited the base's rotation directly
-            // (the base's rotation may have a different yaw/side).
-            // When at rest (Idle/Pushed), stacked caps lay FLAT with their OWN
-            // landing yaw and side.
             if (_stackBase._state == CapState.Flying)
             {
-                // Compute the same flip animation the base uses, but on top of
-                // this cap's own _flyStartRot.
-                float flyProgress = _stackBase._flyDuration > 0f
-                    ? Mathf.Clamp01(_stackBase._flyElapsed / _stackBase._flyDuration)
-                    : 1f;
-                Vector3 motion3D = new Vector3(_stackBase._flyDirection.x, 0f, _stackBase._flyDirection.y);
-                Vector3 rotAxis = Vector3.Cross(Vector3.up, motion3D);
-                if (!IsFinite(rotAxis) || rotAxis.sqrMagnitude < 0.0001f) rotAxis = Vector3.right;
-                else rotAxis = rotAxis.normalized;
-                rot = Quaternion.AngleAxis(flyProgress * 180f, rotAxis) * _flyStartRot;
+                // During the flip, the whole stack rotates as a rigid body.
+                // The position offset must rotate WITH the base — use the base's
+                // rotation applied to the up vector, so stacked caps ORBIT
+                // around the base instead of staying at a fixed world-space height.
+                Vector3 rotatedUp = _stackBase.transform.rotation * Vector3.up;
+                pos = _stackBase.transform.position + rotatedUp * (yOff * myIndex);
+                // Inherit the base's exact rotation — rigid body.
+                rot = _stackBase.transform.rotation;
             }
             else
             {
                 // At rest: flat rotation with own yaw + own side.
+                pos = _stackBase.transform.position + Vector3.up * (yOff * myIndex);
                 rot = Quaternion.Euler(0f, _landingYaw, 0f) * sideRot;
             }
         }

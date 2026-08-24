@@ -153,7 +153,7 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     {
         if (_cap == null) return false;
 
-        return _cap.Owner switch
+        return _cap.EffectiveOwner switch
         {
             CapOwner.Player => throwerOwner == CapOwner.Opponent,
             CapOwner.Opponent => throwerOwner == CapOwner.Player,
@@ -208,7 +208,7 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     Material GetRestrictedMaterial()
     {
         if (_cap == null) return null;
-        return _cap.Owner == CapOwner.Player ? EnemyRestrictedMaterial : PlayerRestrictedMaterial;
+        return _cap.EffectiveOwner == CapOwner.Player ? EnemyRestrictedMaterial : PlayerRestrictedMaterial;
     }
 
     void UpdateVisualScale()
