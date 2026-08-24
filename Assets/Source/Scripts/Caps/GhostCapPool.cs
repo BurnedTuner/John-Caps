@@ -17,10 +17,13 @@ using UnityEngine.Rendering;
 /// </summary>
 public class GhostCapPool
 {
-    private readonly Dictionary<Cap, GameObject> _ghosts = new();
+    // Keyed by (Cap, index) so a cap can have MULTIPLE ghosts when it
+    // appears in multiple predictions (e.g., peeled off then hit by a
+    // chain reaction → two flights → two ghosts at different positions).
+    private readonly Dictionary<(Cap, int), GameObject> _ghosts = new();
     private readonly Dictionary<Material, Material> _transparentMats = new();
-    private readonly HashSet<Cap> _usedThisFrame = new();
-    private readonly List<Cap> _staleKeys = new();
+    private readonly HashSet<(Cap, int)> _usedThisFrame = new();
+    private readonly List<(Cap, int)> _staleKeys = new();
 
     private Transform _parent;
     private Material _defaultTransparentMat;
@@ -61,6 +64,10 @@ public class GhostCapPool
             return;
         }
 
+        // Track per-cap occurrence count so a cap with multiple predictions
+        // gets a separate ghost for each prediction (keyed by (Cap, index)).
+        var perCapCount = new Dictionary<Cap, int>();
+
         for (int i = 0; i < predictions.Count; i++)
         {
             CapPrediction pred = predictions[i];
@@ -73,7 +80,14 @@ public class GhostCapPool
             bool isStackCap = pred.Cap.StackBase != null || pred.Cap.StackedAbove.Count > 0;
             if (!isStackCap) continue;
 
-            GameObject ghost = GetOrCreateGhost(pred.Cap);
+            // Assign a per-cap index so multiple ghosts for the same cap
+            // (e.g., peeled off then hit again) get separate entries.
+            if (!perCapCount.TryGetValue(pred.Cap, out int capIndex))
+                capIndex = 0;
+            perCapCount[pred.Cap] = capIndex + 1;
+
+            var key = (pred.Cap, capIndex);
+            GameObject ghost = GetOrCreateGhost(pred.Cap, key);
             if (ghost == null) continue;
 
             PositionGhost(ghost, pred);
@@ -82,9 +96,6 @@ public class GhostCapPool
             ghost.SetActive(true);
 
             // Apply transparent materials to ALL sub-meshes of the ghost.
-            // The 3D cap model has 3 material slots (top, bottom, rim). We need
-            // to make all of them transparent so the ghost is see-through from
-            // any angle. Each slot's material is individually cloned + made transparent.
             MeshRenderer[] renderers = ghost.GetComponentsInChildren<MeshRenderer>(true);
             for (int r = 0; r < renderers.Length; r++)
             {
@@ -92,7 +103,6 @@ public class GhostCapPool
                 if (mr == null) continue;
                 if (!mr.enabled) continue; // skip disabled renderers (OutlineRenderer)
 
-                // Get all materials on this renderer and make each one transparent.
                 Material[] currentMats = mr.sharedMaterials;
                 if (currentMats == null || currentMats.Length == 0) continue;
 
@@ -109,20 +119,20 @@ public class GhostCapPool
                     mr.sharedMaterials = transparentMats;
             }
 
-            _usedThisFrame.Add(pred.Cap);
+            _usedThisFrame.Add(key);
         }
 
-        // Hide ghosts whose cap didn't appear in this frame's predictions.
+        // Hide ghosts whose (Cap, index) key didn't appear in this frame's predictions.
         _staleKeys.Clear();
         foreach (var kvp in _ghosts)
         {
-            if (kvp.Key == null || kvp.Value == null) { _staleKeys.Add(kvp.Key); continue; }
+            if (kvp.Key.Item1 == null || kvp.Value == null) { _staleKeys.Add(kvp.Key); continue; }
             if (!_usedThisFrame.Contains(kvp.Key))
                 kvp.Value.SetActive(false);
         }
         for (int i = 0; i < _staleKeys.Count; i++)
         {
-            if (_staleKeys[i] != null && _ghosts.TryGetValue(_staleKeys[i], out GameObject g) && g != null)
+            if (_ghosts.TryGetValue(_staleKeys[i], out GameObject g) && g != null)
                 Object.Destroy(g);
             _ghosts.Remove(_staleKeys[i]);
         }
@@ -168,16 +178,16 @@ public class GhostCapPool
     // Internals
     // -----------------------------------------------------------------------
 
-    GameObject GetOrCreateGhost(Cap cap)
+    GameObject GetOrCreateGhost(Cap cap, (Cap, int) key)
     {
         if (cap == null || cap.gameObject == null) return null;
 
-        if (_ghosts.TryGetValue(cap, out GameObject existing) && existing != null)
+        if (_ghosts.TryGetValue(key, out GameObject existing) && existing != null)
             return existing;
 
-        // Cleanup any stale entries (cap was destroyed but key lingered).
+        // Cleanup any stale entries.
         if (existing == null)
-            _ghosts.Remove(cap);
+            _ghosts.Remove(key);
 
         // Determine a valid scene parent. If _parent is a persistent prefab asset
         // (not a scene instance), Instantiate refuses to use it. Fall back to
@@ -187,7 +197,7 @@ public class GhostCapPool
             validParent = null;
 
         GameObject ghost = Object.Instantiate(cap.gameObject, validParent);
-        ghost.name = $"Ghost_{cap.StableId}";
+        ghost.name = $"Ghost_{cap.StableId}_{key.Item2}";
         ghost.SetActive(false); // created hidden; ShowGhosts activates
 
         // Disable ALL Behaviour components on root and children (Cap, CapFlipEffect,
@@ -235,7 +245,7 @@ public class GhostCapPool
             renderers[i].reflectionProbeUsage = ReflectionProbeUsage.Off;
         }
 
-        _ghosts[cap] = ghost;
+        _ghosts[key] = ghost;
         return ghost;
     }
 

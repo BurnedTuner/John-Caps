@@ -811,7 +811,9 @@ public sealed class CapThrower : MonoBehaviour
             CapRegistry.AllCaps,
             _directHitSeeds,
             _tuning,
-            _predictionResults);
+            _predictionResults,
+            _heldCap,
+            _aimPoint);
 
         // Split predictions by depth:
         //   Depth < PredictionDepth  → full (trajectory + ghost)
