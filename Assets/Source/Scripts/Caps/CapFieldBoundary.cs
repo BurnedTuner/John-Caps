@@ -252,9 +252,17 @@ public sealed class CapFieldBoundary : MonoBehaviour
             // the bottom cap's rim.
             settings.Pivot = ResolveTopplePivot(stack[i], nearestEdgePoint);
 
-            // Announced before the fall starts, while the cap is still intact and readable.
-            OnCapLeftField?.Invoke(stack[i]);
+            // IMPORTANT: start the fall FIRST, then fire OnCapLeftField.
+            // Subscribers to OnCapLeftField (e.g., TurnController → RunManager.OnMatchFinished
+            // → BattleResultUI) may check whether any caps are currently falling (via
+            // FindFirstObjectByType<FallingCap>). If OnCapLeftField fires BEFORE
+            // FallingCap.Begin, the FallingCap component hasn't been added yet, so the
+            // check returns false and the win/lose panel shows immediately — before the
+            // fall animation finishes. By starting the fall first, the FallingCap
+            // component is present when subscribers run, so they can correctly detect
+            // "caps are still falling" and defer the panel show.
             FallingCap.Begin(stack[i], this, settings);
+            OnCapLeftField?.Invoke(stack[i]);
         }
     }
 

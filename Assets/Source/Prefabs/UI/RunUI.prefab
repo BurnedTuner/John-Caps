@@ -66,7 +66,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: c4cd7035133a6ac45b586601f2d6e7cc, type: 3}
+  m_Sprite: {fileID: 21300000, guid: a384dd2efeb8e6845851f71acf8878fb, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -686,6 +686,8 @@ MonoBehaviour:
   _levelText: {fileID: 0}
   _progressSceneName: RunProgress
   _mainMenuSceneName: MainMenu
+  _waitForFallAnimation: 1
+  _fallWaitTimeoutSeconds: 12
 --- !u!1 &3721055732740787305
 GameObject:
   m_ObjectHideFlags: 0

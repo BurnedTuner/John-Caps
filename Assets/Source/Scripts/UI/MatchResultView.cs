@@ -2,11 +2,16 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// Shows the match outcome as a large caption once TurnController reports a winner, and clears it
-/// again when the board is reset.
+/// Shows WHY the match ended (e.g., "Reached kill target", "All enemy caps
+/// knocked off") as a small text on the battle arena.
 ///
-/// The caption is driven through a CanvasGroup so it can fade and pop in without touching the child
-/// texts, and it never blocks raycasts — the menu button underneath stays clickable.
+/// The big VICTORY/DEFEAT caption is NO LONGER shown — the win/lose panel
+/// (BattleResultUI) handles that with proper buttons. This component only
+/// shows the reason text, which the win/lose panel doesn't display.
+///
+/// The caption is driven through a CanvasGroup so it can fade and pop in
+/// without touching the child texts, and it never blocks raycasts — the
+/// menu button underneath stays clickable.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(CanvasGroup))]
@@ -16,21 +21,8 @@ public sealed class MatchResultView : MonoBehaviour
     [SerializeField] private TurnController _turnController;
     [SerializeField] private GameManager _gameManager;
 
-    [Tooltip("The big caption itself.")]
-    [SerializeField] private TMP_Text _resultText;
-
-    [Tooltip("Optional smaller line under the caption, e.g. how to restart.")]
-    [SerializeField] private TMP_Text _hintText;
-
     [Tooltip("Optional text field showing WHY the match ended (e.g., 'Reached kill target', 'All enemy caps knocked off').")]
     [SerializeField] private TMP_Text _reasonText;
-
-    [Header("Messages")]
-    [SerializeField] private string _playerVictoryMessage = "ПОБЕДА";
-    [SerializeField] private string _opponentVictoryMessage = "ПОРАЖЕНИЕ";
-    [Tooltip("Shown when neither side could finish the match, e.g. nobody had a cap left to throw.")]
-    [SerializeField] private string _drawMessage = "НИЧЬЯ";
-    [SerializeField] private string _hintMessage = "R — начать заново";
 
     [Header("Reason messages — Player wins")]
     [Tooltip("Shown when the PLAYER wins by reaching the kill target.")]
@@ -53,11 +45,6 @@ public sealed class MatchResultView : MonoBehaviour
     [SerializeField] private string _drawReason = "Оба игрока без фишек";
     [Tooltip("Shown when the reason is unknown.")]
     [SerializeField] private string _unknownReason = "";
-
-    [Header("Colours")]
-    [SerializeField] private Color _victoryColor = new Color(0.25f, 1f, 0.6f);
-    [SerializeField] private Color _defeatColor = new Color(1f, 0.3f, 0.25f);
-    [SerializeField] private Color _drawColor = new Color(0.9f, 0.9f, 0.9f);
 
     [Header("Appearance")]
     [Tooltip("How long the caption takes to fade and settle into place.")]
@@ -98,8 +85,8 @@ public sealed class MatchResultView : MonoBehaviour
         if (_turnController == null)
             Debug.LogError("[MatchResultView] TurnController is not assigned or present in the scene.", this);
 
-        if (_resultText == null)
-            Debug.LogError("[MatchResultView] Result text is not assigned, so there is nothing to show.", this);
+        if (_reasonText == null)
+            Debug.LogWarning("[MatchResultView] Reason text is not assigned — the reason caption will not be visible.", this);
     }
 
     void OnDisable()
@@ -157,32 +144,10 @@ public sealed class MatchResultView : MonoBehaviour
 
     void HandleMatchFinished(CapOwner winner, MatchEndReason reason)
     {
-        if (_resultText != null)
-        {
-            _resultText.text = winner switch
-            {
-                CapOwner.Player => _playerVictoryMessage,
-                CapOwner.Opponent => _opponentVictoryMessage,
-                _ => _drawMessage
-            };
-
-            _resultText.color = winner switch
-            {
-                CapOwner.Player => _victoryColor,
-                CapOwner.Opponent => _defeatColor,
-                _ => _drawColor
-            };
-        }
-
-        if (_hintText != null)
-            _hintText.text = _hintMessage;
-
+        // Only show the reason text — the big VICTORY/DEFEAT caption is handled
+        // by BattleResultUI's win/lose panel (with proper buttons).
         if (_reasonText != null)
         {
-            // Pick the reason text based on BOTH the winner AND the reason.
-            // Player and opponent have different texts for the same reason
-            // (e.g., "You reached the kill target" vs "Opponent reached the
-            // kill target"). Draw is neutral — same text regardless.
             _reasonText.text = (winner, reason) switch
             {
                 (CapOwner.Player, MatchEndReason.KillTarget) => _playerKillTargetReason,
@@ -228,3 +193,4 @@ public sealed class MatchResultView : MonoBehaviour
             _rectTransform.localScale = Vector3.one;
     }
 }
+

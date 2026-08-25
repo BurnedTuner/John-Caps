@@ -996,6 +996,18 @@ public class Cap : MonoBehaviour
     /// </summary>
     public void SetOverrideMaterial(Material mat, float duration)
     {
+        // IMPORTANT: cache the cap's CURRENT materials BEFORE applying the override.
+        // This ensures the override system restores EXACTLY what the cap had right
+        // before the VFX triggered — not whatever was cached at Configure time,
+        // not what was cached at SetGeneratedSprites time, but the live state at
+        // the moment of the override. This is the robust fix for "bomb/flipper
+        // reverts to a different sprite" — the cache is always fresh.
+        //
+        // Only cache if we're not ALREADY in an override (otherwise we'd cache the
+        // override material itself, which is wrong).
+        if (_overrideMaterial == null && mat != null)
+            CacheOriginalMaterials();
+
         _overrideMaterial = mat;
         _overrideMaterialTimer = duration;
     }
@@ -1314,8 +1326,15 @@ public class Cap : MonoBehaviour
     /// with randomly-generated clones. Without this, the material-override system
     /// (e.g. bomb explosion) would restore the OLD prefab-default materials
     /// instead of the generated ones.
+    ///
+    /// Also called after CapVisualGenerator.SetGeneratedSprites() — which replaces
+    /// the materials with STORED sprites (e.g., from a run deck entry). Without
+    /// this re-cache, the override system would restore the materials from BEFORE
+    /// SetGeneratedSprites ran (e.g., the freshly-generated random face from
+    /// CapFactory.Create → Configure → GenerateVisuals), causing the cap to
+    /// "revert to a different sprite" after the bomb/flipper VFX expires.
     /// </summary>
-    void CacheOriginalMaterials()
+    public void CacheOriginalMaterials()
     {
         for (int i = 0; i < _meshRenderers.Count; i++)
         {

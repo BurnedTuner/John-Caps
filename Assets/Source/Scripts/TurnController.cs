@@ -501,7 +501,6 @@ public sealed class TurnController : MonoBehaviour
 
         CapOwner other = Other(CurrentTurn);
         int otherCapsOnField = other == CapOwner.Player ? counts.Player : counts.Opponent;
-        int currentCapsOnField = CurrentTurn == CapOwner.Player ? counts.Player : counts.Opponent;
 
         // 1. WIN: the other side is wiped out (current player knocked off all enemies).
         if (IsWipedOut(other, otherCapsOnField))
@@ -511,11 +510,11 @@ public sealed class TurnController : MonoBehaviour
         }
 
         // 2. LOSE: the current player is wiped out (no caps on field).
-        if (IsWipedOut(CurrentTurn, currentCapsOnField))
-        {
-            FinishMatch(other, MatchEndReason.EnemyWipedOut);
-            return true;
-        }
+        // REMOVED by user request — the player having no caps on the field is
+        // no longer a lose condition. The player can still win by knocking off
+        // all enemy caps, or lose by running out of caps to throw (NoCapsLeft).
+        // The match continues even if the player has zero caps on the field,
+        // as long as they still have caps in hand / deck to throw.
 
         // 3. LOSE: no caps left in hand AND deck (exhaustion).
         // Only checked for the side whose turn just ended — the other side

@@ -103,6 +103,12 @@ public class CapVisualGenerator : MonoBehaviour
     ///
     /// Re-applies the template materials with the given sprites. The cap's
     /// GeneratedFaceSprite / GeneratedBackSprite are set to the given sprites.
+    ///
+    /// IMPORTANT: also calls Cap.CacheOriginalMaterials() so the material-override
+    /// system (bomb/flipper VFX) restores the STORED sprites after the override
+    /// expires. Without this, the override would restore the materials from BEFORE
+    /// SetGeneratedSprites ran (the freshly-generated random face), causing the cap
+    /// to "revert to a different sprite" after the VFX.
     /// </summary>
     public void SetGeneratedSprites(Sprite faceSprite, Sprite backSprite)
     {
@@ -110,6 +116,12 @@ public class CapVisualGenerator : MonoBehaviour
         ApplyVisuals(faceSprite, backSprite);
         GeneratedFaceSprite = faceSprite;
         GeneratedBackSprite = backSprite;
+
+        // Re-cache the materials on the sibling Cap component so the override
+        // system restores THESE materials (not the previous ones).
+        Cap cap = GetComponent<Cap>();
+        if (cap != null)
+            cap.CacheOriginalMaterials();
     }
 
     void ApplyVisuals(Sprite faceSprite, Sprite backSprite)

@@ -502,9 +502,10 @@ public class RunManager : MonoBehaviour
     /// ONLY as the source for CapFactory.Create on the next level (which
     /// Instantiate-s a fresh copy from it).
     ///
-    /// Called at RecordCapLost time, BEFORE FallingCap.Begin destroys the
-    /// original. The original continues its fall animation and gets destroyed;
-    /// the clone is safely parked under RunManager.
+    /// Called at RecordCapLost time. The original cap has ALREADY started its
+    /// fall (FallingCap.Begin ran in CapFieldBoundary.DropCap BEFORE firing
+    /// OnCapLeftField). The original continues its fall animation and gets
+    /// destroyed; the clone is safely parked under RunManager.
     /// </summary>
     Cap CaptureCapClone(Cap cap)
     {
@@ -518,6 +519,28 @@ public class RunManager : MonoBehaviour
             // as a safety measure (in case it's accidentally activated).
             Cap clone = Object.Instantiate(cap, container);
             clone.gameObject.name = $"Captured_{cap.gameObject.name}";
+
+            // IMPORTANT: the cap was captured at RecordCapLost time, which now
+            // runs AFTER FallingCap.Begin (CapFieldBoundary.DropCap starts the
+            // fall before firing OnCapLeftField). So the original cap has a
+            // FallingCap component added by FallingCap.Begin. Instantiate copies
+            // all components, so the clone would ALSO have a FallingCap component.
+            // If left in place, the clone's FallingCap.Update would run (if
+            // accidentally activated) and try to animate the fall using stale
+            // settings — corrupting the clone's state. Worse, when CapFactory.Create
+            // instantiates from this clone on the next level, the new cap would
+            // inherit the stale FallingCap component. Destroy it here to keep the
+            // clone clean.
+            FallingCap fallingCap = clone.GetComponent<FallingCap>();
+            if (fallingCap != null)
+                Object.Destroy(fallingCap);
+
+            // Also re-enable the Cap component (FallingCap.Begin disables it).
+            // The clone is set inactive below, but if it's ever activated (e.g.,
+            // by CapFactory.Create on the next level), Cap.enabled should be true
+            // so the cap can be driven normally.
+            clone.enabled = true;
+
             clone.gameObject.SetActive(false);
             return clone;
         }

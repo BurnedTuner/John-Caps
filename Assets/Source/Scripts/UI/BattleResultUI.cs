@@ -79,7 +79,25 @@ public class BattleResultUI : MonoBehaviour
     [Tooltip("The main menu scene name (loaded when the run ends).")]
     [SerializeField] private string _mainMenuSceneName = "MainMenu";
 
+    [Header("Fall animation wait")]
+    [Tooltip("If true, the win/lose panel waits until all FallingCap components " +
+             "have finished (caps dropped below vanish height or timed out) before " +
+             "showing. Lets the player see the final caps fall off the table.")]
+    [SerializeField] private bool _waitForFallAnimation = true;
+
+    [Tooltip("Maximum seconds to wait for fall animations to finish before showing " +
+             "the panel anyway. Safety net in case a FallingCap gets stuck " +
+             "(e.g., a cap that never reaches the vanish height).")]
+    [Min(0.1f)] [SerializeField] private float _fallWaitTimeoutSeconds = 12f;
+
     private RunManager _runManager;
+
+    // Stashed battle result + timestamp — used to defer showing the panel until
+    // all FallingCap components have finished. Set when HandleBattleEnded fires;
+    // consumed in Update.
+    private BattleResult _pendingResult;
+    private float _pendingResultTime;
+    private bool _isWaitingForFall;
 
     void Awake()
     {
@@ -103,6 +121,38 @@ public class BattleResultUI : MonoBehaviour
         HideAllPanels();
         UpdateHearts();
         UpdateLevelText();
+    }
+
+    void Update()
+    {
+        // If we're waiting for fall animations to finish, check every frame
+        // whether any FallingCap components are still active. If none (or the
+        // timeout expired), show the stashed panel.
+        if (_isWaitingForFall)
+        {
+            bool timedOut = Time.time - _pendingResultTime >= _fallWaitTimeoutSeconds;
+            bool anyFalling = AreAnyCapsFalling();
+
+            if (!anyFalling || timedOut)
+            {
+                _isWaitingForFall = false;
+                ShowPendingPanel();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns true if any FallingCap component is currently active in the scene.
+    /// Used to wait for fall animations to finish before showing the win/lose panel.
+    /// </summary>
+    static bool AreAnyCapsFalling()
+    {
+        // FallingCap is a MonoBehaviour added to caps when they leave the field.
+        // We use FindFirstObjectByType (Unity 2023+) which is allocation-free
+        // for the "any" check. If multiple caps are falling, only the first is
+        // returned, but we only need to know "is at least one falling".
+        var falling = FindFirstObjectByType<FallingCap>();
+        return falling != null;
     }
 
     // -----------------------------------------------------------------------
@@ -207,43 +257,55 @@ public class BattleResultUI : MonoBehaviour
     {
         if (_runManager == null || result == null) return;
 
+        UpdateLevelText();
+
+        // Stash the result. If we're waiting for fall animations, the panel
+        // shows once no FallingCap components remain (or the timeout expires).
+        // Otherwise, show immediately.
+        _pendingResult = result;
+        _pendingResultTime = Time.time;
+
+        if (_waitForFallAnimation && AreAnyCapsFalling())
+        {
+            // Defer the panel show until the fall animations finish.
+            _isWaitingForFall = true;
+        }
+        else
+        {
+            // No falling caps (or wait disabled) — show the panel now.
+            _isWaitingForFall = false;
+            ShowPendingPanel();
+        }
+    }
+
+    /// <summary>
+    /// Shows the appropriate panel for the stashed _pendingResult. Called either
+    /// immediately (if no fall animations are running) or after the wait completes.
+    /// </summary>
+    void ShowPendingPanel()
+    {
+        if (_pendingResult == null) return;
+        BattleResult result = _pendingResult;
+        _pendingResult = null;
+
         bool playerWon = result.PlayerWon;
 
         if (playerWon)
         {
-            // Check if this was the last level (victory).
             if (result.WasLastLevel)
-            {
                 ShowPanel(_runVictoryPanel);
-            }
             else
-            {
                 ShowPanel(_winPanel);
-            }
         }
         else
         {
-            if (_runManager.Hearts <= 0)
-            {
-                // No hearts left — run over.
+            if (_runManager != null && _runManager.Hearts <= 0)
                 ShowPanel(_runOverPanel);
-            }
             else if (result.IsBoss)
-            {
-                // Boss loss with hearts — retry.
                 ShowPanel(_loseBossPanel);
-            }
             else
-            {
-                // Non-boss loss — skip to next level.
                 ShowPanel(_loseSkipPanel);
-            }
         }
-
-        UpdateLevelText();
-        // The match-rewards panel is NOT shown in the battle scene — it's
-        // shown in the RunProgress scene (loaded when the player clicks Next /
-        // Continue / Retry). No rewards panel wiring here.
     }
 
     void HandleHeartsChanged(int newHearts)
@@ -253,10 +315,38 @@ public class BattleResultUI : MonoBehaviour
 
     void HandleRunEnded(bool isVictory)
     {
-        if (isVictory)
-            ShowPanel(_runVictoryPanel);
-        else
-            ShowPanel(_runOverPanel);
+        // The run has ended (victory or run-over). This fires AFTER HandleBattleEnded
+        // (RunManager.OnMatchFinished calls OnBattleEnded then EndRun → OnRunEnded).
+        // HandleBattleEnded already stashed the result and started the wait (if any
+        // FallingCap components are still active). When the wait completes,
+        // ShowPendingPanel will show the correct panel based on the stashed result.
+        //
+        // If HandleBattleEnded decided to show immediately (no falling caps), the
+        // panel is already showing. In that case, we don't need to do anything here
+        // — ShowPendingPanel already chose _runVictoryPanel or _runOverPanel based
+        // on result.WasLastLevel / result.PlayerWon / Hearts.
+        //
+        // If we're still waiting for fall animations, the pending result will be
+        // shown when the wait completes. Don't override it here.
+        //
+        // If there's no pending result (HandleBattleEnded already showed the panel),
+        // we don't need to re-show — the correct panel is already up.
+        if (_isWaitingForFall) return;
+        // Defensive: if there's no pending result AND no panel is currently shown,
+        // show the appropriate run-end panel. This handles edge cases where
+        // HandleBattleEnded didn't fire for some reason.
+        bool anyPanelActive = (_runVictoryPanel != null && _runVictoryPanel.activeSelf)
+                              || (_runOverPanel != null && _runOverPanel.activeSelf)
+                              || (_winPanel != null && _winPanel.activeSelf)
+                              || (_loseSkipPanel != null && _loseSkipPanel.activeSelf)
+                              || (_loseBossPanel != null && _loseBossPanel.activeSelf);
+        if (!anyPanelActive)
+        {
+            if (isVictory)
+                ShowPanel(_runVictoryPanel);
+            else
+                ShowPanel(_runOverPanel);
+        }
     }
 
     // -----------------------------------------------------------------------
