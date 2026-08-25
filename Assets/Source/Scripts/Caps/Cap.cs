@@ -69,10 +69,20 @@ public class Cap : MonoBehaviour
              "If null, the deck panel falls back to the first sticker sprite or a default.")]
     [SerializeField] private Sprite _deckSprite;
     /// <summary>
-    /// Unique sprite for this cap in the deck panel UI. Set in inspector on each cap prefab.
-    /// Falls back to null (caller decides the fallback, e.g. first sticker or default sprite).
+    /// Unique sprite for this cap in the deck panel UI. If a CapVisualGenerator
+    /// generated a face sprite, returns THAT (the actual face shown on the cap).
+    /// Otherwise falls back to the inspector-assigned _deckSprite.
     /// </summary>
-    public Sprite DeckSprite => _deckSprite;
+    public Sprite DeckSprite
+    {
+        get
+        {
+            var gen = GetComponent<CapVisualGenerator>();
+            if (gen != null && gen.GeneratedFaceSprite != null)
+                return gen.GeneratedFaceSprite;
+            return _deckSprite;
+        }
+    }
 
     [Header("Cap parameters")]
     [SerializeField] private CapParameters _parameters = new CapParameters();
@@ -220,6 +230,16 @@ public class Cap : MonoBehaviour
         WasPeelOff = false;
         _overrideMaterial = null;
         _overrideMaterialTimer = 0f;
+
+        // Generate random face/back visuals if the prefab has a CapVisualGenerator.
+        var visualGen = GetComponent<CapVisualGenerator>();
+        if (visualGen != null)
+            visualGen.GenerateVisuals();
+
+        // Re-cache the (now-generated) materials so the override system
+        // restores the generated ones, not the prefab defaults.
+        CacheOriginalMaterials();
+
         ApplyVisuals();
         ApplyOutline();
         ApplyRimMaterial();
@@ -1282,10 +1302,28 @@ public class Cap : MonoBehaviour
     void TryRegisterRenderer(MeshRenderer mr)
     {
         if (mr == null) return;
-        if (_meshRenderers.Contains(mr)) return; // defensive: same renderer assigned twice
+        if (_meshRenderers.Contains(mr)) return;
         _meshRenderers.Add(mr);
         if (mr.sharedMaterials != null)
             _originalMaterials[mr] = (Material[])mr.sharedMaterials.Clone();
+    }
+
+    /// <summary>
+    /// Re-caches the current sharedMaterials on all registered renderers.
+    /// Called after CapVisualGenerator.GenerateVisuals() replaces the materials
+    /// with randomly-generated clones. Without this, the material-override system
+    /// (e.g. bomb explosion) would restore the OLD prefab-default materials
+    /// instead of the generated ones.
+    /// </summary>
+    void CacheOriginalMaterials()
+    {
+        for (int i = 0; i < _meshRenderers.Count; i++)
+        {
+            MeshRenderer mr = _meshRenderers[i];
+            if (mr == null) continue;
+            if (mr.sharedMaterials != null)
+                _originalMaterials[mr] = (Material[])mr.sharedMaterials.Clone();
+        }
     }
 
     void OnValidate()

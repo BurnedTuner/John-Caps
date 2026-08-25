@@ -64,6 +64,14 @@ public class CapHand : MonoBehaviour
     /// <summary>Mutable live deck — cap prefabs not yet drawn into the hand.</summary>
     private readonly List<Cap> _deckPrefabs = new();
 
+    /// <summary>
+    /// Hidden preview instances — one per deck prefab. Each is instantiated and
+    /// has CapVisualGenerator.GenerateVisuals() called (via Cap.Configure), so
+    /// its DeckSprite returns the generated face sprite. Used by DeckPanelUI to
+    /// show the cap's visual in the deck panel. Destroyed on ResetHand.
+    /// </summary>
+    private readonly List<Cap> _deckPreviewCaps = new();
+
     /// <summary>Hand slots — instantiated Cap GameObjects. Null = empty slot.</summary>
     private readonly List<Cap> _handCaps = new();
 
@@ -75,17 +83,17 @@ public class CapHand : MonoBehaviour
     public int DeckCount => _deckPrefabs.Count;
 
     /// <summary>
-    /// Returns the cap prefab at the given index in the live deck (not yet drawn
+    /// Returns the PREVIEW cap at the given index in the live deck (not yet drawn
     /// into the hand). Returns null if the index is out of range. Used by UI
     /// panels (e.g., DeckPanelUI) to render each remaining cap's icon/sticker.
-    /// The returned Cap is a PREFAB — it's not instantiated in the scene, so
-    /// callers should only read metadata (Parameters, materials, ICapAbility
-    /// components) off it, not expect it to be visible or interactable.
+    /// The returned Cap is a hidden instance with generated visuals (face/back
+    /// materials already assigned via CapVisualGenerator). Its DeckSprite property
+    /// returns the generated face sprite.
     /// </summary>
     public Cap GetDeckCap(int index)
     {
-        if (index < 0 || index >= _deckPrefabs.Count) return null;
-        return _deckPrefabs[index];
+        if (index < 0 || index >= _deckPreviewCaps.Count) return null;
+        return _deckPreviewCaps[index];
     }
 
     /// <summary>Number of non-empty hand slots.</summary>
@@ -197,7 +205,8 @@ public class CapHand : MonoBehaviour
 
     /// <summary>
     /// Draw a cap from the deck into the first empty hand slot. If the deck is
-    /// empty, the slot stays empty.
+    /// empty, the slot stays empty. Uses the preview cap directly — the cap
+    /// shown in the deck UI IS the cap the player gets (same generated face).
     /// </summary>
     public void DrawFromDeck()
     {
@@ -205,18 +214,36 @@ public class CapHand : MonoBehaviour
         if (emptySlot < 0) return; // hand is full
         if (_deckPrefabs.Count == 0) return; // deck is empty
 
-        Cap prefab = _deckPrefabs[0];
         _deckPrefabs.RemoveAt(0);
 
-        Cap instance = InstantiateCap(prefab);
-        _handCaps[emptySlot] = instance;
+        // Use the preview cap directly — its visuals were already generated
+        // (same face/back the deck UI showed). This guarantees the player gets
+        // the exact cap they saw in the deck panel.
+        Cap instance = null;
+        if (_deckPreviewCaps.Count > 0)
+        {
+            instance = _deckPreviewCaps[0];
+            _deckPreviewCaps.RemoveAt(0);
+        }
 
+        if (instance == null)
+        {
+            // Fallback: if no preview cap exists (shouldn't happen), create one.
+            instance = InstantiateCap(_deckPrefabs.Count > 0 ? _deckPrefabs[0] : null);
+        }
+        else
+        {
+            // Activate the preview cap and set it up for the hand.
+            PrepareCapForHand(instance);
+        }
+
+        _handCaps[emptySlot] = instance;
         LayoutHand();
     }
 
     /// <summary>
     /// Refill all empty hand slots from the deck. Stops when hand is full or
-    /// deck is empty.
+    /// deck is empty. Uses preview caps directly (same visuals as deck UI).
     /// </summary>
     public void RefillHandFromDeck()
     {
@@ -225,13 +252,61 @@ public class CapHand : MonoBehaviour
         {
             if (_handCaps[i] == null && _deckPrefabs.Count > 0)
             {
-                Cap prefab = _deckPrefabs[0];
                 _deckPrefabs.RemoveAt(0);
-                _handCaps[i] = InstantiateCap(prefab);
+
+                Cap instance = null;
+                if (_deckPreviewCaps.Count > 0)
+                {
+                    instance = _deckPreviewCaps[0];
+                    _deckPreviewCaps.RemoveAt(0);
+                }
+
+                if (instance == null)
+                {
+                    instance = InstantiateCap(_deckPrefabs.Count > 0 ? _deckPrefabs[0] : null);
+                }
+                else
+                {
+                    PrepareCapForHand(instance);
+                }
+
+                _handCaps[i] = instance;
                 changed = true;
             }
         }
         if (changed) LayoutHand();
+    }
+
+    /// <summary>
+    /// Takes a preview cap (hidden, unregistered, at far position) and prepares
+    /// it for the hand: activates it, sets the hand layer, makes it immutable,
+    /// unregisters from CapRegistry, destroys colliders. Same setup as
+    /// InstantiateCap, but reuses the existing instance with its generated visuals.
+    /// </summary>
+    void PrepareCapForHand(Cap cap)
+    {
+        if (cap == null) return;
+
+        // Activate the cap (it was hidden as a preview).
+        cap.gameObject.SetActive(true);
+
+        // Position it at the hand anchor.
+        Transform anchor = HandAnchor != null ? HandAnchor
+            : (HandCamera != null ? HandCamera.transform : transform);
+        Vector3 spawnPos = anchor != null ? anchor.position : Vector3.zero;
+        cap.transform.position = spawnPos;
+
+        // Set the hand layer.
+        SetCapLayerRecursive(cap.gameObject, PlayerHandLayer);
+
+        // Make it non-interactable while in hand (same as InstantiateCap).
+        cap.SetImmutable(true);
+        // Ensure it's NOT in CapRegistry (it was unregistered as a preview;
+        // keep it unregistered while in hand).
+        if (CapRegistry.Contains(cap))
+            CapRegistry.Unregister(cap);
+        // Destroy colliders (same as InstantiateCap).
+        DestroyCollidersRecursive(cap.gameObject);
     }
 
     /// <summary>
@@ -254,6 +329,14 @@ public class CapHand : MonoBehaviour
         _handCaps.Clear();
         _deckPrefabs.Clear();
 
+        // Destroy old preview caps if any (from a previous reset).
+        for (int i = 0; i < _deckPreviewCaps.Count; i++)
+        {
+            if (_deckPreviewCaps[i] != null)
+                Destroy(_deckPreviewCaps[i].gameObject);
+        }
+        _deckPreviewCaps.Clear();
+
         // Restore deck from template.
         if (DeckTemplate != null && DeckTemplate.Caps != null)
         {
@@ -265,6 +348,33 @@ public class CapHand : MonoBehaviour
 
             if (DeckTemplate.ShuffleOnStart)
                 ShuffleDeck();
+        }
+
+        // Create hidden preview instances — one per deck prefab. Each is
+        // instantiated and has Configure called (which triggers
+        // CapVisualGenerator.GenerateVisuals), so its DeckSprite returns the
+        // generated face sprite. The preview caps are hidden (SetActive false)
+        // and not registered in CapRegistry — they exist solely for the deck UI.
+        for (int i = 0; i < _deckPrefabs.Count; i++)
+        {
+            Cap prefab = _deckPrefabs[i];
+            if (prefab == null) continue;
+
+            // Instantiate at a far-away position (won't be seen).
+            Cap preview = CapFactory.Create(
+                prefab,
+                new Vector2(9999f, 9999f),
+                isFace: true,
+                Owner);
+
+            if (preview != null)
+            {
+                // Hide it and unregister from CapRegistry — it's a preview only.
+                preview.gameObject.SetActive(false);
+                preview.gameObject.name = $"DeckPreview_{prefab.name}_{i}";
+                CapRegistry.Unregister(preview);
+                _deckPreviewCaps.Add(preview);
+            }
         }
 
         // Initialize hand slots to null up to HandSize.
