@@ -320,7 +320,6 @@ public class CapHand : MonoBehaviour
         {
             if (_handCaps[i] != null)
             {
-                // Unregister so CapRegistry doesn't hold a stale reference.
                 CapRegistry.Unregister(_handCaps[i]);
                 Destroy(_handCaps[i].gameObject);
                 _handCaps[i] = null;
@@ -329,7 +328,7 @@ public class CapHand : MonoBehaviour
         _handCaps.Clear();
         _deckPrefabs.Clear();
 
-        // Destroy old preview caps if any (from a previous reset).
+        // Destroy old preview caps if any.
         for (int i = 0; i < _deckPreviewCaps.Count; i++)
         {
             if (_deckPreviewCaps[i] != null)
@@ -337,43 +336,96 @@ public class CapHand : MonoBehaviour
         }
         _deckPreviewCaps.Clear();
 
-        // Restore deck from template.
-        if (DeckTemplate != null && DeckTemplate.Caps != null)
+        // --- Check if RunManager is active (run mode) ---
+        RunManager runManager = RunManager.Instance;
+        if (runManager != null && runManager.IsRunActive)
         {
-            for (int i = 0; i < DeckTemplate.Caps.Length; i++)
+            // Run mode: read deck from RunManager (with pre-generated visuals).
+            var runDeck = runManager.RunDeck;
+            for (int i = 0; i < runDeck.Count; i++)
             {
-                if (DeckTemplate.Caps[i] != null)
-                    _deckPrefabs.Add(DeckTemplate.Caps[i]);
+                if (runDeck[i].Prefab != null)
+                    _deckPrefabs.Add(runDeck[i].Prefab);
             }
 
-            if (DeckTemplate.ShuffleOnStart)
+            if (DeckTemplate != null && DeckTemplate.ShuffleOnStart)
                 ShuffleDeck();
-        }
 
-        // Create hidden preview instances — one per deck prefab. Each is
-        // instantiated and has Configure called (which triggers
-        // CapVisualGenerator.GenerateVisuals), so its DeckSprite returns the
-        // generated face sprite. The preview caps are hidden (SetActive false)
-        // and not registered in CapRegistry — they exist solely for the deck UI.
-        for (int i = 0; i < _deckPrefabs.Count; i++)
-        {
-            Cap prefab = _deckPrefabs[i];
-            if (prefab == null) continue;
-
-            // Instantiate at a far-away position (won't be seen).
-            Cap preview = CapFactory.Create(
-                prefab,
-                new Vector2(9999f, 9999f),
-                isFace: true,
-                Owner);
-
-            if (preview != null)
+            // Create preview caps from the run deck entries (with stored sprites).
+            for (int i = 0; i < runDeck.Count; i++)
             {
-                // Hide it and unregister from CapRegistry — it's a preview only.
-                preview.gameObject.SetActive(false);
-                preview.gameObject.name = $"DeckPreview_{prefab.name}_{i}";
-                CapRegistry.Unregister(preview);
-                _deckPreviewCaps.Add(preview);
+                var entry = runDeck[i];
+                if (entry.Prefab == null) continue;
+
+                // Instantiate at a far-away position.
+                Cap preview = CapFactory.Create(
+                    entry.Prefab,
+                    new Vector2(9999f, 9999f),
+                    isFace: true,
+                    Owner);
+
+                if (preview != null)
+                {
+                    // OVERRIDE the freshly-generated visuals with the STORED sprites
+                    // from the run deck entry. CapFactory.Create → Cap.Configure →
+                    // GenerateVisuals picks a NEW random face each time — without this
+                    // override, every ResetHand would pick different faces, causing:
+                    //   1. The deck UI to show different faces each scene.
+                    //   2. Cap-loss matching by GeneratedFaceSprite to fail (the live
+                    //      cap's sprite != the deck entry's stored sprite) → lost caps
+                    //      wouldn't be removed from RunDeck → deck would appear to
+                    //      "reset to default" on the next level.
+                    // SetGeneratedSprites re-applies the template materials with the
+                    // stored sprites and sets GeneratedFaceSprite / GeneratedBackSprite
+                    // to the stored values, so the preview cap's visuals MATCH the run
+                    // deck entry exactly.
+                    var gen = preview.GetComponent<CapVisualGenerator>();
+                    if (gen != null && entry.GeneratedFaceSprite != null)
+                    {
+                        gen.SetGeneratedSprites(entry.GeneratedFaceSprite, entry.GeneratedBackSprite);
+                    }
+
+                    preview.gameObject.SetActive(false);
+                    preview.gameObject.name = $"DeckPreview_{entry.Prefab.name}_{i}";
+                    CapRegistry.Unregister(preview);
+                    _deckPreviewCaps.Add(preview);
+                }
+            }
+        }
+        else
+        {
+            // Sandbox/standalone mode: read from DeckTemplate (original behavior).
+            if (DeckTemplate != null && DeckTemplate.Caps != null)
+            {
+                for (int i = 0; i < DeckTemplate.Caps.Length; i++)
+                {
+                    if (DeckTemplate.Caps[i] != null)
+                        _deckPrefabs.Add(DeckTemplate.Caps[i]);
+                }
+
+                if (DeckTemplate.ShuffleOnStart)
+                    ShuffleDeck();
+            }
+
+            // Create hidden preview instances.
+            for (int i = 0; i < _deckPrefabs.Count; i++)
+            {
+                Cap prefab = _deckPrefabs[i];
+                if (prefab == null) continue;
+
+                Cap preview = CapFactory.Create(
+                    prefab,
+                    new Vector2(9999f, 9999f),
+                    isFace: true,
+                    Owner);
+
+                if (preview != null)
+                {
+                    preview.gameObject.SetActive(false);
+                    preview.gameObject.name = $"DeckPreview_{prefab.name}_{i}";
+                    CapRegistry.Unregister(preview);
+                    _deckPreviewCaps.Add(preview);
+                }
             }
         }
 

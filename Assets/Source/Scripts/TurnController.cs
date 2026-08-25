@@ -399,15 +399,21 @@ public sealed class TurnController : MonoBehaviour
         {
             case CapOwner.Player:
                 _playerCapsLostThisTurn++;
-                _opponentKills++; // opponent killed a player cap = player lost one
+                _opponentKills++;
                 break;
             case CapOwner.Opponent:
                 _opponentCapsLostThisTurn++;
-                _playerKills++; // player killed an opponent cap = opponent lost one
+                _playerKills++;
                 break;
             default:
                 _neutralCapsLostThisTurn++;
                 break;
+        }
+
+        // Record the lost cap for RunManager (if a run is active).
+        if (RunManager.Instance != null && RunManager.Instance.IsRunActive)
+        {
+            RunManager.Instance.RecordCapLost(cap);
         }
 
         // Notify UI listeners.
@@ -557,6 +563,12 @@ public sealed class TurnController : MonoBehaviour
 
         Debug.Log($"[TurnController] Match over. Winner: {winner}. Reason: {reason}. Press R to reset the board.", this);
         MatchFinished?.Invoke(winner, reason);
+
+        // Notify RunManager if a run is active.
+        if (RunManager.Instance != null && RunManager.Instance.IsRunActive)
+        {
+            RunManager.Instance.OnMatchFinished(winner, reason);
+        }
     }
 
     /// <summary>

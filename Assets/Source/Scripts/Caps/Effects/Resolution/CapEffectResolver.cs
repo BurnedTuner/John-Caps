@@ -22,6 +22,23 @@ using UnityEngine;
 ///      "Push-sets-IsBusy-then-Flip-is-skipped" race that used to silently drop the
 ///      flip no longer happens.
 ///   3. Execute the merged per-target actions.
+///
+/// "Landed-on" cap exclusion:
+///   When a cap lands on top of another cap (creating a stack), the landed-on cap
+///   must NOT be affected by the source's own effect — it's the cap the source is
+///   physically resting on. The primary exclusion is the stack-base check
+///   (<c>target == sourceStackBase</c> / <c>target.FindStackBase() == sourceFindBase</c>).
+///   The secondary fallback is a DISTANCE check: if the source's landing position
+///   is within the COMBINED radius (source radius + target radius) of the target's
+///   center, the source "landed on" that target and the target is skipped.
+///
+///   IMPORTANT: the distance threshold MUST be the combined radius, not half the
+///   target's radius. The old threshold (target.radius * 0.5) only excluded caps
+///   whose CENTER the source landed within — if the source landed on the outer
+///   half of the target's body (within the target's radius but more than half a
+///   radius from its center), the target was NOT excluded and got flipped in place
+///   by the flipper's effect. This caused the "flipper landed on a cap but flipped
+///   it in place instead of launching it" bug.
 /// </summary>
 internal sealed class CapEffectResolver
 {
@@ -30,14 +47,12 @@ internal sealed class CapEffectResolver
     private readonly CapEffectCommandBuffer _commandBuffer = new();
     private readonly List<Cap> _targets = new();
 
-    // Per-target merged action. A struct so we can value-update via the dictionary
-    // without per-entry allocations.
     struct ResolvedTarget
     {
         public Cap Target;
-        public Cap Source;          // last effect source that touched this target
-        public bool WantsPush;      // bomb-style "move without flipping"
-        public bool WantsFlip;      // flipper-style "flip in place"
+        public Cap Source;
+        public bool WantsPush;
+        public bool WantsFlip;
         public Vector2 MoveDirection;
         public float MoveForce;
     }
@@ -68,17 +83,12 @@ internal sealed class CapEffectResolver
             }
         }
 
-        // MERGE: collapse the command buffer into a per-target action map.
-        // After this loop, each target that any command wanted to touch has
-        // exactly one ResolvedTarget entry summarising what should happen.
         IReadOnlyList<ICapEffectCommand> commands = _commandBuffer.Commands;
         for (int i = 0; i < commands.Count; i++)
             MergeCommand(commands[i]);
 
         _commandBuffer.Clear();
 
-        // EXECUTE: one action per target. Order is insertion-stable so the
-        // behaviour is deterministic across frames.
         for (int i = 0; i < _resolvedOrder.Count; i++)
         {
             Cap target = _resolvedOrder[i];
@@ -88,10 +98,6 @@ internal sealed class CapEffectResolver
 
             if (resolved.WantsPush && resolved.WantsFlip)
             {
-                // Combined "in both radii" case: launch with the bomb's force.
-                // Launch flips the cap AND moves it the bomb-force distance,
-                // which is exactly the requested behaviour ("flipped not in
-                // place but with the bomb force distance").
                 _executor.TryLaunch(resolved.Source, target, resolved.MoveDirection, resolved.MoveForce);
             }
             else if (resolved.WantsPush)
@@ -102,20 +108,12 @@ internal sealed class CapEffectResolver
             {
                 _executor.TryFlip(resolved.Source, target);
             }
-            // else: target was claimed by Launch only — Launch is already a
-            // complete move+flip, handled below in MergeCommand's launch branch
-            // by setting both WantsPush and WantsFlip, so we never get here.
         }
 
         _resolved.Clear();
         _resolvedOrder.Clear();
     }
 
-    /// <summary>
-    /// Fold one command's targets into the per-target action map. Idempotent for
-    /// the same target — multiple commands wanting the same action just reaffirm
-    /// it. Different actions (Push + Flip) escalate the merged action to a Launch.
-    /// </summary>
     void MergeCommand(ICapEffectCommand command)
     {
         if (command is RadialPushCommand push)
@@ -128,12 +126,56 @@ internal sealed class CapEffectResolver
             Debug.LogError($"[CapEffectResolver] Unsupported command: {command.GetType().Name}.");
     }
 
+    /// <summary>
+    /// Returns true if the target cap is the one the source LANDED ON (i.e., the
+    /// source's landing position overlaps the target's body). Such caps are
+    /// excluded from the source's own effect — they should be affected by the
+    /// IMPACT (launch/stack), not by the radial effect.
+    ///
+    /// The check uses the COMBINED radius (source radius + target radius) as the
+    /// threshold: if the distance between the source's landing position and the
+    /// target's center is less than this, the two caps overlap and the target is
+    /// considered "landed on".
+    /// </summary>
+    static bool IsLandedOnCap(Cap target, Cap source, Vector2 origin)
+    {
+        if (target == null || source == null) return false;
+
+        // Primary check: stack base. If AddToStack was called, the source's
+        // _stackBase points to the cap it's resting on (or the bottom of that
+        // cap's stack). This is the authoritative "landed on" signal.
+        Cap sourceStackBase = source.StackBase;
+        if (target == sourceStackBase) return true;
+
+        // Same-stack check: if the target is in the same stack as the source,
+        // it's either the cap the source landed on or a cap stacked above/below
+        // it — either way, don't affect it.
+        Cap sourceFindBase = source.FindStackBase();
+        if (target.FindStackBase() == sourceFindBase) return true;
+
+        // Fallback: distance check. The stack-base check only works if AddToStack
+        // was called (low-force landing → stack). For high-force landings where
+        // the cap was LAUNCHED (not stacked), the stack base isn't set — but the
+        // launched cap is busy and excluded by IsBusy anyway. This distance check
+        // catches the remaining edge case: the source landed on a cap that was
+        // SKIPPED by ResolveLanding (e.g., a cap in an existing stack whose
+        // CanFlip was false). In that case, AddToStack wasn't called on it, and
+        // the cap isn't busy — without this check, the radial effect would flip
+        // it in place.
+        //
+        // The threshold is the COMBINED radius (source + target): if the source's
+        // landing position is within this distance of the target's center, the
+        // two caps physically overlap and the source "landed on" the target.
+        float targetRadius = target.Parameters != null ? target.Parameters.Radius : 0.5f;
+        float sourceRadius = source.Parameters != null ? source.Parameters.Radius : 0.5f;
+        float landedThreshold = targetRadius + sourceRadius;
+        float sqrDistance = (target.GroundPosition - origin).sqrMagnitude;
+        return sqrDistance < landedThreshold * landedThreshold;
+    }
+
     void MergePush(RadialPushCommand command)
     {
         if (command.Source == null || command.Radius <= 0f || command.Force <= 0f) return;
-
-        Cap sourceStackBase = command.Source.StackBase;
-        Cap sourceFindBase = command.Source.FindStackBase();
 
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
@@ -142,20 +184,9 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
-            // The cap the source LANDED ON is now its stack base. It must not
-            // be affected by the source's own effect.
-            if (target == sourceStackBase) continue;
-            // Exclude ALL caps in the same stack as the source. A bomb/flipper
-            // in a stack should NOT push/flip other stacked caps — they're
-            // physically stacked on top of each other.
-            if (target.FindStackBase() == sourceFindBase) continue;
-            // Also skip the cap the source landed on when the stack base
-            // hasn't been set yet (chain-launched caps — see MergeFlip for
-            // the full explanation).
-            float landedThreshold = target.Parameters.Radius * 0.5f;
-            if ((target.GroundPosition - command.Origin).sqrMagnitude
-                < landedThreshold * landedThreshold)
-                continue;
+            // Exclude the cap the source LANDED ON — it's affected by the impact,
+            // not by this radial effect.
+            if (IsLandedOnCap(target, command.Source, command.Origin)) continue;
 
             Vector2 offset = target.GroundPosition - command.Origin;
             Vector2 dir = offset.sqrMagnitude > 0.000001f ? offset.normalized : Vector2.right;
@@ -180,9 +211,6 @@ internal sealed class CapEffectResolver
     {
         if (command.Source == null || command.Radius <= 0f) return;
 
-        Cap sourceStackBase = command.Source.StackBase;
-        Cap sourceFindBase = command.Source.FindStackBase();
-
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
         for (int i = 0; i < _targets.Count; i++)
@@ -190,12 +218,11 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
-            if (target == sourceStackBase) continue;
-            if (target.FindStackBase() == sourceFindBase) continue;
-            float landedThreshold = target.Parameters.Radius * 0.5f;
-            if ((target.GroundPosition - command.Origin).sqrMagnitude
-                < landedThreshold * landedThreshold)
-                continue;
+            // Exclude the cap the source LANDED ON — it's affected by the impact,
+            // not by this radial effect. Without this, a flipper landing on a cap
+            // would flip that cap IN PLACE (TryFlip → BeginFlipInPlace) instead of
+            // letting the impact launch it (TryActivateCap → BeginLaunch).
+            if (IsLandedOnCap(target, command.Source, command.Origin)) continue;
 
             bool found = _resolved.TryGetValue(target, out ResolvedTarget resolved);
             if (!found)
@@ -204,9 +231,6 @@ internal sealed class CapEffectResolver
                 _resolvedOrder.Add(target);
             }
             resolved.WantsFlip = true;
-            // Keep the existing Source/MoveForce/MoveDirection if a push already
-            // set them — we want the bomb's parameters to drive the combined
-            // launch, not the flipper's (which has no force of its own).
             if (resolved.Source == null)
                 resolved.Source = command.Source;
             _resolved[target] = resolved;
@@ -219,9 +243,6 @@ internal sealed class CapEffectResolver
     {
         if (command.Source == null || command.Radius <= 0f || command.Force <= 0f) return;
 
-        Cap sourceStackBase = command.Source.StackBase;
-        Cap sourceFindBase = command.Source.FindStackBase();
-
         _query.CollectCapsInRadius(command.Origin, command.Radius, _targets);
 
         for (int i = 0; i < _targets.Count; i++)
@@ -229,12 +250,7 @@ internal sealed class CapEffectResolver
             Cap target = _targets[i];
             if (target == null || target == command.Source) continue;
             if (target.IsBusy || target.HasLeftGame) continue;
-            if (target == sourceStackBase) continue;
-            if (target.FindStackBase() == sourceFindBase) continue;
-            float landedThreshold = target.Parameters.Radius * 0.5f;
-            if ((target.GroundPosition - command.Origin).sqrMagnitude
-                < landedThreshold * landedThreshold)
-                continue;
+            if (IsLandedOnCap(target, command.Source, command.Origin)) continue;
 
             Vector2 offset = target.GroundPosition - command.Origin;
             Vector2 dir = offset.sqrMagnitude > 0.000001f ? offset.normalized : Vector2.right;
@@ -245,9 +261,6 @@ internal sealed class CapEffectResolver
                 resolved = new ResolvedTarget { Target = target };
                 _resolvedOrder.Add(target);
             }
-            // A Launch already does both move and flip. Marking both flags means
-            // the executor dispatches it through TryLaunch, which is the
-            // strongest action available — strictly dominates Push or Flip alone.
             resolved.WantsPush = true;
             resolved.WantsFlip = true;
             resolved.MoveForce = command.Force;

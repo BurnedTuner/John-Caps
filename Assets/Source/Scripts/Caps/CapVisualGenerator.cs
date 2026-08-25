@@ -15,6 +15,12 @@ using UnityEngine;
 ///   2. Pick a random face from that back's face pool.
 ///   3. Clone template materials, set their _BaseMap/_MainTex to the sprite textures.
 ///   4. Apply face -> top renderer, back -> bottom renderer, rim -> rim renderer.
+///
+/// SetGeneratedSprites (alternative to GenerateVisuals):
+///   Used when the cap's visuals should match a STORED face/back pair (e.g., a
+///   run deck entry that was pre-generated at run start). Re-applies the same
+///   face/back materials WITHOUT picking new random sprites, so the cap's
+///   DeckSprite / GeneratedFaceSprite match what was stored.
 /// </summary>
 public class CapVisualGenerator : MonoBehaviour
 {
@@ -76,11 +82,7 @@ public class CapVisualGenerator : MonoBehaviour
             faceSprite = backEntry.FaceSprites[faceIndex];
         }
 
-        if (_topRenderer != null && _faceTemplateMaterial != null && faceSprite != null)
-            _topRenderer.sharedMaterial = CloneMaterialWithTexture(_faceTemplateMaterial, faceSprite);
-
-        if (_bottomRenderer != null && _backTemplateMaterial != null && backSprite != null)
-            _bottomRenderer.sharedMaterial = CloneMaterialWithTexture(_backTemplateMaterial, backSprite);
+        ApplyVisuals(faceSprite, backSprite);
 
         // Store the generated sprites so the deck UI can use them.
         GeneratedFaceSprite = faceSprite;
@@ -91,6 +93,32 @@ public class CapVisualGenerator : MonoBehaviour
             int rimIndex = Random.Range(0, _rimMaterials.Length);
             _rimRenderer.sharedMaterial = _rimMaterials[rimIndex];
         }
+    }
+
+    /// <summary>
+    /// Sets the cap's visuals to a STORED face/back pair WITHOUT picking new
+    /// random sprites. Used when the cap should match a pre-generated run deck
+    /// entry (so the deck UI shows the same face the player will actually get,
+    /// and so cap-loss matching by GeneratedFaceSprite works across scenes).
+    ///
+    /// Re-applies the template materials with the given sprites. The cap's
+    /// GeneratedFaceSprite / GeneratedBackSprite are set to the given sprites.
+    /// </summary>
+    public void SetGeneratedSprites(Sprite faceSprite, Sprite backSprite)
+    {
+        ResolveRenderers();
+        ApplyVisuals(faceSprite, backSprite);
+        GeneratedFaceSprite = faceSprite;
+        GeneratedBackSprite = backSprite;
+    }
+
+    void ApplyVisuals(Sprite faceSprite, Sprite backSprite)
+    {
+        if (_topRenderer != null && _faceTemplateMaterial != null && faceSprite != null)
+            _topRenderer.sharedMaterial = CloneMaterialWithTexture(_faceTemplateMaterial, faceSprite);
+
+        if (_bottomRenderer != null && _backTemplateMaterial != null && backSprite != null)
+            _bottomRenderer.sharedMaterial = CloneMaterialWithTexture(_backTemplateMaterial, backSprite);
     }
 
     public void SetRenderers(MeshRenderer top, MeshRenderer bottom, MeshRenderer rim)

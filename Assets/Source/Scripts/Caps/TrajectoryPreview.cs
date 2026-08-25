@@ -88,6 +88,12 @@ public class TrajectoryPreview : MonoBehaviour
 
     void EnsureLineRenderers()
     {
+        // Unity's overloaded == operator returns true for destroyed objects,
+        // so a null check here catches both "never created" AND "destroyed by
+        // scene unload" cases. If the underlying GameObject was destroyed
+        // (e.g., during a level transition while CapThrower.Update still runs
+        // for one more frame), we recreate the LineRenderer instead of
+        // crashing on the next .enabled access.
         if (_arcLine == null)
             _arcLine = CreateLineRenderer("ArcLine", ArcColor);
         if (_landingCircle == null)
@@ -96,6 +102,12 @@ public class TrajectoryPreview : MonoBehaviour
 
     void EnsurePredictionLineCount(int count)
     {
+        // Purge destroyed entries first (scene unload can destroy the
+        // underlying GameObjects while the C# references in the list remain).
+        for (int i = _predictionLines.Count - 1; i >= 0; i--)
+            if (_predictionLines[i] == null)
+                _predictionLines.RemoveAt(i);
+
         while (_predictionLines.Count < count)
         {
             var line = CreateLineRenderer($"Prediction_{_predictionLines.Count}", DirectHitColor);
@@ -105,6 +117,10 @@ public class TrajectoryPreview : MonoBehaviour
 
     void EnsureEndCircleCount(int count)
     {
+        for (int i = _endCircles.Count - 1; i >= 0; i--)
+            if (_endCircles[i] == null)
+                _endCircles.RemoveAt(i);
+
         while (_endCircles.Count < count)
         {
             var circle = CreateLineRenderer($"EndCircle_{_endCircles.Count}", DirectHitColor);
@@ -114,6 +130,10 @@ public class TrajectoryPreview : MonoBehaviour
 
     void EnsureContinuationLineCount(int count)
     {
+        for (int i = _continuationLines.Count - 1; i >= 0; i--)
+            if (_continuationLines[i] == null)
+                _continuationLines.RemoveAt(i);
+
         while (_continuationLines.Count < count)
         {
             var line = CreateLineRenderer($"Continuation_{_continuationLines.Count}", ContinuationColor);
@@ -123,6 +143,10 @@ public class TrajectoryPreview : MonoBehaviour
 
     void EnsureBombRadiusCount(int count)
     {
+        for (int i = _bombRadiusCircles.Count - 1; i >= 0; i--)
+            if (_bombRadiusCircles[i] == null)
+                _bombRadiusCircles.RemoveAt(i);
+
         while (_bombRadiusCircles.Count < count)
         {
             var line = CreateLineRenderer($"BombRadius_{_bombRadiusCircles.Count}", BombRadiusColor);
@@ -176,9 +200,9 @@ public class TrajectoryPreview : MonoBehaviour
             DrawPrediction(fullPredictions[i], i, fallOff);
         }
         for (int i = fullCount; i < _predictionLines.Count; i++)
-            _predictionLines[i].enabled = false;
+            if (_predictionLines[i] != null) _predictionLines[i].enabled = false;
         for (int i = fullCount; i < _endCircles.Count; i++)
-            _endCircles[i].enabled = false;
+            if (_endCircles[i] != null) _endCircles[i].enabled = false;
 
         // --- Continuation lines (half-length, no end circle, no ghost) ---
         int contCount = continuationPredictions != null ? continuationPredictions.Count : 0;
@@ -195,7 +219,7 @@ public class TrajectoryPreview : MonoBehaviour
             DrawContinuation(continuationPredictions[i], i, hasPrecedingFull, fallOff);
         }
         for (int i = contCount; i < _continuationLines.Count; i++)
-            _continuationLines[i].enabled = false;
+            if (_continuationLines[i] != null) _continuationLines[i].enabled = false;
 
         // --- Effect radius circles (bomb, defender, etc.) ---
         int bombCount = bombZones != null ? bombZones.Count : 0;
@@ -205,17 +229,26 @@ public class TrajectoryPreview : MonoBehaviour
             DrawCircle(_bombRadiusCircles[i], bombZones[i].center, bombZones[i].radius, bombZones[i].color);
         }
         for (int i = bombCount; i < _bombRadiusCircles.Count; i++)
-            _bombRadiusCircles[i].enabled = false;
+            if (_bombRadiusCircles[i] != null) _bombRadiusCircles[i].enabled = false;
     }
 
     public void Hide()
     {
+        // Defensive null checks throughout: during scene transitions (e.g., when
+        // the player starts a new level that's a copy of the previous one), the
+        // LineRenderer GameObjects can be destroyed by Unity's scene unloader
+        // BEFORE this MonoBehaviour's OnDestroy runs. CapThrower.Update may run
+        // one more frame in that window and call Hide() — without these checks,
+        // accessing .enabled on a destroyed LineRenderer throws
+        // MissingReferenceException. Unity's overloaded == operator returns true
+        // for destroyed objects, so the != null check correctly catches both
+        // "never assigned" and "destroyed" cases.
         if (_arcLine != null) _arcLine.enabled = false;
         if (_landingCircle != null) _landingCircle.enabled = false;
-        foreach (var line in _predictionLines) line.enabled = false;
-        foreach (var circle in _endCircles) circle.enabled = false;
-        foreach (var line in _continuationLines) line.enabled = false;
-        foreach (var circle in _bombRadiusCircles) circle.enabled = false;
+        foreach (var line in _predictionLines) if (line != null) line.enabled = false;
+        foreach (var circle in _endCircles) if (circle != null) circle.enabled = false;
+        foreach (var line in _continuationLines) if (line != null) line.enabled = false;
+        foreach (var circle in _bombRadiusCircles) if (circle != null) circle.enabled = false;
         _ghostPool?.HideAll();
     }
 
@@ -256,6 +289,7 @@ public class TrajectoryPreview : MonoBehaviour
 
         // --- Prediction line ---
         var line = _predictionLines[lineIndex];
+        if (line == null) return; // destroyed during scene transition
         line.enabled = true;
         line.startColor = color;
         line.endColor = fadedColor;
@@ -268,6 +302,7 @@ public class TrajectoryPreview : MonoBehaviour
 
         // --- End circle (where this cap will land) ---
         var circle = _endCircles[lineIndex];
+        if (circle == null) return;
         float capRadius = prediction.Cap != null ? prediction.Cap.Parameters.Radius : 0.5f;
         DrawCircle(circle, end, capRadius, color);
     }
@@ -293,6 +328,7 @@ public class TrajectoryPreview : MonoBehaviour
     void DrawContinuation(CapPrediction prediction, int lineIndex, bool hasPrecedingFull, bool willFallOff)
     {
         var line = _continuationLines[lineIndex];
+        if (line == null) return; // destroyed during scene transition
         line.enabled = true;
         Color color = willFallOff ? FallOffPredictionColor : ContinuationColor;
         line.startColor = color;
@@ -323,6 +359,7 @@ public class TrajectoryPreview : MonoBehaviour
 
     void DrawCircle(LineRenderer line, Vector3 center, float radius, Color color, int segments = 32)
     {
+        if (line == null) return; // destroyed during scene transition
         line.enabled = true;
         line.startColor = color;
         line.endColor = color;
