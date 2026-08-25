@@ -58,6 +58,60 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
 
     public float ZoneRadius => _level switch { 2 => _zoneRadiusL2, 3 => _zoneRadiusL3, _ => _zoneRadiusL1 };
 
+    /// <summary>
+    /// Sets the ability level. Called by CapFactory.CreateComposed after the
+    /// component is added to a cap instance (parameters come from CopyFrom).
+    /// </summary>
+    public void SetLevel(int level) => _level = Mathf.Clamp(level, 1, 3);
+
+    /// <summary>
+    /// Copies all serialized parameters from the given template's DefenderCapEffect.
+    /// Used by CapFactory.CreateComposed to apply a deck's defender template parameters
+    /// to a dynamically-added defender component on a cap instance.
+    ///
+    /// IMPORTANT: if the source template has a ZoneVisual child GameObject, this
+    /// method INSTANTIATES A COPY of that child and parents it to the cap instance.
+    /// Without this, the ZoneVisual reference would point to the template's child
+    /// (which lives on the template prefab, not on the instance) — the visual
+    /// wouldn't appear on the instance, and scaling/toggling would affect the
+    /// template's child instead.
+    ///
+    /// Also re-caches _visualRenderer + _cap, since Awake already ran on the
+    /// instance (during Instantiate) before this component was added.
+    /// </summary>
+    public void CopyFrom(DefenderCapEffect source)
+    {
+        if (source == null) return;
+        _stickerSprite = source._stickerSprite;
+        _zoneRadiusL1 = source._zoneRadiusL1;
+        _zoneRadiusL2 = source._zoneRadiusL2;
+        _zoneRadiusL3 = source._zoneRadiusL3;
+        TriggerSide = source.TriggerSide;
+        ZoneVisualBaseSize = source.ZoneVisualBaseSize;
+        PlayerRestrictedMaterial = source.PlayerRestrictedMaterial;
+        EnemyRestrictedMaterial = source.EnemyRestrictedMaterial;
+
+        // Instantiate a copy of the template's ZoneVisual child, parented to
+        // this cap instance. The template's ZoneVisual lives on the template
+        // prefab — without copying it, the instance would reference the
+        // template's child (wrong hierarchy, wrong renderer cache).
+        if (source.ZoneVisual != null)
+        {
+            GameObject visualCopy = Object.Instantiate(source.ZoneVisual, transform);
+            visualCopy.name = source.ZoneVisual.name; // strip "(Clone)" for cleaner hierarchy
+            ZoneVisual = visualCopy;
+        }
+
+        // Re-cache the cap reference + visual renderer. Awake already ran on
+        // the instance (during Instantiate) before this component was added,
+        // so _cap and _visualRenderer are stale.
+        _cap = GetComponent<Cap>();
+        CacheVisualRenderer();
+        UpdateVisualScale();
+        UpdateVisualMaterial();
+        UpdateVisualActive();
+    }
+
     [Tooltip("Which side the cap must be showing for the zone to be active. " +
              "Face = zone active when cap is face-up. Back = active when back-up. " +
              "Either = always active regardless of side.")]

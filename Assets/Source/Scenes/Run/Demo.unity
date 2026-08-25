@@ -849,7 +849,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1cb80f438639ed74f8c890d8c3477d07, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _deckTemplate: {fileID: 11400000, guid: b4fb1c9fbf3883e41b470b30a4d0ff97, type: 2}
+  _deckTemplate: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
   _shuffle: 1
   _randomSeed: 0
   _spawnPoint: {fileID: 656311913}
@@ -1309,6 +1309,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: BattleScene
       objectReference: {fileID: 0}
+    - target: {fileID: 3963814646844791785, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
+      propertyPath: DeckTemplate
+      value: 
+      objectReference: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
     - target: {fileID: 7055518032389358768, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: _turnController
       value: 

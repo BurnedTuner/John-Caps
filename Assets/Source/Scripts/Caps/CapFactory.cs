@@ -3,10 +3,25 @@ using UnityEngine;
 /// <summary>
 /// Instantiates a Cap prefab with correct registry hookup.
 /// Radius and materials come from the cap's own CapParameters.
+///
+/// Two creation paths:
+///   - Create(prefab, ...): legacy, instantiates a cap prefab as-is (abilities
+///     baked into the prefab). Used for scene-placed caps, sandbox mode, and
+///     backward compatibility.
+///   - CreateComposed(entry, deck, ...): new, instantiates a base cap prefab
+///     then dynamically adds ability components (Bomb/Flipper/Defender/Predictor)
+///     based on the deck entry's level sliders. Ability parameters are copied
+///     from the deck's template prefabs. Used for run-mode player + enemy caps.
 /// </summary>
 public static class CapFactory
 {
     static int _nextStableId = 1;
+
+    // Counter for run deck entry IDs. Incremented each time a cap is created
+    // from a run deck entry (CreateComposed) or when a gained cap is added to
+    // the run deck. Used by RunManager to identify which deck entry a lost cap
+    // came from — replacing the fragile GeneratedFaceSprite matching.
+    static int _nextRunDeckEntryId = 1;
 
     public static Cap Create(
         Cap prefab,
@@ -41,6 +56,112 @@ public static class CapFactory
         return cap;
     }
 
+    /// <summary>
+    /// Creates a cap from a composed deck entry. Instantiates the base prefab
+    /// (visual only), then dynamically adds ability components based on the
+    /// entry's level sliders (0 = no ability, 1-3 = ability with that level).
+    /// Ability parameters (radius, force, VFX, etc.) are copied from the deck's
+    /// template prefabs.
+    ///
+    /// The cap's RunDeckEntryId is set to a new unique ID (from the internal
+    /// counter). RunManager uses this ID to identify which deck entry a lost
+    /// cap came from — no sprite matching needed.
+    ///
+    /// If the base prefab ALREADY has an ability component (e.g., it's a captured
+    /// clone from a gained enemy cap), the existing component is kept and its
+    /// level is NOT overridden — the clone's state is preserved exactly.
+    /// </summary>
+    public static Cap CreateComposed(
+        Cap basePrefab,
+        CapDeckDefinition.ComposedCapEntry entry,
+        CapDeckDefinition deck,
+        Vector2 groundPosition,
+        bool isFace,
+        CapOwner owner)
+    {
+        if (basePrefab == null)
+        {
+            Debug.LogError("[CapFactory] BasePrefab is null.");
+            return null;
+        }
+
+        // Instantiate the base cap (visual only).
+        Vector3 worldPos = CapMath.FromXZ(groundPosition, 0f);
+        Cap instance = Object.Instantiate(basePrefab, worldPos, Quaternion.identity);
+
+        Vector3 p = instance.transform.position;
+        p.y = 0.05f;
+        instance.transform.position = p;
+
+        Cap cap = instance.GetComponent<Cap>();
+        if (cap == null) cap = instance.gameObject.AddComponent<Cap>();
+
+        cap.Configure(_nextStableId++, isFace, owner);
+        cap.MarkFactoryCreated();
+
+        // Add abilities based on the entry's level sliders. Skip if the cap
+        // already has the component (e.g., it's a captured clone — preserve
+        // its exact state, don't re-add).
+        if (entry.BombLevel > 0 && cap.GetComponent<BombCapFlipEffect>() == null)
+        {
+            var bomb = cap.gameObject.AddComponent<BombCapFlipEffect>();
+            if (deck != null && deck.BombTemplate != null)
+            {
+                var templateBomb = deck.BombTemplate.GetComponent<BombCapFlipEffect>();
+                if (templateBomb != null) bomb.CopyFrom(templateBomb);
+            }
+            bomb.SetLevel(entry.BombLevel);
+        }
+
+        if (entry.FlipperLevel > 0 && cap.GetComponent<FlipperCapEffect>() == null)
+        {
+            var flipper = cap.gameObject.AddComponent<FlipperCapEffect>();
+            if (deck != null && deck.FlipperTemplate != null)
+            {
+                var templateFlipper = deck.FlipperTemplate.GetComponent<FlipperCapEffect>();
+                if (templateFlipper != null) flipper.CopyFrom(templateFlipper);
+            }
+            flipper.SetLevel(entry.FlipperLevel);
+        }
+
+        if (entry.DefenderLevel > 0 && cap.GetComponent<DefenderCapEffect>() == null)
+        {
+            var defender = cap.gameObject.AddComponent<DefenderCapEffect>();
+            if (deck != null && deck.DefenderTemplate != null)
+            {
+                var templateDefender = deck.DefenderTemplate.GetComponent<DefenderCapEffect>();
+                if (templateDefender != null) defender.CopyFrom(templateDefender);
+            }
+            defender.SetLevel(entry.DefenderLevel);
+        }
+
+        if (entry.PredictorLevel > 0 && cap.GetComponent<PredictorCapEffect>() == null)
+        {
+            var predictor = cap.gameObject.AddComponent<PredictorCapEffect>();
+            if (deck != null && deck.PredictorTemplate != null)
+            {
+                var templatePredictor = deck.PredictorTemplate.GetComponent<PredictorCapEffect>();
+                if (templatePredictor != null) predictor.CopyFrom(templatePredictor);
+            }
+            predictor.SetLevel(entry.PredictorLevel);
+        }
+
+        // IMPORTANT: re-cache the cap's _flipEffects array. Cap.Awake ran
+        // during Instantiate (before the ability components were added), so
+        // _flipEffects is empty. CapEffectResolver uses FlipEffects to iterate
+        // effects — without this refresh, the dynamically-added abilities are
+        // invisible to the resolver and never trigger (even though they show
+        // stickers, because StickerManager reads GetComponents live each frame).
+        cap.RefreshFlipEffects();
+
+        // Stamp the cap with a unique run deck entry ID. RunManager uses this
+        // to identify which deck entry a lost cap came from.
+        cap.RunDeckEntryId = _nextRunDeckEntryId++;
+
+        CapRegistry.Register(cap);
+        return cap;
+    }
+
     public static void ResetIdCounter(int startId = 1)
     {
         _nextStableId = startId;
@@ -54,5 +175,16 @@ public static class CapFactory
     public static int NextStableId()
     {
         return _nextStableId++;
+    }
+
+    /// <summary>
+    /// Allocates a new run deck entry ID. Called by RunManager when adding a
+    /// gained enemy cap to the run deck (the cap was captured as a clone, so
+    /// its RunDeckEntryId was set at clone time — but the run deck entry
+    /// itself needs an ID for loss tracking).
+    /// </summary>
+    public static int NextRunDeckEntryId()
+    {
+        return _nextRunDeckEntryId++;
     }
 }

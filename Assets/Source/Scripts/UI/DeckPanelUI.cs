@@ -522,11 +522,11 @@ public class DeckPanelUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Reads from RunManager.Instance.RunDeck. Each DeckEntry stores the cap
-    /// prefab + pre-generated face/back sprites. Stickers are read from the
-    /// prefab's ICapAbility components (the prefab's serialized state —
-    /// ability levels are baked in at design time, OR updated when the cap is
-    /// captured as a clone of a modified enemy cap).
+    /// Reads from RunManager.Instance.RunDeck. Each DeckEntry stores the base
+    /// prefab + ability levels + generated face/back sprites. Stickers are
+    /// read from the deck's ABILITY TEMPLATE prefabs (which have the ability
+    /// components configured with sticker sprites + descriptions), NOT from
+    /// the base prefab (which is visual-only and has no ability components).
     ///
     /// No live CapHand is needed — this works in the RunProgress scene where
     /// only RunManager.Instance (DontDestroyOnLoad) is present.
@@ -536,11 +536,17 @@ public class DeckPanelUI : MonoBehaviour
         RunManager runManager = RunManager.Instance;
         if (runManager == null || runManager.RunDeck == null) return;
 
+        // Get the CapDeckDefinition from the LevelSequence — it has the
+        // ability template prefabs (which have sticker sprites + descriptions).
+        CapDeckDefinition deckAsset = runManager.LevelSequence != null
+            ? runManager.LevelSequence.StartingPlayerDeck
+            : null;
+
         var runDeck = runManager.RunDeck;
         for (int i = 0; i < runDeck.Count; i++)
         {
             var deckEntry = runDeck[i];
-            Cap prefab = deckEntry.Prefab;
+            Cap prefab = deckEntry.BasePrefab;
             if (prefab == null) continue;
 
             GameObject entryObj = Instantiate(_capEntryPrefab, _contentParent);
@@ -560,63 +566,142 @@ public class DeckPanelUI : MonoBehaviour
 
             // Set the cap icon sprite: prefer the stored GeneratedFaceSprite
             // (from the run deck entry), fall back to the prefab's DeckSprite,
-            // then first sticker, then _fallbackCapSprite.
+            // then _fallbackCapSprite.
             if (capIcon != null)
             {
                 Sprite capSprite = deckEntry.GeneratedFaceSprite;
                 if (capSprite == null) capSprite = prefab.DeckSprite;
-                if (capSprite == null)
-                {
-                    var fallbackAbilities = prefab.GetComponents<ICapAbility>();
-                    for (int a = 0; a < fallbackAbilities.Length; a++)
-                    {
-                        if (fallbackAbilities[a] != null && fallbackAbilities[a].StickerSprite != null)
-                        {
-                            capSprite = fallbackAbilities[a].StickerSprite;
-                            break;
-                        }
-                    }
-                }
                 if (capSprite == null) capSprite = _fallbackCapSprite;
                 if (capSprite != null)
                     capIcon.sprite = capSprite;
             }
 
-            // Spawn sticker images for each ICapAbility on the prefab.
+            // Spawn sticker images based on the DeckEntry's ability levels.
+            // The sticker SPRITES + DESCRIPTIONS come from the deck's ability
+            // template prefabs (which have the ability components configured).
+            // The LEVELS come from the DeckEntry.
+            //
+            // For gained enemy caps, BasePrefab is a captured clone that already
+            // has ability components — in that case, read directly from the
+            // clone's components (they have the correct levels baked in).
             if (_stickerImagePrefab != null)
             {
-                var abilities = prefab.GetComponents<ICapAbility>();
-                for (int a = 0; a < abilities.Length; a++)
+                // Check if the base prefab already has ability components
+                // (e.g., gained enemy cap captured as a clone). If so, read
+                // directly from them — the clone's state is authoritative.
+                var existingAbilities = prefab.GetComponents<ICapAbility>();
+                if (existingAbilities != null && existingAbilities.Length > 0)
                 {
-                    if (abilities[a] == null) continue;
-                    Sprite stickerSprite = abilities[a].StickerSprite;
-                    if (stickerSprite == null) continue;
-
-                    GameObject stickerObj = Instantiate(_stickerImagePrefab, entryObj.transform);
-                    Image stickerImg = stickerObj.GetComponent<Image>();
-                    if (stickerImg == null) stickerImg = stickerObj.GetComponentInChildren<Image>();
-                    if (stickerImg == null) stickerImg = stickerObj.AddComponent<Image>();
-                    stickerImg.sprite = stickerSprite;
-                    stickerImg.preserveAspect = true;
-                    stickerImg.raycastTarget = false;
-
-                    RectTransform srt = stickerObj.transform as RectTransform;
-                    if (srt != null)
-                        srt.sizeDelta = _stickerSize;
-                    stickerObj.SetActive(true);
-
-                    StickerView view = stickerObj.GetComponent<StickerView>();
-                    if (view == null)
-                        view = stickerObj.AddComponent<StickerView>();
-                    view.SetLevel(abilities[a].Level);
-
-                    entry.StickerImages.Add(stickerImg);
-                    entry.StickerDescriptions.Add(abilities[a].Description ?? string.Empty);
+                    // Gained enemy cap (captured clone) — read from its components.
+                    AddStickersFromAbilities(existingAbilities, entryObj, entry);
+                }
+                else
+                {
+                    // Player cap from the deck (base prefab, no abilities) —
+                    // read stickers from the deck's ability templates, using
+                    // the DeckEntry's level fields.
+                    AddStickersFromDeckEntry(deckEntry, deckAsset, entryObj, entry);
                 }
             }
 
             _entries.Add(entry);
         }
+    }
+
+    /// <summary>
+    /// Adds sticker Images for each ICapAbility in the given list. Used for
+    /// gained enemy caps (captured clones) that already have ability components
+    /// — reads the sticker sprite + description + level directly from each
+    /// component.
+    /// </summary>
+    void AddStickersFromAbilities(ICapAbility[] abilities, GameObject entryObj, DeckEntry entry)
+    {
+        for (int a = 0; a < abilities.Length; a++)
+        {
+            if (abilities[a] == null) continue;
+            Sprite stickerSprite = abilities[a].StickerSprite;
+            if (stickerSprite == null) continue;
+
+            AddStickerImage(stickerSprite, abilities[a].Description, abilities[a].Level,
+                entryObj, entry);
+        }
+    }
+
+    /// <summary>
+    /// Adds sticker Images based on a DeckEntry's ability levels. Used for
+    /// player caps from the deck (base prefab has no ability components).
+    /// Reads the sticker sprite + description from the deck's ability template
+    /// prefabs, and the level from the DeckEntry.
+    /// </summary>
+    void AddStickersFromDeckEntry(RunManager.DeckEntry deckEntry, CapDeckDefinition deck,
+        GameObject entryObj, DeckEntry entry)
+    {
+        if (deck == null) return;
+
+        // Bomb
+        if (deckEntry.BombLevel > 0 && deck.BombTemplate != null)
+        {
+            var ability = deck.BombTemplate.GetComponent<BombCapFlipEffect>();
+            if (ability != null && ability.StickerSprite != null)
+                AddStickerImage(ability.StickerSprite, ability.Description, deckEntry.BombLevel,
+                    entryObj, entry);
+        }
+
+        // Flipper
+        if (deckEntry.FlipperLevel > 0 && deck.FlipperTemplate != null)
+        {
+            var ability = deck.FlipperTemplate.GetComponent<FlipperCapEffect>();
+            if (ability != null && ability.StickerSprite != null)
+                AddStickerImage(ability.StickerSprite, ability.Description, deckEntry.FlipperLevel,
+                    entryObj, entry);
+        }
+
+        // Defender
+        if (deckEntry.DefenderLevel > 0 && deck.DefenderTemplate != null)
+        {
+            var ability = deck.DefenderTemplate.GetComponent<DefenderCapEffect>();
+            if (ability != null && ability.StickerSprite != null)
+                AddStickerImage(ability.StickerSprite, ability.Description, deckEntry.DefenderLevel,
+                    entryObj, entry);
+        }
+
+        // Predictor
+        if (deckEntry.PredictorLevel > 0 && deck.PredictorTemplate != null)
+        {
+            var ability = deck.PredictorTemplate.GetComponent<PredictorCapEffect>();
+            if (ability != null && ability.StickerSprite != null)
+                AddStickerImage(ability.StickerSprite, ability.Description, deckEntry.PredictorLevel,
+                    entryObj, entry);
+        }
+    }
+
+    /// <summary>
+    /// Creates a sticker Image, sets its sprite + size + level badge, and adds
+    /// it to the entry's StickerImages + StickerDescriptions lists.
+    /// </summary>
+    void AddStickerImage(Sprite stickerSprite, string description, int level,
+        GameObject entryObj, DeckEntry entry)
+    {
+        GameObject stickerObj = Instantiate(_stickerImagePrefab, entryObj.transform);
+        Image stickerImg = stickerObj.GetComponent<Image>();
+        if (stickerImg == null) stickerImg = stickerObj.GetComponentInChildren<Image>();
+        if (stickerImg == null) stickerImg = stickerObj.AddComponent<Image>();
+        stickerImg.sprite = stickerSprite;
+        stickerImg.preserveAspect = true;
+        stickerImg.raycastTarget = false;
+
+        RectTransform srt = stickerObj.transform as RectTransform;
+        if (srt != null)
+            srt.sizeDelta = _stickerSize;
+        stickerObj.SetActive(true);
+
+        StickerView view = stickerObj.GetComponent<StickerView>();
+        if (view == null)
+            view = stickerObj.AddComponent<StickerView>();
+        view.SetLevel(level);
+
+        entry.StickerImages.Add(stickerImg);
+        entry.StickerDescriptions.Add(description ?? string.Empty);
     }
 
     /// <summary>

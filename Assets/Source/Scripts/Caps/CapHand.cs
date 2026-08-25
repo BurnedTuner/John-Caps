@@ -340,12 +340,28 @@ public class CapHand : MonoBehaviour
         RunManager runManager = RunManager.Instance;
         if (runManager != null && runManager.IsRunActive)
         {
-            // Run mode: read deck from RunManager (with pre-generated visuals).
+            // Run mode: read deck from RunManager.RunDeck (composed entries).
+            // Each entry has a BasePrefab + ability levels + generated sprites.
+            // We create preview caps via CapFactory.CreateComposed, which
+            // instantiates the base prefab and adds ability components from
+            // the deck's templates.
+            //
+            // IMPORTANT: we need the CapDeckDefinition to pass to CreateComposed
+            // (for the ability templates). Get it from the LevelSequence's
+            // StartingPlayerDeck — the same asset RunManager used to build the deck.
+            CapDeckDefinition deckAsset = runManager.LevelSequence != null
+                ? runManager.LevelSequence.StartingPlayerDeck
+                : null;
+
             var runDeck = runManager.RunDeck;
+
+            // Build the _deckPrefabs list (used for shuffle + count queries).
+            // We store the BasePrefab reference — the actual cap creation
+            // happens via CreateComposed below.
             for (int i = 0; i < runDeck.Count; i++)
             {
-                if (runDeck[i].Prefab != null)
-                    _deckPrefabs.Add(runDeck[i].Prefab);
+                if (runDeck[i].BasePrefab != null)
+                    _deckPrefabs.Add(runDeck[i].BasePrefab);
             }
 
             if (DeckTemplate != null && DeckTemplate.ShuffleOnStart)
@@ -355,11 +371,24 @@ public class CapHand : MonoBehaviour
             for (int i = 0; i < runDeck.Count; i++)
             {
                 var entry = runDeck[i];
-                if (entry.Prefab == null) continue;
+                if (entry.BasePrefab == null) continue;
 
-                // Instantiate at a far-away position.
-                Cap preview = CapFactory.Create(
-                    entry.Prefab,
+                // Build a ComposedCapEntry from the DeckEntry (CreateComposed
+                // takes a ComposedCapEntry + CapDeckDefinition).
+                var composedEntry = new CapDeckDefinition.ComposedCapEntry
+                {
+                    BasePrefab = entry.BasePrefab,
+                    BombLevel = entry.BombLevel,
+                    FlipperLevel = entry.FlipperLevel,
+                    DefenderLevel = entry.DefenderLevel,
+                    PredictorLevel = entry.PredictorLevel,
+                };
+
+                // Create the composed cap at a far-away position.
+                Cap preview = CapFactory.CreateComposed(
+                    entry.BasePrefab,
+                    composedEntry,
+                    deckAsset,
                     new Vector2(9999f, 9999f),
                     isFace: true,
                     Owner);
@@ -367,26 +396,22 @@ public class CapHand : MonoBehaviour
                 if (preview != null)
                 {
                     // OVERRIDE the freshly-generated visuals with the STORED sprites
-                    // from the run deck entry. CapFactory.Create → Cap.Configure →
+                    // from the run deck entry. CapFactory.CreateComposed → Cap.Configure →
                     // GenerateVisuals picks a NEW random face each time — without this
-                    // override, every ResetHand would pick different faces, causing:
-                    //   1. The deck UI to show different faces each scene.
-                    //   2. Cap-loss matching by GeneratedFaceSprite to fail (the live
-                    //      cap's sprite != the deck entry's stored sprite) → lost caps
-                    //      wouldn't be removed from RunDeck → deck would appear to
-                    //      "reset to default" on the next level.
-                    // SetGeneratedSprites re-applies the template materials with the
-                    // stored sprites and sets GeneratedFaceSprite / GeneratedBackSprite
-                    // to the stored values, so the preview cap's visuals MATCH the run
-                    // deck entry exactly.
+                    // override, every ResetHand would pick different faces.
                     var gen = preview.GetComponent<CapVisualGenerator>();
                     if (gen != null && entry.GeneratedFaceSprite != null)
                     {
                         gen.SetGeneratedSprites(entry.GeneratedFaceSprite, entry.GeneratedBackSprite);
                     }
 
+                    // Stamp the preview cap with the run deck entry ID so that
+                    // when it's drawn into the hand and later lost, RunManager
+                    // can identify which deck entry to remove.
+                    preview.RunDeckEntryId = entry.EntryId;
+
                     preview.gameObject.SetActive(false);
-                    preview.gameObject.name = $"DeckPreview_{entry.Prefab.name}_{i}";
+                    preview.gameObject.name = $"DeckPreview_{entry.BasePrefab.name}_{i}";
                     CapRegistry.Unregister(preview);
                     _deckPreviewCaps.Add(preview);
                 }
@@ -394,27 +419,29 @@ public class CapHand : MonoBehaviour
         }
         else
         {
-            // Sandbox/standalone mode: read from DeckTemplate (original behavior).
+            // Sandbox/standalone mode: read from DeckTemplate (composed entries).
             if (DeckTemplate != null && DeckTemplate.Caps != null)
             {
                 for (int i = 0; i < DeckTemplate.Caps.Length; i++)
                 {
-                    if (DeckTemplate.Caps[i] != null)
-                        _deckPrefabs.Add(DeckTemplate.Caps[i]);
+                    if (DeckTemplate.Caps[i].BasePrefab != null)
+                        _deckPrefabs.Add(DeckTemplate.Caps[i].BasePrefab);
                 }
 
                 if (DeckTemplate.ShuffleOnStart)
                     ShuffleDeck();
             }
 
-            // Create hidden preview instances.
-            for (int i = 0; i < _deckPrefabs.Count; i++)
+            // Create hidden preview instances via CreateComposed.
+            for (int i = 0; i < DeckTemplate.Caps.Length; i++)
             {
-                Cap prefab = _deckPrefabs[i];
-                if (prefab == null) continue;
+                var entry = DeckTemplate.Caps[i];
+                if (entry.BasePrefab == null) continue;
 
-                Cap preview = CapFactory.Create(
-                    prefab,
+                Cap preview = CapFactory.CreateComposed(
+                    entry.BasePrefab,
+                    entry,
+                    DeckTemplate,
                     new Vector2(9999f, 9999f),
                     isFace: true,
                     Owner);
@@ -422,7 +449,7 @@ public class CapHand : MonoBehaviour
                 if (preview != null)
                 {
                     preview.gameObject.SetActive(false);
-                    preview.gameObject.name = $"DeckPreview_{prefab.name}_{i}";
+                    preview.gameObject.name = $"DeckPreview_{entry.BasePrefab.name}_{i}";
                     CapRegistry.Unregister(preview);
                     _deckPreviewCaps.Add(preview);
                 }

@@ -20,6 +20,18 @@ public class Cap : MonoBehaviour
     public CapOwner Owner => _owner;
 
     /// <summary>
+    /// The RunManager.RunDeck entry ID this cap was created from. Set by
+    /// CapFactory.CreateComposed at creation time. Used by RunManager to
+    /// identify which deck entry a lost cap came from — replacing the old
+    /// fragile GeneratedFaceSprite matching (which broke when multiple caps
+    /// had the same face sprite, or when the face changed between scenes).
+    ///
+    /// 0 = not from the run deck (e.g., a scene-placed cap, or a cap created
+    /// in sandbox mode without a deck entry).
+    /// </summary>
+    public int RunDeckEntryId { get; set; }
+
+    /// <summary>
     /// The EFFECTIVE owner — if the cap is in a stack, the top cap's owner
     /// determines the effective owner for ALL caps in the stack (defender
     /// zone ownership, bomb target filtering, etc.). If standalone, returns
@@ -219,6 +231,10 @@ public class Cap : MonoBehaviour
         _stableId = id;
         _owner = owner;
         IsFace = isFace;
+        // Reset RunDeckEntryId — caller (CapFactory.CreateComposed) sets it
+        // AFTER Configure if the cap is from the run deck. Default 0 = not
+        // from the run deck.
+        RunDeckEntryId = 0;
         Vector3 pos = transform.position;
         GroundPosition = IsFinite(pos) ? CapMath.ToXZ(pos) : Vector2.zero;
         _state = CapState.Idle;
@@ -343,6 +359,19 @@ public class Cap : MonoBehaviour
     /// factory-created at that point).
     /// </summary>
     public void MarkFactoryCreated() => _isScenePlaced = false;
+
+    /// <summary>
+    /// Re-caches the _flipEffects array. Called by CapFactory.CreateComposed
+    /// AFTER dynamically adding ability components (Bomb/Flipper/Defender/Predictor).
+    ///
+    /// WHY: Cap.Awake runs during Object.Instantiate — BEFORE CreateComposed
+    /// adds the ability components. So _flipEffects = GetComponents<CapFlipEffect>()
+    /// in Awake returns an EMPTY array (the base prefab has no ability components).
+    /// The CapEffectResolver uses FlipEffects to iterate effects — without this
+    /// refresh, dynamically-added abilities are invisible to the resolver and
+    /// never trigger.
+    /// </summary>
+    public void RefreshFlipEffects() => _flipEffects = GetComponents<CapFlipEffect>();
 
     public void SetOwner(CapOwner owner)
     {

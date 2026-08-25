@@ -37,4 +37,24 @@ public sealed class PredictorCapEffect : MonoBehaviour, ICapAbility
         $"Когда целишься этой фишкой, видишь на {PredictionDepthBonus} отскока дальше";
 
     public int PredictionDepthBonus => _level switch { 2 => _depthBonusL2, 3 => _depthBonusL3, _ => _depthBonusL1 };
+
+    /// <summary>
+    /// Sets the ability level. Called by CapFactory.CreateComposed after the
+    /// component is added to a cap instance (parameters come from CopyFrom).
+    /// </summary>
+    public void SetLevel(int level) => _level = Mathf.Clamp(level, 1, 3);
+
+    /// <summary>
+    /// Copies all serialized parameters from the given template's PredictorCapEffect.
+    /// Used by CapFactory.CreateComposed to apply a deck's predictor template parameters
+    /// to a dynamically-added predictor component on a cap instance.
+    /// </summary>
+    public void CopyFrom(PredictorCapEffect source)
+    {
+        if (source == null) return;
+        _stickerSprite = source._stickerSprite;
+        _depthBonusL1 = source._depthBonusL1;
+        _depthBonusL2 = source._depthBonusL2;
+        _depthBonusL3 = source._depthBonusL3;
+    }
 }

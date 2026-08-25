@@ -47,6 +47,35 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
 
     public float EffectRadius => Radius;
 
+    /// <summary>
+    /// Sets the ability level. Called by CapFactory.CreateComposed after the
+    /// component is added to a cap instance (parameters come from CopyFrom).
+    /// </summary>
+    public void SetLevel(int level) => _level = Mathf.Clamp(level, 1, 3);
+
+    /// <summary>
+    /// Copies all serialized parameters from the given template's FlipperCapEffect.
+    /// Used by CapFactory.CreateComposed to apply a deck's flipper template parameters
+    /// to a dynamically-added flipper component on a cap instance.
+    /// </summary>
+    public void CopyFrom(FlipperCapEffect source)
+    {
+        if (source == null) return;
+        _stickerSprite = source._stickerSprite;
+        _radiusL1 = source._radiusL1;
+        _radiusL2 = source._radiusL2;
+        _radiusL3 = source._radiusL3;
+        TriggerSide = source.TriggerSide;
+        FlipVFX = source.FlipVFX;
+        FlipSound = source.FlipSound;
+        FlipPitch = source.FlipPitch;
+        FlipVolume = source.FlipVolume;
+        FlipShakeAmount = source.FlipShakeAmount;
+        FlipShakeDuration = source.FlipShakeDuration;
+        TriggerMaterial = source.TriggerMaterial;
+        MaterialChangeDuration = source.MaterialChangeDuration;
+    }
+
     [Header("Trigger")]
     [Tooltip("Which side the flipper must land on to trigger. " +
              "Face = triggers when it lands face-up. Back = triggers when back-up. " +

@@ -37,18 +37,52 @@ public class RunManager : MonoBehaviour
 
     // --- Run state ---
 
-    /// <summary>A single entry in the run deck. Stores the prefab + generated sprites.</summary>
+    /// <summary>
+    /// A single entry in the run deck. Stores the composed cap definition
+    /// (base prefab + ability levels) + generated sprites + a unique EntryId
+    /// for loss matching.
+    ///
+    /// For gained enemy caps, the BasePrefab is the captured clone (an exact
+    /// copy of the enemy cap at capture time). The ability levels are read
+    /// off the clone's components.
+    /// </summary>
     [System.Serializable]
     public class DeckEntry
     {
-        public Cap Prefab;
+        /// <summary>
+        /// Unique ID for this entry. Stamped onto each Cap created from this
+        /// entry (via Cap.RunDeckEntryId). Used to identify which deck entry a
+        /// lost cap came from — no sprite matching needed.
+        /// </summary>
+        public int EntryId;
+
+        /// <summary>
+        /// The base cap prefab. For player caps from the deck, this is the
+        /// visual-only base prefab. For gained enemy caps, this is the captured
+        /// clone (an exact copy of the enemy cap — preserves ability components
+        /// and their current levels).
+        /// </summary>
+        public Cap BasePrefab;
+
+        /// <summary>Ability levels (0 = no ability, 1-3 = ability level).</summary>
+        public int BombLevel;
+        public int FlipperLevel;
+        public int DefenderLevel;
+        public int PredictorLevel;
+
         public Sprite GeneratedFaceSprite;
         public Sprite GeneratedBackSprite;
         public CapOwner OriginalOwner = CapOwner.Player;
 
-        public DeckEntry(Cap prefab, Sprite face, Sprite back, CapOwner owner)
+        public DeckEntry(int entryId, Cap basePrefab, int bomb, int flipper, int defender, int predictor,
+            Sprite face, Sprite back, CapOwner owner)
         {
-            Prefab = prefab;
+            EntryId = entryId;
+            BasePrefab = basePrefab;
+            BombLevel = bomb;
+            FlipperLevel = flipper;
+            DefenderLevel = defender;
+            PredictorLevel = predictor;
             GeneratedFaceSprite = face;
             GeneratedBackSprite = back;
             OriginalOwner = owner;
@@ -94,6 +128,7 @@ public class RunManager : MonoBehaviour
         public CapSnapshot Snapshot;
         public Cap Cap; // may be null if destroyed by FallingCap
         public Cap CapturedClone; // for enemy caps: a parked clone that survives scene unload
+        public int RunDeckEntryId; // for player caps: the RunDeck entry ID to remove
     }
 
     private readonly List<LostCapRecord> _playerCapsLostThisBattle = new();
@@ -192,15 +227,16 @@ public class RunManager : MonoBehaviour
         _enemyCapsLostThisBattle.Clear();
         LastBattleResult = null;
 
-        // Generate the deck: copy each cap prefab from the template, generate
-        // visuals ONCE (face/back sprites), and store them.
+        // Generate the deck from the composed cap entries. Each entry specifies
+        // a base prefab + ability levels. We generate visuals ONCE (face/back
+        // sprites) and store the composed entry for later re-instantiation.
         if (sequence.StartingPlayerDeck != null && sequence.StartingPlayerDeck.Caps != null)
         {
             for (int i = 0; i < sequence.StartingPlayerDeck.Caps.Length; i++)
             {
-                Cap prefab = sequence.StartingPlayerDeck.Caps[i];
-                if (prefab == null) continue;
-                RunDeck.Add(GenerateDeckEntry(prefab, CapOwner.Player));
+                CapDeckDefinition.ComposedCapEntry entry = sequence.StartingPlayerDeck.Caps[i];
+                if (entry.BasePrefab == null) continue;
+                RunDeck.Add(GenerateDeckEntry(entry, sequence.StartingPlayerDeck, CapOwner.Player));
             }
         }
 
@@ -336,8 +372,8 @@ public class RunManager : MonoBehaviour
         var committedClones = new HashSet<Cap>();
         for (int i = 0; i < RunDeck.Count; i++)
         {
-            if (RunDeck[i].Prefab != null)
-                committedClones.Add(RunDeck[i].Prefab);
+            if (RunDeck[i].BasePrefab != null)
+                committedClones.Add(RunDeck[i].BasePrefab);
         }
 
         // Check enemy lost records (player lost records don't have captured clones).
@@ -478,7 +514,8 @@ public class RunManager : MonoBehaviour
         {
             Snapshot = snapshot,
             Cap = cap,
-            CapturedClone = capturedClone
+            CapturedClone = capturedClone,
+            RunDeckEntryId = cap.RunDeckEntryId, // 0 if not from the run deck
         };
 
         if (cap.Owner == CapOwner.Player)
@@ -489,7 +526,8 @@ public class RunManager : MonoBehaviour
         if (_logRun)
             Debug.Log($"[RunManager] Recorded cap lost: {cap.name} (owner={cap.Owner}). " +
                       $"Snapshotted {snapshot.Stickers.Count} stickers. " +
-                      $"Clone captured: {(capturedClone != null ? "yes" : "no")}.");
+                      $"Clone captured: {(capturedClone != null ? "yes" : "no")}. " +
+                      $"RunDeckEntryId: {cap.RunDeckEntryId}.");
     }
 
     /// <summary>
@@ -591,9 +629,6 @@ public class RunManager : MonoBehaviour
             // Prefer the captured clone — it's a deep copy of the enemy cap's
             // state at the moment it was knocked off, and it survives scene
             // transitions because it's parented to RunManager (DontDestroyOnLoad).
-            // This is the FIX for "gained enemy caps not added to deck" AND for
-            // "stale prefab reference" — the clone reflects the cap's current
-            // state, not the original prefab's state.
             Cap prefab = capturedClone;
             if (prefab == null)
             {
@@ -624,42 +659,77 @@ public class RunManager : MonoBehaviour
                 }
             }
 
-            RunDeck.Add(new DeckEntry(prefab, faceSprite, backSprite, CapOwner.Player));
+            // Read ability levels off the captured clone (or live cap if available).
+            // The clone is an exact copy of the enemy cap, so its ability components
+            // and their levels are preserved.
+            Cap sourceForLevels = capturedClone != null ? capturedClone : enemyCap;
+            int bombLevel = 0, flipperLevel = 0, defenderLevel = 0, predictorLevel = 0;
+            if (sourceForLevels != null)
+            {
+                var bomb = sourceForLevels.GetComponent<BombCapFlipEffect>();
+                if (bomb != null) bombLevel = bomb.Level;
+                var flipper = sourceForLevels.GetComponent<FlipperCapEffect>();
+                if (flipper != null) flipperLevel = flipper.Level;
+                var defender = sourceForLevels.GetComponent<DefenderCapEffect>();
+                if (defender != null) defenderLevel = defender.Level;
+                var predictor = sourceForLevels.GetComponent<PredictorCapEffect>();
+                if (predictor != null) predictorLevel = predictor.Level;
+            }
+
+            int entryId = CapFactory.NextRunDeckEntryId();
+            RunDeck.Add(new DeckEntry(entryId, prefab,
+                bombLevel, flipperLevel, defenderLevel, predictorLevel,
+                faceSprite, backSprite, CapOwner.Player));
 
             if (_logRun)
                 Debug.Log($"[RunManager] Gained enemy cap: {record.Snapshot.DisplayName} " +
-                          $"(source: {(capturedClone != null ? "captured clone" : "live cap")}).");
+                          $"(source: {(capturedClone != null ? "captured clone" : "live cap")}), " +
+                          $"abilities: B={bombLevel} F={flipperLevel} D={defenderLevel} P={predictorLevel}.");
         }
     }
 
+    /// <summary>
+    /// Removes lost player caps from the deck by their RunDeckEntryId.
+    /// This replaces the old fragile GeneratedFaceSprite matching — now each
+    /// cap is stamped with a unique entry ID at creation time, and we just
+    /// remove the entry with that ID. Works even if multiple caps have the
+    /// same abilities and levels (each has a unique ID).
+    /// </summary>
     List<DeckEntry> RemoveLostPlayerCaps(List<DeckEntry> deck)
     {
         var result = new List<DeckEntry>(deck);
-        var toRemove = new List<int>();
 
         for (int i = 0; i < _playerCapsLostThisBattle.Count; i++)
         {
             LostCapRecord record = _playerCapsLostThisBattle[i];
+            int lostEntryId = record.RunDeckEntryId;
 
-            // Use the snapshot's IconSprite for matching — it's the GeneratedFaceSprite
-            // (or back sprite, or null). This works even if the cap is destroyed.
-            Sprite lostFace = record.Snapshot.IconSprite;
+            if (lostEntryId == 0)
+            {
+                // Cap was not from the run deck (e.g., a scene-placed cap, or
+                // a cap created in sandbox mode). Skip — nothing to remove.
+                if (_logRun)
+                    Debug.LogWarning($"[RunManager] Lost cap '{record.Snapshot.DisplayName}' has RunDeckEntryId=0 — not from the run deck, skipping removal.");
+                continue;
+            }
 
-            // Find a matching deck entry by face sprite.
+            // Find and remove the entry with this ID.
+            bool found = false;
             for (int j = 0; j < result.Count; j++)
             {
-                if (toRemove.Contains(j)) continue;
-                if (result[j].GeneratedFaceSprite == lostFace && lostFace != null)
+                if (result[j].EntryId == lostEntryId)
                 {
-                    toRemove.Add(j);
+                    if (_logRun)
+                        Debug.Log($"[RunManager] Removing lost cap entry {lostEntryId} ({result[j].BasePrefab?.name}).");
+                    result.RemoveAt(j);
+                    found = true;
                     break;
                 }
             }
-        }
 
-        toRemove.Sort((a, b) => b.CompareTo(a));
-        for (int i = 0; i < toRemove.Count; i++)
-            result.RemoveAt(toRemove[i]);
+            if (!found && _logRun)
+                Debug.LogWarning($"[RunManager] Lost cap entry {lostEntryId} not found in run deck — already removed?");
+        }
 
         return result;
     }
@@ -749,11 +819,18 @@ public class RunManager : MonoBehaviour
     // Deck entry generation
     // -----------------------------------------------------------------------
 
-    DeckEntry GenerateDeckEntry(Cap prefab, CapOwner owner)
+    /// <summary>
+    /// Creates a DeckEntry from a composed cap entry. Instantiates a hidden
+    /// preview, calls Configure (which triggers GenerateVisuals for the face/back
+    /// sprites), extracts the generated sprites, destroys the preview, and
+    /// returns the entry.
+    /// </summary>
+    DeckEntry GenerateDeckEntry(CapDeckDefinition.ComposedCapEntry entry, CapDeckDefinition deck, CapOwner owner)
     {
-        if (prefab == null) return null;
+        if (entry.BasePrefab == null) return null;
 
-        GameObject previewObj = Instantiate(prefab.gameObject, new Vector3(9999, 9999, 9999), Quaternion.identity);
+        // Create a hidden instance to generate visuals.
+        GameObject previewObj = Instantiate(entry.BasePrefab.gameObject, new Vector3(9999, 9999, 9999), Quaternion.identity);
         previewObj.SetActive(false);
         Cap previewCap = previewObj.GetComponent<Cap>();
         if (previewCap == null)
@@ -761,21 +838,46 @@ public class RunManager : MonoBehaviour
 
         previewCap.Configure(0, true, owner);
 
+        // Extract generated sprites.
         CapVisualGenerator gen = previewCap.GetComponent<CapVisualGenerator>();
         Sprite faceSprite = gen != null ? gen.GeneratedFaceSprite : null;
         Sprite backSprite = gen != null ? gen.GeneratedBackSprite : null;
 
         Destroy(previewObj);
 
-        return new DeckEntry(prefab, faceSprite, backSprite, owner);
+        int entryId = CapFactory.NextRunDeckEntryId();
+        return new DeckEntry(entryId, entry.BasePrefab,
+            entry.BombLevel, entry.FlipperLevel, entry.DefenderLevel, entry.PredictorLevel,
+            faceSprite, backSprite, owner);
     }
 
+    /// <summary>
+    /// Generates a DeckEntry from a cap that was already instantiated (e.g.,
+    /// an enemy cap knocked off the field — captured as a clone). The clone
+    /// is used as the BasePrefab (preserves all ability components + levels).
+    /// Ability levels are read off the clone's components.
+    /// </summary>
     public DeckEntry GenerateDeckEntryFromCap(Cap cap, CapOwner newOwner)
     {
         if (cap == null) return null;
+
         CapVisualGenerator gen = cap.GetComponent<CapVisualGenerator>();
         Sprite face = gen != null ? gen.GeneratedFaceSprite : null;
         Sprite back = gen != null ? gen.GeneratedBackSprite : null;
-        return new DeckEntry(cap, face, back, newOwner);
+
+        // Read ability levels off the cap's existing components.
+        int bombLevel = 0, flipperLevel = 0, defenderLevel = 0, predictorLevel = 0;
+        var bomb = cap.GetComponent<BombCapFlipEffect>();
+        if (bomb != null) bombLevel = bomb.Level;
+        var flipper = cap.GetComponent<FlipperCapEffect>();
+        if (flipper != null) flipperLevel = flipper.Level;
+        var defender = cap.GetComponent<DefenderCapEffect>();
+        if (defender != null) defenderLevel = defender.Level;
+        var predictor = cap.GetComponent<PredictorCapEffect>();
+        if (predictor != null) predictorLevel = predictor.Level;
+
+        int entryId = CapFactory.NextRunDeckEntryId();
+        return new DeckEntry(entryId, cap, bombLevel, flipperLevel, defenderLevel, predictorLevel,
+            face, back, newOwner);
     }
 }

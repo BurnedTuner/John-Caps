@@ -52,6 +52,39 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
 
     public Color ZoneColor => Color.red;
 
+    /// <summary>
+    /// Sets the ability level. Called by CapFactory.CreateComposed after the
+    /// component is added to a cap instance (parameters come from CopyFrom).
+    /// </summary>
+    public void SetLevel(int level) => _level = Mathf.Clamp(level, 1, 3);
+
+    /// <summary>
+    /// Copies all serialized parameters (sticker, level parameters, trigger side,
+    /// VFX, material change) from the given template's BombCapFlipEffect.
+    /// Used by CapFactory.CreateComposed to apply a deck's bomb template parameters
+    /// to a dynamically-added bomb component on a cap instance.
+    /// </summary>
+    public void CopyFrom(BombCapFlipEffect source)
+    {
+        if (source == null) return;
+        _stickerSprite = source._stickerSprite;
+        _radiusL1 = source._radiusL1;
+        _radiusL2 = source._radiusL2;
+        _radiusL3 = source._radiusL3;
+        _forceL1 = source._forceL1;
+        _forceL2 = source._forceL2;
+        _forceL3 = source._forceL3;
+        TriggerSide = source.TriggerSide;
+        ExplosionVFX = source.ExplosionVFX;
+        ExplosionSound = source.ExplosionSound;
+        ExplosionPitch = source.ExplosionPitch;
+        ExplosionVolume = source.ExplosionVolume;
+        ExplosionShakeAmount = source.ExplosionShakeAmount;
+        ExplosionShakeDuration = source.ExplosionShakeDuration;
+        ExplosionMaterial = source.ExplosionMaterial;
+        MaterialChangeDuration = source.MaterialChangeDuration;
+    }
+
     [Header("Trigger")]
     [Tooltip("Which side the bomb must land on to trigger the explosion.")]
     public BombTriggerSide TriggerSide = BombTriggerSide.Face;
