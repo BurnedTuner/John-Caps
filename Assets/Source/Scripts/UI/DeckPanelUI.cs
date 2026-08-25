@@ -21,6 +21,13 @@ using UnityEngine.InputSystem;
 /// return null if the cursor is over the panel. This is implemented via
 /// <see cref="IsCursorOverPanel"/>, which StickerManager queries.
 ///
+/// DATA SOURCE:
+///   - Source.CapHand (default): reads from the battle scene's CapHand — the
+///     live deck that gets drawn into the hand. Used in battle scenes.
+///   - Source.RunManager: reads from RunManager.RunDeck — the persistent deck
+///     that survives scene transitions. Used in the RunProgress scene (which
+///     has no CapHand, just RunManager).
+///
 /// Setup in Unity:
 /// 1. Create a Canvas with:
 ///    - A Button (the "deck" toggle button — always visible).
@@ -42,9 +49,36 @@ using UnityEngine.InputSystem;
 /// 3. Tooltip: assign _tooltipPrefab (same prefab as StickerManager uses —
 ///    should have a HintView component). If null, tooltips are disabled.
 /// 4. Add DeckPanelUI to any GameObject. Assign references. Done.
+/// 5. Set _source to CapHand (battle scene) or RunManager (progress scene).
+///    In CapHand mode, _capHand is auto-found if null.
+///    In RunManager mode, _capHand is ignored (RunManager.Instance is used).
 /// </summary>
 public class DeckPanelUI : MonoBehaviour
 {
+    /// <summary>
+    /// Where the deck panel reads its cap data from.
+    /// </summary>
+    public enum Source
+    {
+        /// <summary>
+        /// Read from the battle scene's CapHand. Used in battle scenes.
+        /// </summary>
+        CapHand = 0,
+
+        /// <summary>
+        /// Read from RunManager.RunDeck. Used in the RunProgress scene (which
+        /// has no CapHand — only RunManager.Instance, which persists via
+        /// DontDestroyOnLoad).
+        /// </summary>
+        RunManager = 1,
+    }
+
+    [Header("Data source")]
+    [Tooltip("Where to read the deck from. CapHand = battle scene's live hand " +
+             "(auto-found if _capHand is null). RunManager = persistent run deck " +
+             "(used in the RunProgress scene).")]
+    [SerializeField] private Source _source = Source.CapHand;
+
     [Header("References")]
     [Tooltip("The button that toggles the deck panel open/closed. Its onClick is auto-wired. " +
              "Also reacts to the E key being held (visual feedback).")]
@@ -342,8 +376,7 @@ public class DeckPanelUI : MonoBehaviour
     /// </summary>
     void PollDeckCount()
     {
-        if (_capHand == null) return;
-        int currentCount = _capHand.DeckCount;
+        int currentCount = CurrentDeckCount;
         if (currentCount != _lastReportedCount)
         {
             _lastReportedCount = currentCount;
@@ -359,10 +392,15 @@ public class DeckPanelUI : MonoBehaviour
     /// Rebuilds the entry list from the current deck. Destroys old entries,
     /// instantiates one per remaining deck cap. No-op if the cap entry prefab
     /// or content parent is missing.
+    ///
+    /// Branches by _source: CapHand reads live cap instances (with already-set
+    /// generated sprites). RunManager reads DeckEntry prefab references + stored
+    /// sprites (no live cap instance needed — works in the progress scene
+    /// where CapHand doesn't exist).
     /// </summary>
     void Refresh()
     {
-        if (_capEntryPrefab == null || _contentParent == null || _capHand == null)
+        if (_capEntryPrefab == null || _contentParent == null)
         {
             UpdateCountText();
             return;
@@ -375,6 +413,31 @@ public class DeckPanelUI : MonoBehaviour
                 Destroy(_entries[i].EntryObj);
         }
         _entries.Clear();
+
+        if (_source == Source.RunManager)
+            RefreshFromRunManager();
+        else
+            RefreshFromCapHand();
+
+        // Position stickers radially around each cap icon NOW (and again every
+        // frame in Update) so they appear in the right place immediately.
+        UpdateStickerPositions();
+
+        UpdateCountText();
+    }
+
+    /// <summary>
+    /// Reads from CapHand.DeckCount + GetDeckCap(i). Each preview cap already
+    /// has its generated visuals (Cap.Configure → GenerateVisuals was called
+    /// when CapHand.ResetHand created the preview caps).
+    /// </summary>
+    void RefreshFromCapHand()
+    {
+        if (_capHand == null)
+        {
+            _capHand = FindFirstObjectByType<CapHand>();
+            if (_capHand == null) return;
+        }
 
         // Spawn ONE entry per remaining deck cap — never stack similar caps
         // into a single slot. Each cap gets its own entry, even if multiple
@@ -422,56 +485,28 @@ public class DeckPanelUI : MonoBehaviour
             }
 
             // Spawn sticker images for each ICapAbility on the cap.
-            // Stickers are parented DIRECTLY to the entry root (not to a
-            // StickerContainer) — their anchoredPosition is set per-frame in
-            // UpdateStickerPositions to place them radially around the cap icon,
-            // mirroring how StickerManager places stickers radially around
-            // field/hand caps (but on a flat UI plane instead of world XZ).
-            //
-            // Stickers are ALWAYS visible in the deck panel — they're not
-            // hover-gated. The player sees the cap's abilities at a glance.
             if (_stickerImagePrefab != null)
             {
-                // Use GetComponents<ICapAbility> (root only) to match
-                // StickerManager's behavior — abilities live on the cap's root
-                // GameObject (every effect has [RequireComponent(typeof(Cap))]).
                 var abilities = cap.GetComponents<ICapAbility>();
-                if (i == 0)
-                {
-                    Debug.Log($"[DeckPanelUI] First deck cap '{cap.name}': found {abilities.Length} ICapAbility components on root. StickerImagePrefab is '{(_stickerImagePrefab != null ? _stickerImagePrefab.name : "null")}'.");
-                }
                 for (int a = 0; a < abilities.Length; a++)
                 {
                     if (abilities[a] == null) continue;
                     Sprite stickerSprite = abilities[a].StickerSprite;
-                    if (stickerSprite == null)
-                    {
-                        if (i == 0)
-                            Debug.LogWarning($"[DeckPanelUI] Ability {a} on '{cap.name}' has no StickerSprite — skipping.");
-                        continue;
-                    }
+                    if (stickerSprite == null) continue;
 
-                    // Parent to the entry root so the sticker's localPosition
-                    // is relative to the cap icon. UpdateStickerPositions sets
-                    // the anchoredPosition radially each frame.
                     GameObject stickerObj = Instantiate(_stickerImagePrefab, entryObj.transform);
                     Image stickerImg = stickerObj.GetComponent<Image>();
                     if (stickerImg == null) stickerImg = stickerObj.GetComponentInChildren<Image>();
                     if (stickerImg == null) stickerImg = stickerObj.AddComponent<Image>();
                     stickerImg.sprite = stickerSprite;
                     stickerImg.preserveAspect = true;
-                    stickerImg.raycastTarget = false; // we do our own hover detection
+                    stickerImg.raycastTarget = false;
 
-                    // Set the sticker's size from the inspector field.
-                    // Overrides the prefab's sizeDelta so the designer can
-                    // tune deck sticker size without editing the prefab.
                     RectTransform srt = stickerObj.transform as RectTransform;
                     if (srt != null)
                         srt.sizeDelta = _stickerSize;
                     stickerObj.SetActive(true);
 
-                    // Set the level badge (x2/x3) via StickerView, same as
-                    // StickerManager does for field caps.
                     StickerView view = stickerObj.GetComponent<StickerView>();
                     if (view == null)
                         view = stickerObj.AddComponent<StickerView>();
@@ -484,12 +519,120 @@ public class DeckPanelUI : MonoBehaviour
 
             _entries.Add(entry);
         }
+    }
 
-        // Position stickers radially around each cap icon NOW (and again every
-        // frame in Update) so they appear in the right place immediately.
-        UpdateStickerPositions();
+    /// <summary>
+    /// Reads from RunManager.Instance.RunDeck. Each DeckEntry stores the cap
+    /// prefab + pre-generated face/back sprites. Stickers are read from the
+    /// prefab's ICapAbility components (the prefab's serialized state —
+    /// ability levels are baked in at design time, OR updated when the cap is
+    /// captured as a clone of a modified enemy cap).
+    ///
+    /// No live CapHand is needed — this works in the RunProgress scene where
+    /// only RunManager.Instance (DontDestroyOnLoad) is present.
+    /// </summary>
+    void RefreshFromRunManager()
+    {
+        RunManager runManager = RunManager.Instance;
+        if (runManager == null || runManager.RunDeck == null) return;
 
-        UpdateCountText();
+        var runDeck = runManager.RunDeck;
+        for (int i = 0; i < runDeck.Count; i++)
+        {
+            var deckEntry = runDeck[i];
+            Cap prefab = deckEntry.Prefab;
+            if (prefab == null) continue;
+
+            GameObject entryObj = Instantiate(_capEntryPrefab, _contentParent);
+            Image capIcon = entryObj.GetComponent<Image>();
+            if (capIcon == null) capIcon = entryObj.GetComponentInChildren<Image>();
+            RectTransform capIconRT = capIcon != null ? capIcon.rectTransform : null;
+
+            var entry = new DeckEntry
+            {
+                Cap = prefab, // store the prefab reference (used for sticker lookup)
+                EntryObj = entryObj,
+                CapIcon = capIcon,
+                CapIconRT = capIconRT,
+                StickerImages = new List<Image>(),
+                StickerDescriptions = new List<string>()
+            };
+
+            // Set the cap icon sprite: prefer the stored GeneratedFaceSprite
+            // (from the run deck entry), fall back to the prefab's DeckSprite,
+            // then first sticker, then _fallbackCapSprite.
+            if (capIcon != null)
+            {
+                Sprite capSprite = deckEntry.GeneratedFaceSprite;
+                if (capSprite == null) capSprite = prefab.DeckSprite;
+                if (capSprite == null)
+                {
+                    var fallbackAbilities = prefab.GetComponents<ICapAbility>();
+                    for (int a = 0; a < fallbackAbilities.Length; a++)
+                    {
+                        if (fallbackAbilities[a] != null && fallbackAbilities[a].StickerSprite != null)
+                        {
+                            capSprite = fallbackAbilities[a].StickerSprite;
+                            break;
+                        }
+                    }
+                }
+                if (capSprite == null) capSprite = _fallbackCapSprite;
+                if (capSprite != null)
+                    capIcon.sprite = capSprite;
+            }
+
+            // Spawn sticker images for each ICapAbility on the prefab.
+            if (_stickerImagePrefab != null)
+            {
+                var abilities = prefab.GetComponents<ICapAbility>();
+                for (int a = 0; a < abilities.Length; a++)
+                {
+                    if (abilities[a] == null) continue;
+                    Sprite stickerSprite = abilities[a].StickerSprite;
+                    if (stickerSprite == null) continue;
+
+                    GameObject stickerObj = Instantiate(_stickerImagePrefab, entryObj.transform);
+                    Image stickerImg = stickerObj.GetComponent<Image>();
+                    if (stickerImg == null) stickerImg = stickerObj.GetComponentInChildren<Image>();
+                    if (stickerImg == null) stickerImg = stickerObj.AddComponent<Image>();
+                    stickerImg.sprite = stickerSprite;
+                    stickerImg.preserveAspect = true;
+                    stickerImg.raycastTarget = false;
+
+                    RectTransform srt = stickerObj.transform as RectTransform;
+                    if (srt != null)
+                        srt.sizeDelta = _stickerSize;
+                    stickerObj.SetActive(true);
+
+                    StickerView view = stickerObj.GetComponent<StickerView>();
+                    if (view == null)
+                        view = stickerObj.AddComponent<StickerView>();
+                    view.SetLevel(abilities[a].Level);
+
+                    entry.StickerImages.Add(stickerImg);
+                    entry.StickerDescriptions.Add(abilities[a].Description ?? string.Empty);
+                }
+            }
+
+            _entries.Add(entry);
+        }
+    }
+
+    /// <summary>
+    /// Returns the current deck count, branching by _source.
+    /// </summary>
+    int CurrentDeckCount
+    {
+        get
+        {
+            if (_source == Source.RunManager)
+            {
+                RunManager rm = RunManager.Instance;
+                return rm != null && rm.RunDeck != null ? rm.RunDeck.Count : 0;
+            }
+            return _capHand != null ? _capHand.DeckCount : 0;
+        }
     }
 
     /// <summary>
@@ -683,7 +826,7 @@ public class DeckPanelUI : MonoBehaviour
     void UpdateCountText()
     {
         if (_countText == null) return;
-        int count = _capHand != null ? _capHand.DeckCount : 0;
+        int count = CurrentDeckCount;
         _countText.text = $"Осталось: {count}";
     }
 }

@@ -141,6 +141,15 @@ public class MatchRewardsPanel : MonoBehaviour
         if (_uiCanvas == null) _uiCanvas = GetComponentInParent<Canvas>();
         if (_uiCanvas == null) _uiCanvas = FindFirstObjectByType<Canvas>();
         _runManager = RunManager.Instance;
+
+        // Hide the root panel IN AWAKE — not in Start.
+        // Unity guarantees Awake runs before ANY Start (across all components),
+        // so this hides the panel before RunProgressUI.Start can call Populate
+        // (which sets it active). If we hid it in Start instead, the Start order
+        // would be non-deterministic: if MatchRewardsPanel.Start ran AFTER
+        // RunProgressUI.Start, it would hide the panel that Populate just showed.
+        if (_rootPanel != null)
+            _rootPanel.SetActive(false);
     }
 
     void OnEnable()
@@ -167,15 +176,10 @@ public class MatchRewardsPanel : MonoBehaviour
             _tooltipRect = _tooltipInstance.transform as RectTransform;
         }
 
-        // Panel starts hidden.
-        // IMPORTANT: do NOT auto-populate from RunManager.LastBattleResult here.
-        // When the player advances to the next level, the new scene's MatchRewardsPanel
-        // would see the PREVIOUS battle's LastBattleResult (RunManager persists via
-        // DontDestroyOnLoad) and auto-show the panel — making it look like the result
-        // panel "didn't hide itself". The panel should ONLY populate when a NEW
-        // OnBattleEnded event fires (i.e., when a battle actually ends in this scene).
-        if (_rootPanel != null)
-            _rootPanel.SetActive(false);
+        // Root panel activation is owned by Awake (hide) + Populate (show).
+        // RunProgressUI.Start calls Populate(LastBattleResult) which sets the
+        // panel active. We do NOT touch _rootPanel here — doing so would
+        // override Populate if Start runs after RunProgressUI.Start.
     }
 
     void SubscribeToRunManager()

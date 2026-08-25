@@ -9,9 +9,19 @@ using TMPro;
 /// RunManager on Awake and subscribes to its events. Destroyed when the
 /// next scene loads.
 ///
-/// The OnBattleEnded event now carries a <see cref="BattleResult"/> with
-/// immutable cap snapshots for the rewards UI. This component forwards the
-/// result to an optional <see cref="MatchRewardsPanel"/> child.
+/// IMPORTANT — flow change:
+///   Navigation buttons no longer call RunManager.AdvanceToNextLevel /
+///   RestartCurrentLevel directly. Instead, they load the RunProgress scene
+///   (an intermediate hub between battles). The RunProgress scene reads
+///   LastBattleResult to show the gained/lost caps, then its own "Next Level"
+///   button calls AdvanceToNextLevel / RestartCurrentLevel.
+///
+///   This component does NOT clear LastBattleResult — the RunProgress scene
+///   owns the lifecycle now. Clearing it here would prevent the progress scene
+///   from displaying the gained/lost caps.
+///
+///   The match-rewards panel (gained/lost caps with stickers) is NO LONGER
+///   shown in the battle scene. It's only shown in the RunProgress scene.
 ///
 /// Setup (per battle scene):
 /// 1. Add this to a GameObject in the battle scene.
@@ -19,9 +29,7 @@ using TMPro;
 ///    Set all panels inactive by default.
 /// 3. Assign buttons on each panel: _nextLevelButton, _loseContinueButton, _bossRetryButton, _returnToMenuButton, _victoryReturnButton.
 /// 4. Assign heart images (3 Images — disabled left-to-right as hearts are lost).
-/// 5. (Optional) Assign _levelText and _mainMenuSceneName.
-/// 6. (Optional) Assign _rewardsPanel to enable the match-rewards UI (shows
-///    caps gained/lost with stickers and hover tooltips).
+/// 5. (Optional) Assign _levelText, _mainMenuSceneName, _progressSceneName.
 /// </summary>
 public class BattleResultUI : MonoBehaviour
 {
@@ -64,15 +72,10 @@ public class BattleResultUI : MonoBehaviour
     [Tooltip("Optional text showing the current level number.")]
     [SerializeField] private TMP_Text _levelText;
 
-    [Header("Rewards UI")]
-    [Tooltip("Optional: the match-rewards panel that shows caps gained/lost. " +
-             "If assigned, this panel is shown alongside whichever post-battle " +
-             "panel activates. The rewards panel self-subscribes to RunManager " +
-             "events, so this reference is only used to hide it when the " +
-             "post-battle panels are dismissed.")]
-    [SerializeField] private MatchRewardsPanel _rewardsPanel;
-
     [Header("Scene config")]
+    [Tooltip("The RunProgress scene name (loaded after the player dismisses the battle result panel).")]
+    [SerializeField] private string _progressSceneName = "RunProgress";
+
     [Tooltip("The main menu scene name (loaded when the run ends).")]
     [SerializeField] private string _mainMenuSceneName = "MainMenu";
 
@@ -153,51 +156,47 @@ public class BattleResultUI : MonoBehaviour
     // Button handlers
     // -----------------------------------------------------------------------
 
-    void OnNextLevel()
+    /// <summary>
+    /// Loads the RunProgress scene. The progress scene reads LastBattleResult
+    /// to show the gained/lost caps and decides which navigation button to show
+    /// (Next Level / Retry Boss / Return to Menu).
+    ///
+    /// Does NOT clear LastBattleResult — the progress scene owns the lifecycle
+    /// now, and it needs LastBattleResult to populate the rewards panel.
+    /// </summary>
+    void LoadProgressScene()
     {
         HideAllPanels();
-        HideRewardsPanel();
-        _runManager?.AdvanceToNextLevel();
+        if (!string.IsNullOrEmpty(_progressSceneName))
+            SceneManager.LoadScene(_progressSceneName);
+    }
+
+    void OnNextLevel()
+    {
+        // Win: go to the progress scene, which shows the next-level button.
+        LoadProgressScene();
     }
 
     void OnLoseContinue()
     {
-        // Non-boss loss: skip to next level.
-        HideAllPanels();
-        HideRewardsPanel();
-        _runManager?.AdvanceToNextLevel();
+        // Non-boss loss: go to the progress scene, which shows the next-level button (skip).
+        LoadProgressScene();
     }
 
     void OnBossRetry()
     {
-        // Boss loss: retry the same level.
-        HideAllPanels();
-        HideRewardsPanel();
-        _runManager?.RestartCurrentLevel();
+        // Boss loss: go to the progress scene, which shows the retry-boss button.
+        LoadProgressScene();
     }
 
     void OnReturnToMenu()
     {
+        // Run over / victory: clear LastBattleResult and return to the main menu.
         HideAllPanels();
-        HideRewardsPanel();
-        if (!string.IsNullOrEmpty(_mainMenuSceneName))
-            SceneManager.LoadScene(_mainMenuSceneName);
-    }
-
-    void HideRewardsPanel()
-    {
-        // The rewards panel self-manages its visibility via OnBattleEnded,
-        // but we also hide it here so it disappears when the player clicks
-        // a navigation button (Next / Continue / Retry / Return).
-        if (_rewardsPanel != null)
-            _rewardsPanel.Hide();
-
-        // Clear LastBattleResult so the NEXT scene's MatchRewardsPanel doesn't
-        // see a stale result. RunManager persists via DontDestroyOnLoad, so without
-        // this, the new scene's panel would see the previous battle's result and
-        // (if it auto-populates) re-show itself.
         if (_runManager != null)
             _runManager.ClearLastBattleResult();
+        if (!string.IsNullOrEmpty(_mainMenuSceneName))
+            SceneManager.LoadScene(_mainMenuSceneName);
     }
 
     // -----------------------------------------------------------------------
@@ -242,16 +241,9 @@ public class BattleResultUI : MonoBehaviour
         }
 
         UpdateLevelText();
-
-        // The rewards panel self-populates via its own OnBattleEnded subscription.
-        // If a rewards panel is assigned here, ensure it's visible (in case it
-        // was hidden by a previous panel-dismiss action).
-        if (_rewardsPanel != null && _rewardsPanel.IsVisible == false)
-        {
-            // Force it to show + populate from the last result if it missed the event.
-            if (_runManager.LastBattleResult != null)
-                _rewardsPanel.Populate(_runManager.LastBattleResult);
-        }
+        // The match-rewards panel is NOT shown in the battle scene — it's
+        // shown in the RunProgress scene (loaded when the player clicks Next /
+        // Continue / Retry). No rewards panel wiring here.
     }
 
     void HandleHeartsChanged(int newHearts)
