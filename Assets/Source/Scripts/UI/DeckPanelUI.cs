@@ -684,6 +684,6 @@ public class DeckPanelUI : MonoBehaviour
     {
         if (_countText == null) return;
         int count = _capHand != null ? _capHand.DeckCount : 0;
-        _countText.text = count > 0 ? $"Deck: {count}" : "Deck: 0";
+        _countText.text = $"Осталось: {count}";
     }
 }
