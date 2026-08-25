@@ -1369,6 +1369,7 @@ MonoBehaviour:
   _capHand: {fileID: 1573795055034367174}
   _gameManager: {fileID: 8983622517434604657}
   _turnResolver: {fileID: 0}
+  _keyHeldColor: {r: 0.76729554, g: 0.76729554, b: 0.76729554, a: 1}
   _capEntryPrefab: {fileID: 2584757282512919438, guid: 7b51186b3e3184146bfc45f574fcfe8e, type: 3}
   _stickerImagePrefab: {fileID: 4925237290050560511, guid: 1f467aa50722e6745bf6f7c26b0a2702, type: 3}
   _tooltipPrefab: {fileID: 7142023367980369850, guid: 2f8c085562ef29c428dd8bba1ebb0a48, type: 3}
@@ -2325,7 +2326,7 @@ MonoBehaviour:
   _bgmSlider: {fileID: 7006151192020697570}
   _precisionAimButton: {fileID: 5180500468761399166}
   _precisionAimOnSprite: {fileID: 21300000, guid: c214ba0581a2e954baf8195bc0f2807a, type: 3}
-  _precisionAimOffSprite: {fileID: 21300000, guid: 25effb1eb1821ed4bb193db4975f55b4, type: 3}
+  _precisionAimOffSprite: {fileID: 21300000, guid: 3e98cee69a52f0940ba510221cdaad1e, type: 3}
   _capThrower: {fileID: 5175839692357260753}
   _toggleKey: 60
 --- !u!1 &5300244432209759014
@@ -2994,7 +2995,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 25effb1eb1821ed4bb193db4975f55b4, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 3e98cee69a52f0940ba510221cdaad1e, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1

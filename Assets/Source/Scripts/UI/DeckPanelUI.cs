@@ -46,7 +46,8 @@ using UnityEngine.InputSystem;
 public class DeckPanelUI : MonoBehaviour
 {
     [Header("References")]
-    [Tooltip("The button that toggles the deck panel open/closed. Its onClick is auto-wired.")]
+    [Tooltip("The button that toggles the deck panel open/closed. Its onClick is auto-wired. " +
+             "Also reacts to the E key being held (visual feedback).")]
     [SerializeField] private Button _toggleButton;
 
     [Tooltip("The panel GameObject shown/hidden when the toggle button is clicked. Set inactive by default.")]
@@ -65,6 +66,10 @@ public class DeckPanelUI : MonoBehaviour
     [Tooltip("Optional: CapTurnResolver for turn-finished events (to refresh the count " +
              "when a cap is drawn from the deck after a throw resolves). Auto-found if null.")]
     [SerializeField] private CapTurnResolver _turnResolver;
+
+    [Header("Keyboard feedback")]
+    [Tooltip("Color applied to the toggle button when the E key is held.")]
+    [SerializeField] private Color _keyHeldColor = new Color(0.6f, 0.8f, 1f, 1f);
 
     [Header("Prefabs")]
     [Tooltip("Prefab for one deck entry. Root should have an Image (the cap icon). " +
@@ -149,6 +154,10 @@ public class DeckPanelUI : MonoBehaviour
     // OnTurnFinished firing — which can be unreliable if the resolver isn't
     // found in time, or if the hand draws from the deck at an unexpected moment).
     private int _lastReportedCount = -1;
+
+    // Cached original toggle button color (for keyboard visual feedback).
+    private Color _toggleNormalColor = Color.white;
+    private bool _toggleColorCached;
 
     void Awake()
     {
@@ -294,6 +303,25 @@ public class DeckPanelUI : MonoBehaviour
 
     void Update()
     {
+        // E key toggles the deck panel (alternative to the on-screen button).
+        if (Keyboard.current?.eKey.wasPressedThisFrame == true)
+        {
+            TogglePanel();
+        }
+
+        // Visual feedback: if the on-screen toggle button is assigned, change
+        // its color while E is held (same pattern as PrecisionAimUI).
+        if (_toggleButton != null && _toggleButton.image != null)
+        {
+            if (!_toggleColorCached)
+            {
+                _toggleNormalColor = _toggleButton.image.color;
+                _toggleColorCached = true;
+            }
+            bool eHeld = Keyboard.current?.eKey.isPressed == true;
+            _toggleButton.image.color = eHeld ? _keyHeldColor : _toggleNormalColor;
+        }
+
         // Always poll the deck count — the count text should update immediately
         // when a cap is drawn from the deck, regardless of whether the panel
         // is open. We poll instead of relying solely on OnTurnFinished because
