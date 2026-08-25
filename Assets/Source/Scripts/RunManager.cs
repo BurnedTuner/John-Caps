@@ -189,12 +189,20 @@ public class RunManager : MonoBehaviour
         }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        // Subscribe to sceneLoaded so we can run the scene-placed enemy cap
+        // replacement pass AFTER the scene's Awake calls complete (the scene's
+        // OpponentCapPool.Awake populates its deck, which the replacement pass
+        // needs to draw from).
+        SceneManager.sceneLoaded += HandleSceneLoaded;
     }
 
     void OnDestroy()
     {
         if (Instance == this)
             Instance = null;
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
 
         // Clean up any remaining captured cap clones. When the run ends,
         // RunManager is destroyed — any clones parked under it should be
@@ -206,6 +214,254 @@ public class RunManager : MonoBehaviour
             Destroy(_capturedCapsContainer.gameObject);
             _capturedCapsContainer = null;
         }
+    }
+
+    /// <summary>
+    /// Called by SceneManager.sceneLoaded after every scene load. If the run
+    /// is active and the LevelSequence has ReplaceSceneEnemyCapsOnLoad enabled,
+    /// runs the scene-placed enemy cap replacement pass: each scene-placed cap
+    /// owned by Opponent is replaced by a random cap drawn from the enemy deck
+    /// (depleting the deck).
+    /// </summary>
+    void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (!IsRunActive) return;
+        if (_levelSequence == null || _levelSequence.Levels == null) return;
+        if (CurrentLevelIndex < 0 || CurrentLevelIndex >= _levelSequence.Levels.Length) return;
+
+        // Read the per-entry bool (per scene) — not a global toggle.
+        LevelSequence.LevelEntry entry = _levelSequence.Levels[CurrentLevelIndex];
+        if (!entry.ReplaceSceneEnemyCapsOnLoad) return;
+
+        // Defer one frame so all scene-placed caps have finished their Awake
+        // calls (Configure, CapRegistry.Register, etc.) before we iterate them.
+        // sceneLoaded fires after Awake but before Start, so this is safe — but
+        // we defer to next frame anyway to be extra safe (some caps might be
+        // registered in Start on some platforms).
+        StartCoroutine(ReplaceSceneEnemyCapsNextFrame());
+    }
+
+    System.Collections.IEnumerator ReplaceSceneEnemyCapsNextFrame()
+    {
+        yield return null; // wait one frame
+        ReplaceSceneEnemyCaps();
+    }
+
+    /// <summary>
+    /// Replaces all scene-placed enemy caps with random caps drawn from the
+    /// enemy deck. Each replacement cap is positioned at the original cap's
+    /// position (optionally + a random jitter within the level's
+    /// ReplacementPositionJitter radius). The drawn caps are depleted from
+    /// the deck via OpponentCapPool.ConsumeRandomEntry.
+    ///
+    /// If the deck runs out before all scene caps are replaced, the remaining
+    /// scene caps are left as-is (not destroyed) — the designer placed them
+    /// deliberately, and removing them without a replacement would change the
+    /// battle's cap count.
+    /// </summary>
+    void ReplaceSceneEnemyCaps()
+    {
+        if (_levelSequence == null || _levelSequence.Levels == null) return;
+        if (CurrentLevelIndex < 0 || CurrentLevelIndex >= _levelSequence.Levels.Length) return;
+
+        // Find the OpponentCapPool in the loaded scene — it holds the enemy deck.
+        OpponentCapPool pool = FindFirstObjectByType<OpponentCapPool>();
+        if (pool == null)
+        {
+            if (_logRun)
+                Debug.LogWarning("[RunManager] ReplaceSceneEnemyCaps: no OpponentCapPool in scene — skipping.");
+            return;
+        }
+
+        if (pool.Remaining == 0)
+        {
+            if (_logRun)
+                Debug.LogWarning("[RunManager] ReplaceSceneEnemyCaps: enemy deck is empty — skipping.");
+            return;
+        }
+
+        // Collect scene-placed enemy caps. We iterate CapRegistry.AllCaps
+        // (which includes scene-placed caps — they register themselves in
+        // Cap.Awake). We DON'T iterate by IsScenePlaced because parked caps
+        // (waiting at spawn points) might not be scene-placed. Instead, we
+        // look for caps that are:
+        //   - Owned by Opponent
+        //   - Scene-placed (so we don't touch caps drawn from the deck during play)
+        //   - Not parked (parked caps are the AI's waiting-at-spawn caps, not
+        //     scene-placed layout caps — they should not be replaced)
+        //   - Not already destroyed
+        //   - Haven't left the game
+        var toReplace = new System.Collections.Generic.List<Cap>();
+        IReadOnlyList<Cap> allCaps = CapRegistry.AllCaps;
+        for (int i = 0; i < allCaps.Count; i++)
+        {
+            Cap cap = allCaps[i];
+            if (cap == null) continue;
+            if (cap.Owner != CapOwner.Opponent) continue;
+            if (!cap.IsScenePlaced) continue;
+            if (cap.IsParked) continue;
+            if (cap.HasLeftGame) continue;
+            toReplace.Add(cap);
+        }
+
+        if (toReplace.Count == 0)
+        {
+            if (_logRun)
+                Debug.Log("[RunManager] ReplaceSceneEnemyCaps: no scene-placed enemy caps to replace.");
+            return;
+        }
+
+        float jitter = _levelSequence.Levels[CurrentLevelIndex].ReplacementPositionJitter;
+
+        // Find CapFieldBoundary in the scene — used to keep replacement caps on-field.
+        CapFieldBoundary fieldBoundary = FindFirstObjectByType<CapFieldBoundary>();
+
+        // Collect the positions of all caps that will NOT be replaced (player caps,
+        // neutral caps, and enemy caps that we're about to replace but haven't yet —
+        // we use the ORIGINAL positions of all toReplace caps as "occupied" so the
+        // first replacement doesn't land on the second toReplace cap's original spot).
+        // As we replace each cap, we add the new cap's position to this list so
+        // subsequent replacements avoid it.
+        var occupiedPositions = new System.Collections.Generic.List<Vector2>();
+        for (int i = 0; i < allCaps.Count; i++)
+        {
+            Cap c = allCaps[i];
+            if (c == null || c.HasLeftGame) continue;
+            // Skip caps that are about to be replaced (their positions will be
+            // added below as we place each replacement). Include player + neutral
+            // caps — those are real obstacles the replacement should avoid.
+            bool isToBeReplaced = false;
+            for (int j = 0; j < toReplace.Count; j++)
+            {
+                if (toReplace[j] == c) { isToBeReplaced = true; break; }
+            }
+            if (isToBeReplaced) continue;
+            occupiedPositions.Add(CapMath.ToXZ(c.transform.position));
+        }
+        // Also add the original positions of the toReplace caps — they're
+        // "occupied" until we replace each one (so a later replacement doesn't
+        // land on an earlier-toReplace cap's original spot before that cap is
+        // destroyed).
+        for (int j = 0; j < toReplace.Count; j++)
+            occupiedPositions.Add(CapMath.ToXZ(toReplace[j].transform.position));
+
+        int replaced = 0;
+        int deckExhausted = 0;
+        for (int i = 0; i < toReplace.Count; i++)
+        {
+            Cap oldCap = toReplace[i];
+
+            // Deck might run out before all scene caps are replaced.
+            if (pool.Remaining == 0)
+            {
+                deckExhausted = toReplace.Count - i;
+                break;
+            }
+
+            // Draw a random entry from the deck (depletes it).
+            CapDeckDefinition.ComposedCapEntry entry = pool.ConsumeRandomEntry();
+            if (entry.BasePrefab == null) continue;
+
+            // Compute the replacement position with no-overlap + on-field checks.
+            Vector3 oldPos = oldCap.transform.position;
+            float capRadius = oldCap.Parameters != null ? oldCap.Parameters.Radius : 0.5f;
+            Vector2 newPos2D = FindValidReplacementPosition(
+                CapMath.ToXZ(oldPos), jitter, capRadius, fieldBoundary, occupiedPositions);
+
+            // Remove the old cap's original position from occupiedPositions (it's
+            // being destroyed). We added ALL toReplace positions above; now that
+            // we're replacing cap i, its original position is no longer occupied.
+            Vector2 oldPos2D = CapMath.ToXZ(oldPos);
+            occupiedPositions.Remove(oldPos2D);
+
+            Vector3 newPos = new Vector3(newPos2D.x, oldPos.y, newPos2D.y);
+
+            // Create the replacement cap.
+            Cap newCap = pool.CreateCapFromEntry(entry, newPos);
+            if (newCap == null) continue;
+
+            // Make sure the new cap sits at the right Y.
+            newCap.transform.position = newPos;
+
+            // Add the new cap's position to occupiedPositions so the next
+            // replacement doesn't land on it.
+            occupiedPositions.Add(newPos2D);
+
+            // Unregister the old cap + destroy it. The new cap was already
+            // registered by CapFactory.CreateComposed.
+            CapRegistry.Unregister(oldCap);
+            Destroy(oldCap.gameObject);
+
+            replaced++;
+        }
+
+        if (_logRun)
+            Debug.Log($"[RunManager] ReplaceSceneEnemyCaps: replaced {replaced} scene-placed enemy caps " +
+                      $"from the deck. Deck exhausted for {deckExhausted} caps (left as-is). " +
+                      $"Jitter: {jitter}. Deck remaining: {pool.Remaining}.");
+    }
+
+    /// <summary>
+    /// Finds a valid replacement position near originalPosition that:
+    ///   1. Is within `jitter` radius of originalPosition.
+    ///   2. Is on the field (if a field boundary is available).
+    ///   3. Does not overlap any cap position in occupiedPositions (distance
+    ///      &gt;= 2 * capRadius so caps don't intersect).
+    ///
+    /// Tries up to 20 random offsets. If none satisfy all constraints, falls
+    /// back to originalPosition (even if it overlaps — better to land on the
+    /// original spot than to fail the replacement entirely).
+    /// </summary>
+    Vector2 FindValidReplacementPosition(
+        Vector2 originalPosition,
+        float jitter,
+        float capRadius,
+        CapFieldBoundary fieldBoundary,
+        System.Collections.Generic.List<Vector2> occupiedPositions)
+    {
+        if (jitter <= 0f) return originalPosition;
+
+        float minSeparation = capRadius * 2f; // caps should be at least 2R apart to not overlap
+        float sqrMinSeparation = minSeparation * minSeparation;
+
+        const int maxAttempts = 20;
+        Vector2 bestCandidate = originalPosition;
+        float bestCandidateScore = float.PositiveInfinity; // lower is better
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            // Random point inside a circle of radius `jitter`.
+            Vector2 offset = Random.insideUnitCircle * jitter;
+            Vector2 candidate = originalPosition + offset;
+
+            // Check on-field constraint.
+            bool onField = fieldBoundary == null || fieldBoundary.Supports(candidate, capRadius);
+            if (!onField) continue;
+
+            // Check no-overlap constraint: distance to every occupied position.
+            bool overlaps = false;
+            for (int i = 0; i < occupiedPositions.Count; i++)
+            {
+                Vector2 occ = occupiedPositions[i];
+                float sqrDist = (candidate - occ).sqrMagnitude;
+                if (sqrDist < sqrMinSeparation)
+                {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (overlaps) continue;
+
+            // Valid! Return immediately.
+            return candidate;
+        }
+
+        // No valid offset found after maxAttempts. Fall back to the original
+        // position — at least it's where the cap was, which is known-good.
+        if (_logRun)
+            Debug.LogWarning($"[RunManager] FindValidReplacementPosition: no valid offset found within " +
+                              $"{jitter} units after {maxAttempts} attempts. Falling back to original position.");
+        return originalPosition;
     }
 
     // -----------------------------------------------------------------------

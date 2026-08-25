@@ -160,6 +160,57 @@ public sealed class OpponentCapPool : MonoBehaviour
         if (!IsEmpty) _nextIndex++;
     }
 
+    /// <summary>
+    /// Draws a RANDOM cap entry from anywhere in the deck (not just the top)
+    /// and removes it. Used by the scene-placed enemy cap replacement pass:
+    /// each scene-placed enemy cap is replaced by a random cap drawn from the
+    /// deck via this method, depleting the deck so the AI can't throw the
+    /// same cap later in the battle.
+    ///
+    /// Returns the drawn entry, or default(ComposedCapEntry) if the deck is
+    /// empty. Caller should check entry.BasePrefab != null before using.
+    /// </summary>
+    public CapDeckDefinition.ComposedCapEntry ConsumeRandomEntry()
+    {
+        if (IsEmpty) return default;
+
+        // Pick a random index in the remaining range [_nextIndex, _deck.Count).
+        int range = _deck.Count - _nextIndex;
+        int pickAt = _nextIndex + Random.Range(0, range);
+        CapDeckDefinition.ComposedCapEntry entry = _deck[pickAt];
+
+        // Remove the picked entry. Swap with the last remaining entry to avoid
+        // an O(n) shift (the deck order doesn't matter — it's shuffled anyway).
+        int lastRemaining = _deck.Count - 1;
+        if (pickAt != lastRemaining)
+            _deck[pickAt] = _deck[lastRemaining];
+        _deck.RemoveAt(lastRemaining);
+
+        return entry;
+    }
+
+    /// <summary>
+    /// Creates a cap instance from a given composed entry (without consuming
+    /// it from the deck). Used by the replacement pass: the entry was already
+    /// consumed via ConsumeRandomEntry; this just instantiates it.
+    ///
+    /// Passes replaceExisting: true to CreateComposed so the scene-placed cap's
+    /// baked-in abilities are deleted and replaced with the deck entry's abilities.
+    /// </summary>
+    public Cap CreateCapFromEntry(CapDeckDefinition.ComposedCapEntry entry, Vector3 worldPosition)
+    {
+        if (entry.BasePrefab == null) return null;
+        Cap cap = CapFactory.CreateComposed(
+            entry.BasePrefab,
+            entry,
+            _resolvedDeck,
+            CapMath.ToXZ(worldPosition),
+            isFace: true,
+            _owner,
+            replaceExisting: true);
+        return cap;
+    }
+
     void Shuffle()
     {
         Random.State previousState = default;

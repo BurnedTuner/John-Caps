@@ -23,6 +23,20 @@ public class LevelSequence : ScriptableObject
         [Tooltip("Optional: the enemy's CapDeckDefinition for this level. " +
                  "If null, the scene's existing OpponentCapPool is used as-is.")]
         public CapDeckDefinition EnemyDeck;
+
+        [Tooltip("If true (default), scene-placed enemy caps in this scene are " +
+                 "replaced by random caps drawn from EnemyDeck when the level loads. " +
+                 "The drawn caps are depleted from the enemy deck (so the AI can't " +
+                 "throw them again). Lets designers compose enemy layouts in the scene " +
+                 "editor without picking which specific caps they are — the run picks " +
+                 "random ones from the deck at load time.")]
+        public bool ReplaceSceneEnemyCapsOnLoad;
+
+        [Tooltip("Random position offset (in world units) applied to each replaced " +
+                 "enemy cap when ReplaceSceneEnemyCapsOnLoad is active. The replacement " +
+                 "cap is placed at a random point within this radius of the original " +
+                 "scene-placed cap's position. 0 = exact original position.")]
+        [Min(0f)] public float ReplacementPositionJitter;
     }
 
     [Tooltip("Ordered list of levels in the run.")]

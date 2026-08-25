@@ -16,8 +16,12 @@ MonoBehaviour:
   - SceneName: Demo
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 2
   - SceneName: Demo 1
     IsBoss: 1
     EnemyDeck: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 0
   StartingPlayerDeck: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
   StartingHearts: 3

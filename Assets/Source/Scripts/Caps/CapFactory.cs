@@ -67,9 +67,16 @@ public static class CapFactory
     /// counter). RunManager uses this ID to identify which deck entry a lost
     /// cap came from — no sprite matching needed.
     ///
-    /// If the base prefab ALREADY has an ability component (e.g., it's a captured
-    /// clone from a gained enemy cap), the existing component is kept and its
-    /// level is NOT overridden — the clone's state is preserved exactly.
+    /// If replaceExisting is false and the base prefab already has an ability
+    /// component (e.g., it's a captured clone from a gained enemy cap), the
+    /// existing component is kept and its level is NOT overridden — the clone's
+    /// state is preserved exactly.
+    ///
+    /// If replaceExisting is true (used by the scene-placed enemy cap replacement
+    /// pass), ALL existing ability components are deleted first, then fresh ones
+    /// are added from the deck entry. This is the "delete old + replace with deck"
+    /// behavior: the scene-placed cap's baked-in abilities are removed, and the
+    /// deck entry's abilities take their place.
     /// </summary>
     public static Cap CreateComposed(
         Cap basePrefab,
@@ -77,7 +84,8 @@ public static class CapFactory
         CapDeckDefinition deck,
         Vector2 groundPosition,
         bool isFace,
-        CapOwner owner)
+        CapOwner owner,
+        bool replaceExisting = false)
     {
         if (basePrefab == null)
         {
@@ -99,9 +107,18 @@ public static class CapFactory
         cap.Configure(_nextStableId++, isFace, owner);
         cap.MarkFactoryCreated();
 
+        // If replaceExisting, delete ALL existing ability components first.
+        // This is used by the scene-placed enemy cap replacement pass: the
+        // scene-placed cap's baked-in abilities are removed, and the deck
+        // entry's abilities take their place.
+        if (replaceExisting)
+        {
+            DestroyExistingAbilities(cap.gameObject);
+        }
+
         // Add abilities based on the entry's level sliders. Skip if the cap
-        // already has the component (e.g., it's a captured clone — preserve
-        // its exact state, don't re-add).
+        // already has the component (can only happen when replaceExisting is
+        // false and the cap is a captured clone).
         if (entry.BombLevel > 0 && cap.GetComponent<BombCapFlipEffect>() == null)
         {
             var bomb = cap.gameObject.AddComponent<BombCapFlipEffect>();
@@ -160,6 +177,24 @@ public static class CapFactory
 
         CapRegistry.Register(cap);
         return cap;
+    }
+
+    /// <summary>
+    /// Destroys all ability components on the given GameObject. Used by
+    /// CreateComposed when replaceExisting is true — the scene-placed cap's
+    /// baked-in abilities are removed so the deck entry's abilities can take
+    /// their place.
+    /// </summary>
+    static void DestroyExistingAbilities(GameObject go)
+    {
+        BombCapFlipEffect bomb = go.GetComponent<BombCapFlipEffect>();
+        if (bomb != null) Object.Destroy(bomb);
+        FlipperCapEffect flipper = go.GetComponent<FlipperCapEffect>();
+        if (flipper != null) Object.Destroy(flipper);
+        DefenderCapEffect defender = go.GetComponent<DefenderCapEffect>();
+        if (defender != null) Object.Destroy(defender);
+        PredictorCapEffect predictor = go.GetComponent<PredictorCapEffect>();
+        if (predictor != null) Object.Destroy(predictor);
     }
 
     public static void ResetIdCounter(int startId = 1)
