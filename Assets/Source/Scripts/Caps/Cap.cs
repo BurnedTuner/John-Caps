@@ -73,6 +73,26 @@ public class Cap : MonoBehaviour
     [Tooltip("Fallback material for the rim/side when the cap is Neutral.")]
     [SerializeField] private Material _neutralRimMaterial;
 
+    [Header("No-loss marker (scene-placed player caps)")]
+    [Tooltip("When set, scene-placed PLAYER caps (not from the run deck) have their " +
+             "face (top) material replaced with this marker material. Identifies " +
+             "these caps visually as 'starting layout' caps that don't count as " +
+             "lost in the result screen when knocked off. Leave null to skip the " +
+             "marker (no visual change).")]
+    [SerializeField] private Material _noLossFaceMaterial;
+    [Tooltip("When set, scene-placed PLAYER caps (not from the run deck) have their " +
+             "back (bottom) material replaced with this marker material.")]
+    [SerializeField] private Material _noLossBackMaterial;
+
+    /// <summary>
+    /// True if this cap is a scene-placed player cap that should NOT count as
+    /// "lost" in the result screen when knocked off. Set on Awake for scene-placed
+    /// player caps with RunDeckEntryId == 0. The enemy's kill count still
+    /// increments (handled in TurnController.HandleCapLeftField, before
+    /// RunManager.RecordCapLost is called).
+    /// </summary>
+    public bool IsNoLossMarker { get; private set; }
+
     [Header("Deck UI")]
     [Tooltip("Unique sprite representing THIS cap in the deck panel UI. Each cap prefab " +
              "should have its own DeckSprite assigned so the player can visually tell caps " +
@@ -1330,10 +1350,42 @@ public class Cap : MonoBehaviour
             if (!CapRegistry.Contains(this))
                 CapRegistry.Register(this);
             _isScenePlaced = true;
+
+            // Scene-placed PLAYER caps that aren't from the run deck are "starting
+            // layout" caps — they don't count as "lost" in the result screen when
+            // knocked off (RunManager.RecordCapLost skips them). Mark them visually
+            // with the no-loss face/back materials so the player can tell them
+            // apart from run-deck caps. RunDeckEntryId is 0 for scene-placed caps
+            // (CapFactory.CreateComposed stamps a non-zero ID for run-deck caps).
+            // Only PLAYER caps are marked — scene-placed enemy caps still count
+            // as "gained" when the player knocks them off.
+            if (_owner == CapOwner.Player)
+            {
+                IsNoLossMarker = true;
+                ApplyNoLossMarkerMaterials();
+            }
         }
 
         ApplyOutline();
         ApplyRimMaterial();
+    }
+
+    /// <summary>
+    /// Replaces the cap's face (top) and back (bottom) materials with the
+    /// no-loss marker materials (_noLossFaceMaterial / _noLossBackMaterial).
+    /// Called on Awake for scene-placed player caps. If a marker material is
+    /// null, that face keeps its original material.
+    /// </summary>
+    void ApplyNoLossMarkerMaterials()
+    {
+        if (_topRenderer != null && _noLossFaceMaterial != null)
+            _topRenderer.sharedMaterial = _noLossFaceMaterial;
+        if (_bottomRenderer != null && _noLossBackMaterial != null)
+            _bottomRenderer.sharedMaterial = _noLossBackMaterial;
+        // Re-cache the original materials so the material-override system
+        // (bomb/flipper VFX) restores the MARKED materials after the override
+        // expires — not the pre-marker originals.
+        CacheOriginalMaterials();
     }
 
     /// <summary>

@@ -434,8 +434,12 @@ public class RunManager : MonoBehaviour
             Vector2 offset = Random.insideUnitCircle * jitter;
             Vector2 candidate = originalPosition + offset;
 
-            // Check on-field constraint.
-            bool onField = fieldBoundary == null || fieldBoundary.Supports(candidate, capRadius);
+            // Check on-field constraint. Use radius=0 (center-only) to match
+            // CapFieldBoundary.LateUpdate's removal test — which calls
+            // Supports(GroundPosition, 0f). If we passed capRadius instead, we'd
+            // accept candidates whose center is off-field but whose edge touches
+            // the field — those caps would then fall off at runtime.
+            bool onField = fieldBoundary == null || fieldBoundary.Supports(candidate, 0f);
             if (!onField) continue;
 
             // Check no-overlap constraint: distance to every occupied position.
@@ -755,6 +759,23 @@ public class RunManager : MonoBehaviour
     public void RecordCapLost(Cap cap)
     {
         if (cap == null) return;
+
+        // Scene-placed PLAYER caps that aren't from the run deck are "starting
+        // layout" caps — they don't count as "lost" in the result screen when
+        // knocked off. The enemy's kill count still increments (handled in
+        // TurnController.HandleCapLeftField, BEFORE this method is called), so
+        // the enemy still gets credit for the kill.
+        //
+        // We check IsNoLossMarker (set on Awake for scene-placed player caps)
+        // rather than IsScenePlaced directly, so the check is robust against
+        // future changes to how scene-placed caps are identified.
+        if (cap.Owner == CapOwner.Player && cap.IsNoLossMarker)
+        {
+            if (_logRun)
+                Debug.Log($"[RunManager] Skipping scene-placed player cap {cap.name} in lost tracking " +
+                          "(kill count already incremented in TurnController).");
+            return;
+        }
 
         // Build the snapshot NOW, while the cap is still alive.
         CapSnapshot snapshot = BuildCapSnapshot(cap);
