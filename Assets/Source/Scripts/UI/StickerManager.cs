@@ -123,82 +123,89 @@ public class StickerManager : MonoBehaviour
         _isHoveringSticker = false;
     }
 
-    void Update()
+    void LateUpdate()
     {
-        bool shiftHeld = Keyboard.current != null && Keyboard.current[Key.LeftShift].isPressed;
+        // LateUpdate runs AFTER all Update calls — so the camera (moved in
+        // CameraController.Update / FixedUpdate) and any caps (moved in
+        // CapThrower / CapHand Update) have already settled for this frame.
+        // Reading camera + cap positions HERE means stickers track the camera
+        // with zero-frame lag. In Update, stickers would use last frame's
+        // camera position → visible "trailing" when the camera moves fast.
         bool capIsHeld = _capThrower != null && _capThrower.CurrentState == CapThrower.State.Aiming;
 
         _visibleThisFrame.Clear();
 
+        // Always show ALL hand cap stickers.
+        if (_capHand != null)
+        {
+            for (int i = 0; i < _capHand.HandSize; i++)
+            {
+                Cap cap = _capHand.GetHandCap(i);
+                if (cap != null) _visibleThisFrame.Add(cap);
+            }
+        }
+
+        // Always show ALL field cap stickers — regardless of aiming state.
+        // Stickers stay visible during aiming (they don't obstruct the aiming
+        // process because their Images have raycastTarget = false, so clicks
+        // pass through to the field/hand caps behind them).
+        IReadOnlyList<Cap> allCaps = CapRegistry.AllCaps;
+        for (int i = 0; i < allCaps.Count; i++)
+        {
+            Cap cap = allCaps[i];
+            if (cap == null || cap.HasLeftGame || cap.IsParked) continue;
+            _visibleThisFrame.Add(cap);
+        }
+
         if (capIsHeld)
         {
+            // While aiming: skip hover detection entirely. No outline boost,
+            // no tooltips. Stickers stay visible (added above) but don't
+            // react to the cursor. Clear any stale hover state from the
+            // pre-aim frame so the outline boost doesn't persist.
             _hoveredCap = null;
             _isHoveringSticker = false;
-        }
-        else if (shiftHeld)
-        {
-            IReadOnlyList<Cap> allCaps = CapRegistry.AllCaps;
-            for (int i = 0; i < allCaps.Count; i++)
+
+            // Clear hover outline on all caps (field + hand).
+            IReadOnlyList<Cap> registryCaps = CapRegistry.AllCaps;
+            for (int i = 0; i < registryCaps.Count; i++)
             {
-                Cap cap = allCaps[i];
-                if (cap == null || cap.HasLeftGame || cap.IsParked) continue;
-                _visibleThisFrame.Add(cap);
+                Cap cap = registryCaps[i];
+                if (cap == null || cap.HasLeftGame) continue;
+                cap.SetHovered(false);
             }
             if (_capHand != null)
             {
                 for (int i = 0; i < _capHand.HandSize; i++)
                 {
                     Cap cap = _capHand.GetHandCap(i);
-                    if (cap != null) _visibleThisFrame.Add(cap);
-                }
-            }
-        }
-        else
-        {
-            // Always show hand cap stickers (when not aiming).
-            if (_capHand != null)
-            {
-                for (int i = 0; i < _capHand.HandSize; i++)
-                {
-                    Cap cap = _capHand.GetHandCap(i);
-                    if (cap != null) _visibleThisFrame.Add(cap);
+                    if (cap == null || cap.HasLeftGame) continue;
+                    cap.SetHovered(false);
                 }
             }
 
-            // If hovering a sticker, keep that cap alive.
-            if (_isHoveringSticker && _hoveredCap != null)
+            HideTooltip();
+        }
+        else
+        {
+            // Not aiming: run hover detection for outline + tooltip.
+            if (DeckPanelUI.IsCursorOverPanel)
             {
-                _visibleThisFrame.Add(_hoveredCap);
-            }
-            else if (DeckPanelUI.IsCursorOverPanel)
-            {
-                // Deck panel is open AND the cursor is over it — block hover
-                // detection on field/hand caps so the player can interact with
-                // the deck UI without the sticker hover/outline flickering on
-                // caps visually behind the panel. Clear _hoveredCap so the
-                // outline boost also goes away.
                 _hoveredCap = null;
             }
             else
             {
-                // Try hand caps FIRST — they render on the HandCamera overlay,
-                // which sits on top of the PlayerCamera view. A hand cap under
-                // the cursor should win over a field cap at the same screen
-                // position (the field cap is hidden behind the hand overlay).
                 Cap hoveredHand = GetHoveredHandCap();
                 if (hoveredHand != null)
                 {
                     _hoveredCap = hoveredHand;
-                    _visibleThisFrame.Add(hoveredHand);
                 }
                 else
                 {
-                    // Also show hovered field cap stickers (if any).
                     Cap hovered = GetHoveredFieldCap();
                     if (hovered != null)
                     {
                         _hoveredCap = hovered;
-                        _visibleThisFrame.Add(hovered);
                     }
                     else
                     {
@@ -206,34 +213,27 @@ public class StickerManager : MonoBehaviour
                     }
                 }
             }
-        }
 
-        // Update hover outline state on ALL caps (field + hand — not just
-        // those with stickers). Hand caps are NOT in CapRegistry, so the
-        // clear loop below must also walk CapHand to clear hover on hand caps
-        // when the cursor leaves them. Without that, a hand cap's hover boost
-        // would stick forever once set.
-        if (_hoveredCap != null && !_hoveredCap.HasLeftGame)
-            _hoveredCap.SetHovered(true);
+            // Update hover outline state on ALL caps (field + hand).
+            if (_hoveredCap != null && !_hoveredCap.HasLeftGame)
+                _hoveredCap.SetHovered(true);
 
-        // Clear hover on all previously hovered caps (except the current one).
-        // Field caps live in CapRegistry...
-        IReadOnlyList<Cap> registryCaps = CapRegistry.AllCaps;
-        for (int i = 0; i < registryCaps.Count; i++)
-        {
-            Cap cap = registryCaps[i];
-            if (cap == null || cap == _hoveredCap || cap.HasLeftGame) continue;
-            cap.SetHovered(false);
-        }
-        // ...and hand caps live in CapHand. Both must be cleared, otherwise a
-        // hand cap keeps its hover outline after the cursor leaves it.
-        if (_capHand != null)
-        {
-            for (int i = 0; i < _capHand.HandSize; i++)
+            // Clear hover on all previously hovered caps (except the current one).
+            IReadOnlyList<Cap> registryCaps2 = CapRegistry.AllCaps;
+            for (int i = 0; i < registryCaps2.Count; i++)
             {
-                Cap cap = _capHand.GetHandCap(i);
+                Cap cap = registryCaps2[i];
                 if (cap == null || cap == _hoveredCap || cap.HasLeftGame) continue;
                 cap.SetHovered(false);
+            }
+            if (_capHand != null)
+            {
+                for (int i = 0; i < _capHand.HandSize; i++)
+                {
+                    Cap cap = _capHand.GetHandCap(i);
+                    if (cap == null || cap == _hoveredCap || cap.HasLeftGame) continue;
+                    cap.SetHovered(false);
+                }
             }
         }
 
@@ -250,7 +250,12 @@ public class StickerManager : MonoBehaviour
         }
 
         UpdatePanelPositions();
-        HandleStickerHover();
+
+        // Only run sticker hover (tooltip) detection when NOT aiming.
+        if (!capIsHeld)
+            HandleStickerHover();
+        else
+            HideTooltip();
     }
 
     void EnsurePanelForCap(Cap cap)
@@ -272,6 +277,16 @@ public class StickerManager : MonoBehaviour
         {
             data.Panel = Instantiate(_stickerPanelPrefab, transform);
             data.StickerScreenPositions = new List<Vector2>();
+
+            // Ensure the panel itself doesn't intercept raycasts. The panel
+            // is a container for sticker Images — it should be invisible to
+            // the raycast system so clicks pass through to the caps behind it.
+            Image panelImg = data.Panel.GetComponent<Image>();
+            if (panelImg != null) panelImg.raycastTarget = false;
+            // Also disable any CanvasGroup's blocksRaycasts on the panel (if it
+            // has one) so it doesn't block input.
+            CanvasGroup cg = data.Panel.GetComponent<CanvasGroup>();
+            if (cg != null) cg.blocksRaycasts = false;
         }
 
         GameObject panel = data.Panel;
@@ -293,6 +308,11 @@ public class StickerManager : MonoBehaviour
                 if (img == null) img = stickerObj.AddComponent<Image>();
                 img.sprite = _cachedAbilities[i].StickerSprite;
                 img.preserveAspect = true;
+                // Stickers must NOT intercept raycasts — otherwise they'd block
+                // hover detection on the field/hand caps behind them. The
+                // sticker hover detection is done manually in HandleStickerHover
+                // (screen-space distance), not via Unity's raycast system.
+                img.raycastTarget = false;
                 RectTransform srt = stickerObj.transform as RectTransform;
                 if (srt != null) srt.sizeDelta = new Vector2(64f, 64f);
                 stickerObj.SetActive(true);
