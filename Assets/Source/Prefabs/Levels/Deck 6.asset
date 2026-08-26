@@ -117,4 +117,44 @@ MonoBehaviour:
     FlipperLevel: 1
     DefenderLevel: 1
     PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 2
+    FlipperLevel: 2
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 2
+    FlipperLevel: 0
+    DefenderLevel: 2
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 2
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 2
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 2
+    DefenderLevel: 2
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 2
+    DefenderLevel: 0
+    PredictorLevel: 2
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 2
+    PredictorLevel: 2
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 3
+    FlipperLevel: 3
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 2
+    PredictorLevel: 0
   ShuffleOnStart: 1

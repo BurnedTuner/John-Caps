@@ -549,7 +549,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 19f907b2a289e604bbb5f60f3e78c2fb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _levelSequence: {fileID: 11400000, guid: 35bc7fa40a51fe24ea9270d5df4eb35e, type: 2}
+  _levelSequence: {fileID: 11400000, guid: 0fcba471044eb4640921f7b32757456d, type: 2}
   _startButton: {fileID: 518943687}
 --- !u!4 &730799005
 Transform:
