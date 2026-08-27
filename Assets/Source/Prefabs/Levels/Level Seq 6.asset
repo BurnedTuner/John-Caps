@@ -13,11 +13,6 @@ MonoBehaviour:
   m_Name: Level Seq 6
   m_EditorClassIdentifier: 
   Levels:
-  - SceneName: NormLevel
-    IsBoss: 0
-    EnemyDeck: {fileID: 11400000, guid: 53dd44770bb6403498d9b7508f45e846, type: 2}
-    ReplaceSceneEnemyCapsOnLoad: 1
-    ReplacementPositionJitter: 3
   - SceneName: Tutorial
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: 599e934be6905184db50da734c39820a, type: 2}
@@ -25,8 +20,43 @@ MonoBehaviour:
     ReplacementPositionJitter: 0
   - SceneName: NormLevel
     IsBoss: 0
+    EnemyDeck: {fileID: 11400000, guid: 1b6c7d9234661c24fa4a9a332344867e, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 3
+  - SceneName: NormLevel
+    IsBoss: 0
+    EnemyDeck: {fileID: 11400000, guid: 1b6c7d9234661c24fa4a9a332344867e, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 4
+  - SceneName: NormLevel
+    IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
-    ReplacementPositionJitter: 0
+    ReplacementPositionJitter: 2
+  - SceneName: NormLevel
+    IsBoss: 0
+    EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 4
+  - SceneName: NormLevel
+    IsBoss: 0
+    EnemyDeck: {fileID: 11400000, guid: 69cd9d93748a96441a9171b1c7887006, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 3
+  - SceneName: NormLevel
+    IsBoss: 0
+    EnemyDeck: {fileID: 11400000, guid: 69cd9d93748a96441a9171b1c7887006, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 6
+  - SceneName: NormLevel
+    IsBoss: 0
+    EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 4
+  - SceneName: NormLevel
+    IsBoss: 1
+    EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
+    ReplaceSceneEnemyCapsOnLoad: 1
+    ReplacementPositionJitter: 3
   StartingPlayerDeck: {fileID: 11400000, guid: e92c8c15b9e02bf438da6cb616d60ca7, type: 2}
   StartingHearts: 3
