@@ -912,6 +912,6 @@ public class DeckPanelUI : MonoBehaviour
     {
         if (_countText == null) return;
         int count = CurrentDeckCount;
-        _countText.text = count < 10 ? $"0{count}" : $"{count}";
+        _countText.text = count < 10 ? $"{count}" : $"{count}";
     }
 }
