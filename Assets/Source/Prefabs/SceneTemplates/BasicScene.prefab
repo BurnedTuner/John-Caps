@@ -1592,6 +1592,7 @@ GameObject:
   - component: {fileID: 5923481836583423375}
   - component: {fileID: 5518757605263261317}
   - component: {fileID: 958687045917569813}
+  - component: {fileID: 3323589612025789349}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -1707,6 +1708,22 @@ MonoBehaviour:
   _precisionAimOffSprite: {fileID: 21300000, guid: 3e98cee69a52f0940ba510221cdaad1e, type: 3}
   _capThrower: {fileID: 5175839692357260753}
   _toggleKey: 60
+--- !u!114 &3323589612025789349
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5297718775984896605}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2584781c1220a06448ee5811de9c4b39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _clickClip: {fileID: 8300000, guid: 82bf3dff8a561fe49900ee5ce908ec4c, type: 3}
+  _precisionToggleClip: {fileID: 8300000, guid: d78cd03d004e1e1458733ab2c6a2ede7, type: 3}
+  _volume: 0.8
+  _autoWireAllButtons: 1
 --- !u!1 &5300244432209759014
 GameObject:
   m_ObjectHideFlags: 0

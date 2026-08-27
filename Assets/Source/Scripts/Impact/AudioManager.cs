@@ -1,5 +1,12 @@
 using UnityEngine;
 
+/// <summary>
+/// Manages a pool of AudioSources for playing sound effects. Singleton that
+/// persists across scenes via DontDestroyOnLoad.
+///
+/// Play3D — spatial sound for world-space events (cap impacts, VFX).
+/// Play2D — non-spatial sound for UI button clicks.
+/// </summary>
 public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance { get; private set; }
@@ -10,7 +17,16 @@ public class AudioManager : MonoBehaviour
     private AudioSource[] _audioPool;
     private int _poolIndex;
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
 
     void Start() => SetupPool();
 
@@ -37,9 +53,8 @@ public class AudioManager : MonoBehaviour
         var src = _audioPool[_poolIndex];
         _poolIndex = (_poolIndex + 1) % PoolSize;
         src.transform.position = pos;
-        src.pitch = pitch;
         src.spatialBlend = 1f;
-        // Multiply the per-sound volume by the global SFX volume from GameSettings.
+        src.pitch = pitch;
         float sfxVolume = GameSettings.GetSfxVolume();
         src.PlayOneShot(clip, Mathf.Clamp01(volume * sfxVolume));
     }

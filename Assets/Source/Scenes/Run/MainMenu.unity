@@ -1297,6 +1297,8 @@ GameObject:
   m_Component:
   - component: {fileID: 2145918107}
   - component: {fileID: 2145918106}
+  - component: {fileID: 2145918108}
+  - component: {fileID: 2145918109}
   m_Layer: 0
   m_Name: MainMenuUI
   m_TagString: Untagged
@@ -1335,6 +1337,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2145918108
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2145918105}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2584781c1220a06448ee5811de9c4b39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _clickClip: {fileID: 8300000, guid: 82bf3dff8a561fe49900ee5ce908ec4c, type: 3}
+  _precisionToggleClip: {fileID: 8300000, guid: d78cd03d004e1e1458733ab2c6a2ede7, type: 3}
+  _volume: 0.8
+  _autoWireAllButtons: 1
+--- !u!114 &2145918109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2145918105}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ea3adaf49b261342ab9a619d706e40e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  PoolSize: 8
+  MaxDistance: 20
 --- !u!1001 &7141519688582414300
 PrefabInstance:
   m_ObjectHideFlags: 0

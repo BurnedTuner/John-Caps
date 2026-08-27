@@ -86,6 +86,13 @@ public class PauseMenu : MonoBehaviour
                 // and refreshes the button image. No need for the designer to wire anything in
                 // the inspector — the script handles it.
                 _precisionAimButton.onClick.AddListener(OnPrecisionAimButtonClicked);
+                // Remove the auto-wired standard click sound from the precision
+                // button — it should only play the precision toggle sound, not
+                // the standard click. UIButtonSoundSetup auto-wires ALL buttons
+                // in Awake (before Start), so the click listener is already
+                // present here. Removing it leaves only PlayPrecision (called
+                // from OnPrecisionAimButtonClicked).
+                _precisionAimButton.onClick.RemoveListener(UIButtonSound.PlayClick);
                 // Set the initial sprite to match the current state.
                 UpdatePrecisionAimButtonImage();
             }
@@ -143,7 +150,6 @@ public class PauseMenu : MonoBehaviour
         if (GameSettings.Instance == null) return;
         bool newValue = !GameSettings.Instance.PrecisionAimEnabled;
         GameSettings.Instance.SetPrecisionAimEnabled(newValue);
-        // Play the precision toggle sound (different from standard UI click).
         UIButtonSound.PlayPrecision();
         UpdatePrecisionAimButtonImage();
     }

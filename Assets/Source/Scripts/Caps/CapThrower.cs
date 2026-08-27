@@ -262,7 +262,6 @@ public sealed class CapThrower : MonoBehaviour
         {
             bool newValue = !GameSettings.Instance.PrecisionAimEnabled;
             GameSettings.Instance.SetPrecisionAimEnabled(newValue);
-            // Play the precision toggle sound (different from standard UI click).
             UIButtonSound.PlayPrecision();
             // Sync the UI button image so it visually matches. PauseMenu's
             // SyncPrecisionAimToggle refreshes the button's sprite — without
