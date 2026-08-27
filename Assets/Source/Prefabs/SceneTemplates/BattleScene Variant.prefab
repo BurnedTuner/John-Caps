@@ -2784,6 +2784,14 @@ PrefabInstance:
       propertyPath: _sfxSlider
       value: 
       objectReference: {fileID: 5461570993714188151}
+    - target: {fileID: 961462038419963166, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: -370.4997
+      objectReference: {fileID: 0}
+    - target: {fileID: 961462038419963166, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 14.749878
+      objectReference: {fileID: 0}
     - target: {fileID: 1800930899156425945, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
       propertyPath: _fieldBoundary
       value: 
