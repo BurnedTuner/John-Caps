@@ -1366,7 +1366,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   PoolSize: 8
-  MaxDistance: 20
+  MaxDistance: 1000
 --- !u!1001 &7141519688582414300
 PrefabInstance:
   m_ObjectHideFlags: 0
