@@ -814,14 +814,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: BattleScene
       objectReference: {fileID: 0}
-    - target: {fileID: 3423508164139620913, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
-      propertyPath: m_SizeDelta.y
-      value: -370.4997
-      objectReference: {fileID: 0}
-    - target: {fileID: 3423508164139620913, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
-      propertyPath: m_AnchoredPosition.y
-      value: 14.749878
-      objectReference: {fileID: 0}
     - target: {fileID: 7055518032389358768, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: _turnController
       value: 
