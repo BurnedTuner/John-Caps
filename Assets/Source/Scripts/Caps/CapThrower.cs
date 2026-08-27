@@ -262,7 +262,6 @@ public sealed class CapThrower : MonoBehaviour
         {
             bool newValue = !GameSettings.Instance.PrecisionAimEnabled;
             GameSettings.Instance.SetPrecisionAimEnabled(newValue);
-            UIButtonSound.PlayPrecision();
             // Sync the UI button image so it visually matches. PauseMenu's
             // SyncPrecisionAimToggle refreshes the button's sprite — without
             // this, the button would show the old state until the player opens
@@ -375,38 +374,94 @@ public sealed class CapThrower : MonoBehaviour
     /// If allowed, search the second half; if restricted, search the first half.
     /// Converges in ~12 iterations to sub-centimeter precision.
     /// </summary>
-    Vector2 ClampToZoneBoundary(Vector2 from, Vector2 to, float capRadius)
+    /// <summary>
+    /// Projects the cursor point onto the nearest blocking zone boundary.
+    /// Finds the nearest defender cap zone center, then places the aim point
+    /// on the boundary circle (ZoneRadius + capRadius) along the line from the
+    /// zone center through the cursor. This is smooth (no jitter), exact (on
+    /// the boundary, not floating inside the allowed area), and follows the
+    /// cursor as it moves through the restricted zone.
+    ///
+    /// For ScoringZone (box colliders), falls back to a binary search along
+    /// the line from _lastAllowedAimPoint to the cursor.
+    /// </summary>
+    Vector2 ClampToZoneBoundary(Vector2 lastAllowed, Vector2 cursorPoint, float capRadius)
     {
-        // If `from` is already restricted (shouldn't happen, but defensive),
-        // return `from` as-is.
-        Vector3 from3D = CapMath.FromXZ(from, 0f);
-        if (OverlapsAimBlockingZone(from3D, capRadius))
-            return from;
+        Vector3 cursor3D = CapMath.FromXZ(cursorPoint, 0f);
+        if (!OverlapsAimBlockingZone(cursor3D, capRadius))
+            return cursorPoint;
 
-        // If `to` is somehow allowed, just use it.
-        Vector3 to3D = CapMath.FromXZ(to, 0f);
-        if (!OverlapsAimBlockingZone(to3D, capRadius))
-            return to;
+        // --- Try projecting onto the nearest DEFENDER cap zone ---
+        Vector2 nearestZoneCenter = Vector2.zero;
+        float nearestZoneRadius = 0f;
+        float nearestDist = float.MaxValue;
+        bool foundDefender = false;
 
-        // Binary search for the boundary.
-        float lo = 0f;  // allowed
-        float hi = 1f;  // restricted
-        Vector2 result = from;
+        IReadOnlyList<Cap> allCaps = CapRegistry.AllCaps;
+        for (int i = 0; i < allCaps.Count; i++)
+        {
+            Cap cap = allCaps[i];
+            if (cap == null) continue;
+
+            DefenderCapEffect defender = cap.GetComponent<DefenderCapEffect>();
+            if (defender == null) continue;
+            if (!defender.IsZoneActive()) continue;
+            if (!defender.BlocksThrower(ThrowOwner)) continue;
+
+            Vector2 zoneCenter = defender.ZoneCenter;
+            float dist = Vector2.Distance(cursorPoint, zoneCenter);
+            if (dist < nearestDist)
+            {
+                nearestDist = dist;
+                nearestZoneCenter = zoneCenter;
+                nearestZoneRadius = defender.ZoneRadius;
+                foundDefender = true;
+            }
+        }
+
+        if (foundDefender)
+        {
+            // Project cursor onto the boundary circle: place the aim point at
+            // exactly (ZoneRadius + capRadius) from the zone center, in the
+            // direction from the zone center toward the cursor.
+            Vector2 dir = cursorPoint - nearestZoneCenter;
+            float dirMag = dir.magnitude;
+            if (dirMag > 0.001f)
+            {
+                Vector2 dirNorm = dir / dirMag;
+                float boundaryRadius = nearestZoneRadius + capRadius;
+                Vector2 projected = nearestZoneCenter + dirNorm * boundaryRadius;
+
+                // Verify the projected point is allowed (not inside another zone).
+                Vector3 projected3D = CapMath.FromXZ(projected, 0f);
+                if (!OverlapsAimBlockingZone(projected3D, capRadius))
+                    return projected;
+            }
+        }
+
+        // --- Fallback: binary search from lastAllowed to cursor ---
+        // Used when the blocking zone is a ScoringZone (box collider), not a
+        // defender cap. Binary search converges to the boundary in ~16 steps.
+        Vector3 lastAllowed3D = CapMath.FromXZ(lastAllowed, 0f);
+        if (OverlapsAimBlockingZone(lastAllowed3D, capRadius))
+            return lastAllowed; // lastAllowed is also restricted — can't search
+
+        float lo = 0f;  // allowed (lastAllowed)
+        float hi = 1f;  // restricted (cursor)
+        Vector2 result = lastAllowed;
 
         for (int i = 0; i < 16; i++)
         {
             float mid = (lo + hi) * 0.5f;
-            Vector2 sample = Vector2.Lerp(from, to, mid);
+            Vector2 sample = Vector2.Lerp(lastAllowed, cursorPoint, mid);
             Vector3 sample3D = CapMath.FromXZ(sample, 0f);
 
             if (OverlapsAimBlockingZone(sample3D, capRadius))
             {
-                // Restricted — search first half.
                 hi = mid;
             }
             else
             {
-                // Allowed — search second half, keep as result.
                 lo = mid;
                 result = sample;
             }
@@ -434,7 +489,6 @@ public sealed class CapThrower : MonoBehaviour
         if (Keyboard.current?.rKey.wasPressedThisFrame == true)
         {
             RequestBoardReset();
-            UIButtonSound.PlayClick();
             return;
         }
 
@@ -450,7 +504,6 @@ public sealed class CapThrower : MonoBehaviour
             if (hoverCap != null)
             {
                 hoverCap.FlipInHand();
-                UIButtonSound.PlayClick();
                 return; // consume the input — don't start aiming
             }
         }

@@ -127,10 +127,10 @@ public class StickerManager : MonoBehaviour
     {
         bool capIsHeld = _capThrower != null && _capThrower.CurrentState == CapThrower.State.Aiming;
 
-        // When ANY UI panel is open (deck, settings, pause), block hover
-        // detection + tooltips entirely. Stickers stay visible but don't
-        // react to the cursor — no outline boost, no tooltip pop-ups.
-        bool anyPanelOpen = UIBlockState.IsAnyPanelOpen;
+        // Block hover + tooltips when ANY UI panel is open (deck, settings,
+        // pause) OR when a result screen is showing (win/lose/over/victory).
+        bool anyPanelOpen = UIBlockState.IsAnyPanelOpen
+            || BattleResultUI.IsAnyPanelShowing;
 
         _visibleThisFrame.Clear();
 
@@ -156,11 +156,12 @@ public class StickerManager : MonoBehaviour
             _visibleThisFrame.Add(cap);
         }
 
-        if (capIsHeld || anyPanelOpen)
+        if (capIsHeld)
         {
-            // While aiming OR any UI panel open: skip hover detection entirely.
-            // No outline boost, no tooltips. Stickers stay visible (added above)
-            // but don't react to the cursor. Clear any stale hover state.
+            // While aiming: skip hover detection entirely. No outline boost,
+            // no tooltips. Stickers stay visible (added above) but don't
+            // react to the cursor. Clear any stale hover state from the
+            // pre-aim frame so the outline boost doesn't persist.
             _hoveredCap = null;
             _isHoveringSticker = false;
 
@@ -249,8 +250,8 @@ public class StickerManager : MonoBehaviour
 
         UpdatePanelPositions();
 
-        // Only run sticker hover (tooltip) detection when NOT aiming AND no panel open.
-        if (!capIsHeld && !anyPanelOpen)
+        // Only run sticker hover (tooltip) detection when NOT aiming.
+        if (!capIsHeld)
             HandleStickerHover();
         else
             HideTooltip();

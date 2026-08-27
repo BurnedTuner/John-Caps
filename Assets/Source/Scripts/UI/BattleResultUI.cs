@@ -369,10 +369,17 @@ public class BattleResultUI : MonoBehaviour
     // UI helpers
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// True if any result panel (win/lose/over/victory) is currently showing.
+    /// Queried by StickerManager to block sticker hover during result screens.
+    /// </summary>
+    public static bool IsAnyPanelShowing { get; private set; }
+
     void ShowPanel(GameObject panel)
     {
         HideAllPanels();
         if (panel != null) panel.SetActive(true);
+        IsAnyPanelShowing = true;
     }
 
     void HideAllPanels()
@@ -382,6 +389,7 @@ public class BattleResultUI : MonoBehaviour
         if (_loseBossPanel != null) _loseBossPanel.SetActive(false);
         if (_runOverPanel != null) _runOverPanel.SetActive(false);
         if (_runVictoryPanel != null) _runVictoryPanel.SetActive(false);
+        IsAnyPanelShowing = false;
     }
 
     void UpdateHearts()
