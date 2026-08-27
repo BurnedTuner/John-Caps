@@ -74,6 +74,9 @@ public class RunProgressUI : MonoBehaviour
     [Tooltip("Button to return to the main menu (shown when the run is over). Set inactive by default.")]
     [SerializeField] private Button _returnToMenuButton;
 
+    [Tooltip("Button to restart the run from level 1 with a fresh deck (shown when the run is over). Set inactive by default.")]
+    [SerializeField] private Button _restartRunButton;
+
     [Header("Rewards + deck")]
     [Tooltip("The match-rewards panel that shows caps gained/lost in the last battle.")]
     [SerializeField] private MatchRewardsPanel _rewardsPanel;
@@ -135,6 +138,7 @@ public class RunProgressUI : MonoBehaviour
         if (_nextLevelButton != null) _nextLevelButton.onClick.AddListener(OnNextLevel);
         if (_retryBossButton != null) _retryBossButton.onClick.AddListener(OnRetryBoss);
         if (_returnToMenuButton != null) _returnToMenuButton.onClick.AddListener(OnReturnToMenu);
+        if (_restartRunButton != null) _restartRunButton.onClick.AddListener(OnRestartRun);
     }
 
     void UnwireButtons()
@@ -142,6 +146,7 @@ public class RunProgressUI : MonoBehaviour
         if (_nextLevelButton != null) _nextLevelButton.onClick.RemoveListener(OnNextLevel);
         if (_retryBossButton != null) _retryBossButton.onClick.RemoveListener(OnRetryBoss);
         if (_returnToMenuButton != null) _returnToMenuButton.onClick.RemoveListener(OnReturnToMenu);
+        if (_restartRunButton != null) _restartRunButton.onClick.RemoveListener(OnRestartRun);
     }
 
     // -----------------------------------------------------------------------
@@ -178,6 +183,18 @@ public class RunProgressUI : MonoBehaviour
         if (_rewardsPanel != null) _rewardsPanel.Hide();
         if (!string.IsNullOrEmpty(_mainMenuSceneName))
             SceneManager.LoadScene(_mainMenuSceneName);
+    }
+
+    /// <summary>
+    /// Called by the "Restart Run" button. Restarts the run from level 1
+    /// with a fresh deck + full hearts.
+    /// </summary>
+    void OnRestartRun()
+    {
+        if (_runManager == null) return;
+        _runManager.ClearLastBattleResult();
+        if (_rewardsPanel != null) _rewardsPanel.Hide();
+        _runManager.RestartRun();
     }
 
     // -----------------------------------------------------------------------
@@ -336,6 +353,7 @@ public class RunProgressUI : MonoBehaviour
         if (_nextLevelButton != null) _nextLevelButton.gameObject.SetActive(false);
         if (_retryBossButton != null) _retryBossButton.gameObject.SetActive(false);
         if (_returnToMenuButton != null) _returnToMenuButton.gameObject.SetActive(false);
+        if (_restartRunButton != null) _restartRunButton.gameObject.SetActive(false);
 
         if (_runManager == null || _runManager.LastBattleResult == null)
         {
@@ -367,8 +385,9 @@ public class RunProgressUI : MonoBehaviour
         {
             if (_runManager.Hearts <= 0)
             {
-                // Run over.
+                // Run over — show both "Return to Menu" and "Restart Run".
                 if (_returnToMenuButton != null) _returnToMenuButton.gameObject.SetActive(true);
+                if (_restartRunButton != null) _restartRunButton.gameObject.SetActive(true);
                 if (_statusText != null) _statusText.text = "Run Over";
             }
             else if (result.IsBoss)

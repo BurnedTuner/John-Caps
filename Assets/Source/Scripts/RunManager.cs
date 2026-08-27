@@ -1046,6 +1046,40 @@ public class RunManager : MonoBehaviour
         LoadLevel(CurrentLevelIndex);
     }
 
+    /// <summary>
+    /// Restarts the entire run from level 1 with a fresh deck + full hearts.
+    /// Called by the "Restart Run" button on the game over screen. Uses the
+    /// SAME LevelSequence as the current run (stored in _levelSequence).
+    /// Destroys any captured clones + clears state before re-initializing.
+    /// </summary>
+    public void RestartRun()
+    {
+        if (_levelSequence == null)
+        {
+            Debug.LogError("[RunManager] RestartRun: no LevelSequence assigned.", this);
+            return;
+        }
+
+        if (_logRun)
+            Debug.Log("[RunManager] Restarting run from level 1.");
+
+        // Clean up captured clones from the previous run.
+        if (_capturedCapsContainer != null)
+        {
+            Destroy(_capturedCapsContainer.gameObject);
+            _capturedCapsContainer = null;
+        }
+
+        // Clear tracking lists.
+        _playerCapsLostThisBattle.Clear();
+        _enemyCapsLostThisBattle.Clear();
+        LastBattleResult = null;
+
+        // Re-initialize: StartRun resets CurrentLevelIndex, Hearts, RunDeck,
+        // generates the deck, and loads level 0.
+        StartRun(_levelSequence);
+    }
+
     void LoadLevel(int index)
     {
         CurrentLevelIndex = index;

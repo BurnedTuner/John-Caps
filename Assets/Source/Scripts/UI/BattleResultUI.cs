@@ -58,6 +58,9 @@ public class BattleResultUI : MonoBehaviour
     [Tooltip("Button on the run-over panel to return to the main menu.")]
     [SerializeField] private Button _returnToMenuButton;
 
+    [Tooltip("Button on the run-over panel to restart the run from level 1 with a fresh deck.")]
+    [SerializeField] private Button _restartRunButton;
+
     [Tooltip("Panel shown when the player clears all levels (victory).")]
     [SerializeField] private GameObject _runVictoryPanel;
 
@@ -166,6 +169,7 @@ public class BattleResultUI : MonoBehaviour
         if (_bossRetryButton != null) _bossRetryButton.onClick.AddListener(OnBossRetry);
         if (_returnToMenuButton != null) _returnToMenuButton.onClick.AddListener(OnReturnToMenu);
         if (_victoryReturnButton != null) _victoryReturnButton.onClick.AddListener(OnReturnToMenu);
+        if (_restartRunButton != null) _restartRunButton.onClick.AddListener(OnRestartRun);
     }
 
     void UnwireButtons()
@@ -175,6 +179,7 @@ public class BattleResultUI : MonoBehaviour
         if (_bossRetryButton != null) _bossRetryButton.onClick.RemoveListener(OnBossRetry);
         if (_returnToMenuButton != null) _returnToMenuButton.onClick.RemoveListener(OnReturnToMenu);
         if (_victoryReturnButton != null) _victoryReturnButton.onClick.RemoveListener(OnReturnToMenu);
+        if (_restartRunButton != null) _restartRunButton.onClick.RemoveListener(OnRestartRun);
     }
 
     // -----------------------------------------------------------------------
@@ -247,6 +252,17 @@ public class BattleResultUI : MonoBehaviour
             _runManager.ClearLastBattleResult();
         if (!string.IsNullOrEmpty(_mainMenuSceneName))
             SceneManager.LoadScene(_mainMenuSceneName);
+    }
+
+    /// <summary>
+    /// Called by the "Restart Run" button on the game over panel. Restarts
+    /// the run from level 1 with a fresh deck + full hearts.
+    /// </summary>
+    void OnRestartRun()
+    {
+        HideAllPanels();
+        if (_runManager != null)
+            _runManager.RestartRun();
     }
 
     // -----------------------------------------------------------------------
