@@ -96,6 +96,20 @@ public class RunProgressUI : MonoBehaviour
     [Tooltip("The main menu scene name (loaded when the run ends or the player returns).")]
     [SerializeField] private string _mainMenuSceneName = "MainMenu";
 
+    [Header("Settings panel (optional)")]
+    [Tooltip("Button that toggles the settings panel open/closed.")]
+    [SerializeField] private Button _settingsButton;
+
+    [Tooltip("The settings panel GameObject. Starts inactive. Should contain SettingsBinder + SFX/BGM sliders.")]
+    [SerializeField] private GameObject _settingsPanel;
+
+    [Tooltip("Button inside the settings panel that closes it.")]
+    [SerializeField] private Button _settingsBackButton;
+
+    [Header("Leave to menu")]
+    [Tooltip("Button that returns to the main menu at any time (always visible, not just on run over).")]
+    [SerializeField] private Button _leaveToMenuButton;
+
     private RunManager _runManager;
     private readonly List<GameObject> _spawnedNodes = new();
 
@@ -127,6 +141,10 @@ public class RunProgressUI : MonoBehaviour
         UpdateLevelText();
         PopulateRewards();
         ShowContextButton();
+
+        // Settings panel starts hidden.
+        if (_settingsPanel != null)
+            _settingsPanel.SetActive(false);
     }
 
     // -----------------------------------------------------------------------
@@ -139,6 +157,9 @@ public class RunProgressUI : MonoBehaviour
         if (_retryBossButton != null) _retryBossButton.onClick.AddListener(OnRetryBoss);
         if (_returnToMenuButton != null) _returnToMenuButton.onClick.AddListener(OnReturnToMenu);
         if (_restartRunButton != null) _restartRunButton.onClick.AddListener(OnRestartRun);
+        if (_settingsButton != null) _settingsButton.onClick.AddListener(OnToggleSettings);
+        if (_settingsBackButton != null) _settingsBackButton.onClick.AddListener(OnCloseSettings);
+        if (_leaveToMenuButton != null) _leaveToMenuButton.onClick.AddListener(OnLeaveToMenu);
     }
 
     void UnwireButtons()
@@ -147,6 +168,9 @@ public class RunProgressUI : MonoBehaviour
         if (_retryBossButton != null) _retryBossButton.onClick.RemoveListener(OnRetryBoss);
         if (_returnToMenuButton != null) _returnToMenuButton.onClick.RemoveListener(OnReturnToMenu);
         if (_restartRunButton != null) _restartRunButton.onClick.RemoveListener(OnRestartRun);
+        if (_settingsButton != null) _settingsButton.onClick.RemoveListener(OnToggleSettings);
+        if (_settingsBackButton != null) _settingsBackButton.onClick.RemoveListener(OnCloseSettings);
+        if (_leaveToMenuButton != null) _leaveToMenuButton.onClick.RemoveListener(OnLeaveToMenu);
     }
 
     // -----------------------------------------------------------------------
@@ -195,6 +219,39 @@ public class RunProgressUI : MonoBehaviour
         _runManager.ClearLastBattleResult();
         if (_rewardsPanel != null) _rewardsPanel.Hide();
         _runManager.RestartRun();
+    }
+
+    /// <summary>Toggles the settings panel open/closed.</summary>
+    void OnToggleSettings()
+    {
+        if (_settingsPanel != null)
+        {
+            bool newState = !_settingsPanel.activeSelf;
+            _settingsPanel.SetActive(newState);
+            UIBlockState.SetSettingsPanelOpen(newState);
+        }
+    }
+
+    /// <summary>Closes the settings panel.</summary>
+    void OnCloseSettings()
+    {
+        if (_settingsPanel != null)
+            _settingsPanel.SetActive(false);
+        UIBlockState.SetSettingsPanelOpen(false);
+    }
+
+    /// <summary>
+    /// Returns to the main menu at any time (not just on run over). Clears
+    /// the battle result + hides rewards.
+    /// </summary>
+    void OnLeaveToMenu()
+    {
+        if (_runManager != null)
+            _runManager.ClearLastBattleResult();
+        if (_rewardsPanel != null)
+            _rewardsPanel.Hide();
+        if (!string.IsNullOrEmpty(_mainMenuSceneName))
+            SceneManager.LoadScene(_mainMenuSceneName);
     }
 
     // -----------------------------------------------------------------------

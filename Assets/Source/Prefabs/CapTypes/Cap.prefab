@@ -58,7 +58,7 @@ MonoBehaviour:
   _outlineRenderer: {fileID: 4378826819257500004}
   _outlineWidth: 0.2
   _hoverOutlineBoost: 0.1
-  _playerOutlineColor: {r: 0.05, g: 0.9, b: 0.85, a: 1}
+  _playerOutlineColor: {r: 1, g: 1, b: 1, a: 1}
   _opponentOutlineColor: {r: 1, g: 0.2, b: 0.05, a: 1}
   _playerRimMaterial: {fileID: 2100000, guid: 71adcb4c86bf3174cb21141b158cde66, type: 2}
   _opponentRimMaterial: {fileID: 2100000, guid: 4c4a4e77af626b64ab5227ab0b2bb9cb, type: 2}
