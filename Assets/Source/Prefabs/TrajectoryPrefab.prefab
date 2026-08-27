@@ -55,5 +55,6 @@ MonoBehaviour:
   FallOffColor: {r: 1, g: 0.18, b: 0.18, a: 0.95}
   FallOffLandingCircleColor: {r: 1, g: 0.25, b: 0.25, a: 0.7}
   FallOffPredictionColor: {r: 1, g: 0.22, b: 0.22, a: 0.95}
-  PredictionDepthScale: -1
-  PredictionMinArcScale: 0.2
+  BombPushColor: {r: 1, g: 0.6, b: 0.1, a: 0.8}
+  PredictionArcBaseHeight: 1
+  PredictionArcHeightPerDepth: 0.4

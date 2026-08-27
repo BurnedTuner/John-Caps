@@ -222,7 +222,13 @@ public static class StackPeelOffPredictor
                 continue;
             }
 
-            simConsumed.Add(dropCap);
+            // Do NOT add peeled-off caps to simConsumed — they should be
+            // hittable by LATER chain reactions (e.g., the next stack cap
+            // peels off and lands near a previously peeled-off cap, hitting
+            // it again). simInStack already prevents hitting caps that are
+            // still flying. Once a cap is dropped (removed from simInStack),
+            // it's at rest at its landing position and can be hit again.
+            // simPeeledOff marks it as flippable (even if real CanFlip is false).
             // Remove from simInStack — this cap is now being dropped.
             simInStack.Remove(dropCap);
 

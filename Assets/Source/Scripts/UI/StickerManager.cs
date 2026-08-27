@@ -125,13 +125,12 @@ public class StickerManager : MonoBehaviour
 
     void LateUpdate()
     {
-        // LateUpdate runs AFTER all Update calls — so the camera (moved in
-        // CameraController.Update / FixedUpdate) and any caps (moved in
-        // CapThrower / CapHand Update) have already settled for this frame.
-        // Reading camera + cap positions HERE means stickers track the camera
-        // with zero-frame lag. In Update, stickers would use last frame's
-        // camera position → visible "trailing" when the camera moves fast.
         bool capIsHeld = _capThrower != null && _capThrower.CurrentState == CapThrower.State.Aiming;
+
+        // When ANY UI panel is open (deck, settings, pause), block hover
+        // detection + tooltips entirely. Stickers stay visible but don't
+        // react to the cursor — no outline boost, no tooltip pop-ups.
+        bool anyPanelOpen = UIBlockState.IsAnyPanelOpen;
 
         _visibleThisFrame.Clear();
 
@@ -157,12 +156,11 @@ public class StickerManager : MonoBehaviour
             _visibleThisFrame.Add(cap);
         }
 
-        if (capIsHeld)
+        if (capIsHeld || anyPanelOpen)
         {
-            // While aiming: skip hover detection entirely. No outline boost,
-            // no tooltips. Stickers stay visible (added above) but don't
-            // react to the cursor. Clear any stale hover state from the
-            // pre-aim frame so the outline boost doesn't persist.
+            // While aiming OR any UI panel open: skip hover detection entirely.
+            // No outline boost, no tooltips. Stickers stay visible (added above)
+            // but don't react to the cursor. Clear any stale hover state.
             _hoveredCap = null;
             _isHoveringSticker = false;
 
@@ -251,8 +249,8 @@ public class StickerManager : MonoBehaviour
 
         UpdatePanelPositions();
 
-        // Only run sticker hover (tooltip) detection when NOT aiming.
-        if (!capIsHeld)
+        // Only run sticker hover (tooltip) detection when NOT aiming AND no panel open.
+        if (!capIsHeld && !anyPanelOpen)
             HandleStickerHover();
         else
             HideTooltip();

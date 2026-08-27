@@ -65,7 +65,11 @@ public class MainMenuUI : MonoBehaviour
     public void ToggleSettingsPanel()
     {
         if (_settingsPanel != null)
-            _settingsPanel.SetActive(!_settingsPanel.activeSelf);
+        {
+            bool newState = !_settingsPanel.activeSelf;
+            _settingsPanel.SetActive(newState);
+            UIBlockState.SetSettingsPanelOpen(newState);
+        }
     }
 
     /// <summary>Closes the settings panel.</summary>
@@ -73,6 +77,7 @@ public class MainMenuUI : MonoBehaviour
     {
         if (_settingsPanel != null)
             _settingsPanel.SetActive(false);
+        UIBlockState.SetSettingsPanelOpen(false);
     }
 
     /// <summary>

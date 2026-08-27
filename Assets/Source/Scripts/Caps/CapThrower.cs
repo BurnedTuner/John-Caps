@@ -436,6 +436,9 @@ public sealed class CapThrower : MonoBehaviour
             return;
         }
 
+        // Block all cap interactions when ANY UI panel is open (deck, settings, pause).
+        if (UIBlockState.IsAnyPanelOpen) return;
+
         // F or RMB while hovering a hand cap flips it (toggles IsFace).
         // RMB also starts camera orbit in CameraController, but a single click
         // won't cause visible orbit — and the flip is more useful.
