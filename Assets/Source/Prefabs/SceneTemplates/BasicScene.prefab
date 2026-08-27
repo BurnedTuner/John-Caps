@@ -3750,7 +3750,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: Feedback
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3687587521901605989, guid: 462abe6aaef4baa4ca1f1ce18682ffd2, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
