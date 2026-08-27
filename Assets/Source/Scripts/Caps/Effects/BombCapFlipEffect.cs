@@ -96,7 +96,7 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
     public GameObject ExplosionVFX;
     public AudioClip ExplosionSound;
     [Range(0f, 2f)] public float ExplosionPitch = 0.8f;
-    [Range(0f, 1f)] public float ExplosionVolume = 1f;
+    public float ExplosionVolume = 1f;
     public float ExplosionShakeAmount = 0.4f;
     public float ExplosionShakeDuration = 0.6f;
 

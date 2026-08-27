@@ -9,27 +9,27 @@ public class ImpactFeedback : MonoBehaviour
     [Header("Audio - Table Impact")]
     public AudioClip TableImpactSound;
     [Range(0f, 2f)] public float TableImpactPitch = 1f;
-    [Range(0f, 1f)] public float TableImpactVolume = 1f;
+     public float TableImpactVolume = 1f;
 
     [Header("Audio - Cap Impact")]
     public AudioClip CapImpactSound;
     [Range(0f, 2f)] public float CapImpactBasePitch = 1f;
     [Range(0f, 0.5f)] public float CapImpactPitchStepPerDepth = 0.1f;
     [Range(0f, 3f)] public float CapImpactMaxPitch = 2f;
-    [Range(0f, 1f)] public float CapImpactVolume = 1f;
+     public float CapImpactVolume = 1f;
 
     [Header("Audio - Stack")]
     public AudioClip StackSound;
     [Range(0f, 2f)] public float StackBasePitch = 1f;
     [Range(0f, 0.5f)] public float StackPitchStepPerStack = 0.05f;
     [Range(0f, 3f)] public float StackMaxPitch = 2f;
-    [Range(0f, 1f)] public float StackVolume = 1f;
+     public float StackVolume = 1f;
 
     [Header("Audio - Cap Vanish")]
     [Tooltip("Abstract sound for a cap disappearing after it fell off the field.")]
     public AudioClip CapVanishSound;
     [Range(0f, 2f)] public float CapVanishPitch = 1f;
-    [Range(0f, 1f)] public float CapVanishVolume = 1f;
+    public float CapVanishVolume = 1f;
 
     [Header("VFX")]
     public GameObject TableImpactVFX;
