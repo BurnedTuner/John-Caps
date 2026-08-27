@@ -3064,7 +3064,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5478055671033976843, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7412683564019871797, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
       propertyPath: m_Pivot.x
@@ -3144,6 +3144,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7412683564019871797, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7689180609562077233, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
