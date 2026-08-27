@@ -747,6 +747,62 @@ MonoBehaviour:
   m_Offset: {x: 0, y: 0, z: 0.5}
   m_Size: {x: 10, y: 2, z: 1}
   m_FadeFactor: 1
+--- !u!1 &1037106472
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1037106473}
+  - component: {fileID: 1037106474}
+  m_Layer: 0
+  m_Name: "\u041F\u0435\u0440\u0432\u044B\u0439 \u0442\u0435\u043A\u0441\u0442"
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1037106473
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1037106472}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
+  m_LocalPosition: {x: 0.20000002, y: 0.56, z: 0.35}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1129094256}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1037106474
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1037106472}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0777d029ed3dffa4692f417d4aba19ca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 2100000, guid: 49f53bf15c2bc344bafd4d7f9112e692, type: 2}
+  m_DrawDistance: 1000
+  m_FadeScale: 1
+  m_StartAngleFade: 180
+  m_EndAngleFade: 180
+  m_UVScale: {x: 1, y: 1}
+  m_UVBias: {x: 0, y: 0}
+  m_DecalLayerMask: 1
+  m_ScaleMode: 0
+  m_Offset: {x: 0, y: 0, z: 0.5}
+  m_Size: {x: 10, y: 2, z: 1}
+  m_FadeFactor: 1
 --- !u!4 &1129094256 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8523373294708741455, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
@@ -1367,6 +1423,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8523373294708741455, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 981895173}
+    - targetCorrespondingSourceObject: {fileID: 8523373294708741455, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1037106473}
     - targetCorrespondingSourceObject: {fileID: 8523373294708741455, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1355736388}
