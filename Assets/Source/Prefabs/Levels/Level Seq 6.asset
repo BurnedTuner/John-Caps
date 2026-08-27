@@ -23,37 +23,37 @@ MonoBehaviour:
     EnemyDeck: {fileID: 11400000, guid: 1b6c7d9234661c24fa4a9a332344867e, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
     ReplacementPositionJitter: 3
-  - SceneName: NormLevel
+  - SceneName: OtherLevel
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: 1b6c7d9234661c24fa4a9a332344867e, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
     ReplacementPositionJitter: 4
-  - SceneName: NormLevel
+  - SceneName: OtherLevel
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
     ReplacementPositionJitter: 2
-  - SceneName: NormLevel
+  - SceneName: MegaLevel
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
     ReplacementPositionJitter: 4
-  - SceneName: NormLevel
+  - SceneName: MegaLevel
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: 69cd9d93748a96441a9171b1c7887006, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
     ReplacementPositionJitter: 3
-  - SceneName: NormLevel
+  - SceneName: MegaLevel
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: 69cd9d93748a96441a9171b1c7887006, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
     ReplacementPositionJitter: 6
-  - SceneName: NormLevel
+  - SceneName: MegaLevel
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
     ReplacementPositionJitter: 4
-  - SceneName: NormLevel
+  - SceneName: BossLevel
     IsBoss: 1
     EnemyDeck: {fileID: 11400000, guid: f8c200492ca7ac34dbb6714ce879ff18, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1
