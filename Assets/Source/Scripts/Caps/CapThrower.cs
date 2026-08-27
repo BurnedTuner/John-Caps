@@ -273,8 +273,6 @@ public sealed class CapThrower : MonoBehaviour
 
         if (!TurnInputEnabled)
         {
-            if (CurrentState == State.Idle && Keyboard.current?.rKey.wasPressedThisFrame == true)
-                RequestBoardReset();
             return;
         }
 
@@ -486,12 +484,6 @@ public sealed class CapThrower : MonoBehaviour
 
     void UpdateIdle()
     {
-        if (Keyboard.current?.rKey.wasPressedThisFrame == true)
-        {
-            RequestBoardReset();
-            return;
-        }
-
         // F or RMB while hovering a hand cap flips it (toggles IsFace).
         // RMB also starts camera orbit in CameraController, but a single click
         // won't cause visible orbit — and the flip is more useful.

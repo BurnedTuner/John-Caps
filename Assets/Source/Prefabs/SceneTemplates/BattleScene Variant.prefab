@@ -1377,7 +1377,7 @@ MonoBehaviour:
     MaxCandidates: 1024
     DeduplicationStep: 0.25
     TopNChoices: 1
-    AimJitter: 0.2
+    AimJitter: 0.12
     PlayerThrowPowerOverride: 0
     VerboseLog: 0
     DrawGizmos: 0
