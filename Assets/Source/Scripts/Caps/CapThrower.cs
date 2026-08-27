@@ -839,7 +839,9 @@ public sealed class CapThrower : MonoBehaviour
             CapRegistry.AllCaps,
             _directHitSeeds,
             _tuning,
-            _predictionResults);
+            _predictionResults,
+            _heldCap,
+            _aimPoint);
 
         // Split predictions by depth:
         //   Depth < PredictionDepth  → full (trajectory + ghost)
@@ -988,13 +990,18 @@ public sealed class CapThrower : MonoBehaviour
 
                     Vector2 capPos = targetCap.GroundPosition;
                     float distToCenter = Vector2.Distance(capPos, zoneCenter2D);
-                    if (distToCenter > zone.radius) continue; // outside the bomb radius
+                    float targetRadius = targetCap.Parameters != null ? targetCap.Parameters.Radius : 0.5f;
+                    // Use COMBINED radius (touch distance) — matches the runtime
+                    // CollectCapsInRadius which uses radius + cap.Parameters.Radius.
+                    // A cap whose center is OUTSIDE the effect radius but whose body
+                    // still TOUCHES the explosion circle is included.
+                    float touchDistance = zone.radius + targetRadius;
+                    if (distToCenter > touchDistance) continue; // outside touch range
 
                     // Exclude the cap the source LANDED ON (the one the bomb
                     // is sitting on top of after landing). The source's landing
                     // position is zoneCenter2D. If a cap is within combined
                     // radius distance, it's the landed-on cap.
-                    float targetRadius = targetCap.Parameters != null ? targetCap.Parameters.Radius : 0.5f;
                     float sourceRadius = slammerRadius;
                     float landedThreshold = targetRadius + sourceRadius;
                     if (distToCenter < landedThreshold) continue; // this is the cap the bomb landed on
