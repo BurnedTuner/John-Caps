@@ -225,6 +225,9 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     /// <summary>ICapEffectRadius — same as ZoneRadius.</summary>
     public float EffectRadius => ZoneRadius;
 
+    /// <summary>Defender doesn't push caps — returns 0.</summary>
+    public float EffectForce => 0f;
+
     /// <summary>Cyan color for defender radius circles in the trajectory preview.</summary>
     public Color ZoneColor => new Color(0.2f, 0.6f, 1f, 0.3f);
 

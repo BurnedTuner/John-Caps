@@ -43,6 +43,11 @@ public class TrajectoryPreview : MonoBehaviour
              "predicted cap will land OFF the field. Overrides the depth-based color.")]
     public Color FallOffPredictionColor = new Color(1f, 0.22f, 0.22f, 0.95f);
 
+    [Tooltip("Color for bomb-push prediction lines (caps pushed by a bomb explosion). " +
+             "Distinct from chain/stack lines so the player can tell push-predictions " +
+             "from impact-predictions at a glance.")]
+    public Color BombPushColor = new Color(1f, 0.6f, 0.1f, 0.8f);
+
     private LineRenderer _arcLine;
     private LineRenderer _landingCircle;
     private readonly List<LineRenderer> _predictionLines = new();
@@ -282,8 +287,17 @@ public class TrajectoryPreview : MonoBehaviour
 
     void DrawPrediction(CapPrediction prediction, int lineIndex, bool willFallOff)
     {
-        float depthBlend = Mathf.Clamp01(prediction.Depth / 5f);
-        Color baseColor = Color.Lerp(DirectHitColor, DeepChainColor, depthBlend);
+        // Bomb-push predictions use a distinct color (orange) so the player can
+        // tell them apart from chain/stack impact predictions (green→orange gradient).
+        // Fall-off overrides both — always red.
+        Color baseColor;
+        if (prediction.Source == PredictionSource.Bomb)
+            baseColor = BombPushColor;
+        else
+        {
+            float depthBlend = Mathf.Clamp01(prediction.Depth / 5f);
+            baseColor = Color.Lerp(DirectHitColor, DeepChainColor, depthBlend);
+        }
         Color color = willFallOff ? FallOffPredictionColor : baseColor;
         Color fadedColor = new Color(color.r, color.g, color.b, 0.2f);
 

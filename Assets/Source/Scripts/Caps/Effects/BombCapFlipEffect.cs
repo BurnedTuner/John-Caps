@@ -50,6 +50,9 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
 
     public float EffectRadius => Radius;
 
+    /// <summary>The bomb's push force. Used by the trajectory preview to predict where affected caps will land.</summary>
+    public float EffectForce => Force;
+
     public Color ZoneColor => Color.red;
 
     /// <summary>

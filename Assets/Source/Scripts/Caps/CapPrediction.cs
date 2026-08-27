@@ -12,6 +12,8 @@ public enum PredictionSource
     Chain = 1,
     /// <summary>Stack peel-off — this cap was part of a stack that got hit.</summary>
     Stack = 2,
+    /// <summary>Bomb push — this cap is inside a bomb's explosion radius and will be pushed away.</summary>
+    Bomb = 3,
 }
 
 /// <summary>

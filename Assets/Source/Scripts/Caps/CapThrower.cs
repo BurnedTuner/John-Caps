@@ -923,6 +923,123 @@ public sealed class CapThrower : MonoBehaviour
             }
         }
 
+        // --- Bomb push prediction ---
+        // For each bomb zone (center, radius, color) that has a non-zero force,
+        // find caps inside the radius and predict where the bomb will push them.
+        // Each pushed cap gets a CapPrediction with Source = Bomb, added to
+        // _fullPredictions so TrajectoryPreview draws a push line + end circle.
+        if (_tuning != null)
+        {
+            for (int z = 0; z < _bombZones.Count; z++)
+            {
+                var zone = _bombZones[z];
+                // Find the ICapEffectRadius that produced this zone to get its force.
+                // We search both the held cap and predicted caps for the matching
+                // effect (by ZoneColor + EffectRadius — a simple identity check).
+                float zoneForce = 0f;
+                // Check held cap effects.
+                if (_heldCap != null)
+                {
+                    var heldEffects = _heldCap.GetComponents<ICapEffectRadius>();
+                    for (int e = 0; e < heldEffects.Length; e++)
+                    {
+                        if (heldEffects[e].EffectRadius == zone.radius
+                            && heldEffects[e].ZoneColor == zone.color
+                            && heldEffects[e].ShouldTriggerOnSide(_heldCap.IsFace))
+                        {
+                            zoneForce = heldEffects[e].EffectForce;
+                            break;
+                        }
+                    }
+                }
+                // Check predicted cap effects if not found on held cap.
+                if (zoneForce == 0f)
+                {
+                    for (int p = 0; p < _fullPredictions.Count; p++)
+                    {
+                        CapPrediction pred = _fullPredictions[p];
+                        if (pred.Cap == null) continue;
+                        var predEffects = pred.Cap.GetComponents<ICapEffectRadius>();
+                        for (int e = 0; e < predEffects.Length; e++)
+                        {
+                            if (predEffects[e].EffectRadius == zone.radius
+                                && predEffects[e].ZoneColor == zone.color
+                                && predEffects[e].ShouldTriggerOnSide(pred.WillLandFace))
+                            {
+                                zoneForce = predEffects[e].EffectForce;
+                                break;
+                            }
+                        }
+                        if (zoneForce > 0f) break;
+                    }
+                }
+
+                if (zoneForce <= 0f) continue; // not a push effect (defender, flipper)
+
+                Vector2 zoneCenter2D = CapMath.ToXZ(zone.center);
+
+                // Find caps inside the bomb radius. Iterate CapRegistry.AllCaps.
+                IReadOnlyList<Cap> allCaps = CapRegistry.AllCaps;
+                for (int c = 0; c < allCaps.Count; c++)
+                {
+                    Cap targetCap = allCaps[c];
+                    if (targetCap == null || targetCap == _heldCap) continue;
+                    if (targetCap.HasLeftGame || targetCap.IsParked) continue;
+
+                    Vector2 capPos = targetCap.GroundPosition;
+                    float distToCenter = Vector2.Distance(capPos, zoneCenter2D);
+                    if (distToCenter > zone.radius) continue; // outside the bomb radius
+
+                    // Exclude the cap the source LANDED ON (the one the bomb
+                    // is sitting on top of after landing). The source's landing
+                    // position is zoneCenter2D. If a cap is within combined
+                    // radius distance, it's the landed-on cap.
+                    float targetRadius = targetCap.Parameters != null ? targetCap.Parameters.Radius : 0.5f;
+                    float sourceRadius = slammerRadius;
+                    float landedThreshold = targetRadius + sourceRadius;
+                    if (distToCenter < landedThreshold) continue; // this is the cap the bomb landed on
+
+                    // Compute push direction: away from the bomb center.
+                    Vector2 pushDir = CapImpact.RadialDirection(zoneCenter2D, capPos);
+
+                    // Compute push distance: matches TryPush (rawForce * ForceToTravelDistance).
+                    float pushDistance = zoneForce * _tuning.ForceToTravelDistance;
+                    if (pushDistance <= _tuning.MinimumFlightLength) continue; // too weak to move
+
+                    // Check if this cap is already in _fullPredictions (direct/chain/stack).
+                    // If so, skip — the existing prediction takes priority.
+                    bool alreadyPredicted = false;
+                    for (int p = 0; p < _fullPredictions.Count; p++)
+                    {
+                        if (_fullPredictions[p].Cap == targetCap)
+                        {
+                            alreadyPredicted = true;
+                            break;
+                        }
+                    }
+                    if (alreadyPredicted) continue;
+
+                    // Create a bomb-push prediction. The cap doesn't flip (push
+                    // doesn't change IsFace), so WillLandFace = current IsFace.
+                    _fullPredictions.Add(new CapPrediction(
+                        targetCap,
+                        depth: 0,
+                        startPosition: capPos,
+                        direction: pushDir,
+                        force: zoneForce,
+                        travelDistance: pushDistance,
+                        willLandFace: targetCap.IsFace,
+                        source: PredictionSource.Bomb));
+
+                    // Also add a fall-off flag for this prediction.
+                    Vector2 pushEnd = capPos + pushDir * pushDistance;
+                    bool willFallOff = _turnResolver != null
+                        && !IsPointSupportedByField(pushEnd, 0f);
+                    _fullPredictionsFallOff.Add(willFallOff);
+                }
+            }
+        }
+
         // The thrown cap itself will fall off when its aim point (the cap's
         // CENTER) is outside the field. The runtime removal test in
         // CapFieldBoundary.LateUpdate is Supports(cap.GroundPosition, 0f) —

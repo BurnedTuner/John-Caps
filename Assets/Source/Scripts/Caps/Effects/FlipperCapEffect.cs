@@ -47,6 +47,9 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
 
     public float EffectRadius => Radius;
 
+    /// <summary>Flipper doesn't push caps — returns 0.</summary>
+    public float EffectForce => 0f;
+
     /// <summary>
     /// Sets the ability level. Called by CapFactory.CreateComposed after the
     /// component is added to a cap instance (parameters come from CopyFrom).

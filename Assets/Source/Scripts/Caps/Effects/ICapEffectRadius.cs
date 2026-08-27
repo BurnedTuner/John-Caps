@@ -7,11 +7,22 @@ using UnityEngine;
 ///
 /// The trajectory preview draws a circle at the effect's center with the
 /// effect's radius, colored by the effect's preferred color.
+///
+/// Effects that PUSH caps (e.g., bomb) also expose EffectForce, used by the
+/// trajectory preview to predict where affected caps will land after the push.
+/// Effects that don't push (e.g., defender, flipper) return 0 for EffectForce.
 /// </summary>
 public interface ICapEffectRadius
 {
     /// <summary>The radius of the effect zone (circle drawn in the preview).</summary>
     float EffectRadius { get; }
+
+    /// <summary>
+    /// The force applied to caps inside the radius. Used by the trajectory
+    /// preview to compute predicted push distance for affected caps.
+    /// Return 0 if the effect doesn't push caps (e.g., defender, flipper).
+    /// </summary>
+    float EffectForce { get; }
 
     /// <summary>
     /// True if the effect should be shown/active given the cap's current side.
