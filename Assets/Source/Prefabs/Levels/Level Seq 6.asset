@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level Seq 6
   m_EditorClassIdentifier: 
   Levels:
-  - SceneName: Demo 1
+  - SceneName: Tutorial
     IsBoss: 0
     EnemyDeck: {fileID: 11400000, guid: 599e934be6905184db50da734c39820a, type: 2}
     ReplaceSceneEnemyCapsOnLoad: 1

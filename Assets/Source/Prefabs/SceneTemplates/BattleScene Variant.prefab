@@ -3249,6 +3249,17 @@ BoxCollider:
   m_CorrespondingSourceObject: {fileID: 4264331754325650050, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
   m_PrefabInstance: {fileID: 2510037884128093999}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &3429635022856197178 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 958687045917569813, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
+  m_PrefabInstance: {fileID: 2510037884128093999}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 99224e8a492216743bac84583d5a9547, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &5097485168036291768 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 7235197627595899799, guid: f7efa2f9ef5c18e41911137c84385da9, type: 3}
@@ -3297,6 +3308,34 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 247502043411029511}
     m_Modifications:
+    - target: {fileID: 902366857477202350, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 902366857477202350, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 902366857477202350, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 3429635022856197178}
+    - target: {fileID: 902366857477202350, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 902366857477202350, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: TogglePause
+      objectReference: {fileID: 0}
+    - target: {fileID: 902366857477202350, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: PauseMenu, Assembly-CSharp
+      objectReference: {fileID: 0}
+    - target: {fileID: 902366857477202350, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
+      objectReference: {fileID: 0}
     - target: {fileID: 1512305277929313617, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
       propertyPath: m_Color.a
       value: 1
