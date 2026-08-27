@@ -106,6 +106,7 @@ public class PauseMenu : MonoBehaviour
         if (Keyboard.current[_toggleKey].wasPressedThisFrame)
         {
             TogglePause();
+            UIButtonSound.PlayClick();
         }
     }
 
@@ -121,9 +122,6 @@ public class PauseMenu : MonoBehaviour
         // simulation freezes. The aim system and UI still work (they use
         // unscaled time where needed).
         Time.timeScale = _isPaused ? 0f : 1f;
-
-        // Register with UIBlockState so CapThrower + StickerManager block input.
-        UIBlockState.SetPauseMenuOpen(_isPaused);
     }
 
     /// <summary>Force-close the pause menu (e.g., when a new turn starts).</summary>
@@ -133,7 +131,6 @@ public class PauseMenu : MonoBehaviour
         if (_panel != null)
             _panel.SetActive(false);
         Time.timeScale = 1f;
-        UIBlockState.SetPauseMenuOpen(false);
     }
 
     /// <summary>
@@ -146,6 +143,8 @@ public class PauseMenu : MonoBehaviour
         if (GameSettings.Instance == null) return;
         bool newValue = !GameSettings.Instance.PrecisionAimEnabled;
         GameSettings.Instance.SetPrecisionAimEnabled(newValue);
+        // Play the precision toggle sound (different from standard UI click).
+        UIButtonSound.PlayPrecision();
         UpdatePrecisionAimButtonImage();
     }
 

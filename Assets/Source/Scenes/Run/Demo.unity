@@ -575,37 +575,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
---- !u!1 &656311912
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 656311913}
-  m_Layer: 0
-  m_Name: SpawnPoint
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &656311913
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 656311912}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.05, z: 12}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1505771084}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -712,7 +681,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _turnResolver: {fileID: 1868331109}
   _playerThrower: {fileID: 1456347940}
-  _opponentThrower: {fileID: 1505771086}
+  _opponentThrower: {fileID: 0}
   _fieldBoundary: {fileID: 1945879164}
   _gameManager: {fileID: 932608219}
   _firstTurn: 1
@@ -734,105 +703,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 778305b35fe473d4fbeeb5a3eb4d39f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!1 &1505771083
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1505771084}
-  - component: {fileID: 1505771085}
-  - component: {fileID: 1505771086}
-  m_Layer: 0
-  m_Name: OpponentAI
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1505771084
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1505771083}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 656311913}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1505771085
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1505771083}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1cb80f438639ed74f8c890d8c3477d07, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _deckTemplate: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
-  _shuffle: 1
-  _randomSeed: 0
-  _spawnPoint: {fileID: 656311913}
-  _owner: 2
---- !u!114 &1505771086
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1505771083}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: de8a9e542a6f2dc4caa4167e5a604148, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _turnResolver: {fileID: 1868331109}
-  _fieldBoundary: {fileID: 1945879164}
-  _pool: {fileID: 1505771085}
-  _playerThrower: {fileID: 1456347940}
-  _gameManager: {fileID: 932608219}
-  _thinkDelay: 0.6
-  _search:
-    KillWeight: 10
-    ExtraTurnBonus: 25
-    SelfLossWeight: 12
-    NeutralLossWeight: 0.5
-    OwnDangerWeight: 2
-    ProtectOwnFromEdgeWeight: 3
-    PushEnemyToEdgeWeight: 10
-    ExtraTurnDangerDiscount: 0.25
-    EnemyDangerWeight: 1
-    OwnStackedWeight: 1
-    WinScore: 10000
-    MaxChainDepth: 1
-    RingAngles: 12
-    RingOffsets:
-    - 0.95
-    - 0.75
-    - 0.5
-    GridStep: 2
-    LandingEdgeMargin: 0.5
-    TargetNeutralCaps: 1
-    TargetOwnCaps: 0
-    MaxCandidates: 1024
-    DeduplicationStep: 0.25
-    TopNChoices: 1
-    AimJitter: 0
-    PlayerThrowPowerOverride: 0
-    VerboseLog: 0
-    DrawGizmos: 0
-  _verifyPrediction: 0
 --- !u!1001 &1512490982
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1006,7 +876,6 @@ SceneRoots:
   - {fileID: 43834587}
   - {fileID: 421113198}
   - {fileID: 7863228716901976986}
-  - {fileID: 1505771084}
   - {fileID: 1315964524}
   - {fileID: 524322455}
   - {fileID: 497645542}

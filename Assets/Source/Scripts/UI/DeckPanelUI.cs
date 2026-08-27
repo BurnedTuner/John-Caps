@@ -263,8 +263,6 @@ public class DeckPanelUI : MonoBehaviour
                 _activeInstance = null;
             HideTooltip();
         }
-        // Register with UIBlockState so CapThrower + StickerManager know to block.
-        UIBlockState.SetDeckPanelOpen(newState);
     }
 
     /// <summary>Force-open the panel and refresh.</summary>
@@ -274,7 +272,6 @@ public class DeckPanelUI : MonoBehaviour
         _panel.SetActive(true);
         _activeInstance = this;
         Refresh();
-        UIBlockState.SetDeckPanelOpen(true);
     }
 
     /// <summary>Force-close the panel.</summary>
@@ -285,7 +282,6 @@ public class DeckPanelUI : MonoBehaviour
         if (_activeInstance == this)
             _activeInstance = null;
         HideTooltip();
-        UIBlockState.SetDeckPanelOpen(false);
     }
 
     /// <summary>
@@ -345,6 +341,7 @@ public class DeckPanelUI : MonoBehaviour
         if (Keyboard.current?.eKey.wasPressedThisFrame == true)
         {
             TogglePanel();
+            UIButtonSound.PlayClick();
         }
 
         // Visual feedback: if the on-screen toggle button is assigned, change

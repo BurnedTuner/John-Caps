@@ -1325,8 +1325,8 @@ MonoBehaviour:
   _stickerAngleStep: 40
   _stickerHoverRadius: 40
   _hintOffset: {x: 0, y: 200}
-  _handStickerScale: 1.3
-  _fieldStickerScale: 1
+  _handStickerScale: 1.5
+  _fieldStickerScale: 2
   _stickerRadiusMultiplier: 0.8
 --- !u!1 &4299729016037042098
 GameObject:

@@ -262,6 +262,8 @@ public sealed class CapThrower : MonoBehaviour
         {
             bool newValue = !GameSettings.Instance.PrecisionAimEnabled;
             GameSettings.Instance.SetPrecisionAimEnabled(newValue);
+            // Play the precision toggle sound (different from standard UI click).
+            UIButtonSound.PlayPrecision();
             // Sync the UI button image so it visually matches. PauseMenu's
             // SyncPrecisionAimToggle refreshes the button's sprite — without
             // this, the button would show the old state until the player opens
@@ -433,11 +435,9 @@ public sealed class CapThrower : MonoBehaviour
         if (Keyboard.current?.rKey.wasPressedThisFrame == true)
         {
             RequestBoardReset();
+            UIButtonSound.PlayClick();
             return;
         }
-
-        // Block all cap interactions when ANY UI panel is open (deck, settings, pause).
-        if (UIBlockState.IsAnyPanelOpen) return;
 
         // F or RMB while hovering a hand cap flips it (toggles IsFace).
         // RMB also starts camera orbit in CameraController, but a single click
@@ -451,6 +451,7 @@ public sealed class CapThrower : MonoBehaviour
             if (hoverCap != null)
             {
                 hoverCap.FlipInHand();
+                UIButtonSound.PlayClick();
                 return; // consume the input — don't start aiming
             }
         }
