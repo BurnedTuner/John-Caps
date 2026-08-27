@@ -95,6 +95,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _stickerSprite: {fileID: 21300000, guid: 003f0b8a82357db4e865c4d357eb1a16, type: 3}
   _level: 1
-  _depthBonusL1: 3
+  _depthBonusL1: 2
   _depthBonusL2: 4
   _depthBonusL3: 6
