@@ -34,7 +34,7 @@ public sealed class PredictorCapEffect : MonoBehaviour, ICapAbility
     public Sprite StickerSprite => _stickerSprite;
     public int Level => _level;
     public string Description =>
-        $"При розыгрыше из руки\nпредсказывает будущее на {PredictionDepthBonus} шага дальше";
+        $"При розыгрыше из руки\nПРЕДСКАЗЫВАЕТ будущее на {PredictionDepthBonus} шага дальше.";
 
     public int PredictionDepthBonus => _level switch { 2 => _depthBonusL2, 3 => _depthBonusL3, _ => _depthBonusL1 };
 

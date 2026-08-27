@@ -54,7 +54,7 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     public Sprite StickerSprite => _stickerSprite;
     public int Level => _level;
     public string Description =>
-        $"Пока лежит лицом вверх,\nсоздает защитную область.";
+        $"Пока лежит лицом вверх,\nЗАЩИЩАЕТ область вокруг себя";
 
     public float ZoneRadius => _level switch { 2 => _zoneRadiusL2, 3 => _zoneRadiusL3, _ => _zoneRadiusL1 };
 
