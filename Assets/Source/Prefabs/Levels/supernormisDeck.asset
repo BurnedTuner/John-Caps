@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dcad1d31003070744ac44ff51e6af5d4, type: 3}
-  m_Name: UltraMegaDeck
+  m_Name: supernormisDeck
   m_EditorClassIdentifier: 
   _bombTemplate: {fileID: 2897028790850669261, guid: 21a3a79e2bc267242995580d2798209e, type: 3}
   _flipperTemplate: {fileID: 4244484007897682594, guid: 2d5de48daa7674941a61b19e8989dad1, type: 3}
@@ -18,275 +18,280 @@ MonoBehaviour:
   _predictorTemplate: {fileID: 8469923001124145423, guid: 8d23a630cbdef4040ba3f2b15a7059fb, type: 3}
   Caps:
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 1
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 1
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 1
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 1
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
     FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
     DefenderLevel: 0
     PredictorLevel: 0
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 1
-    FlipperLevel: 1
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
-    FlipperLevel: 1
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
     FlipperLevel: 0
     DefenderLevel: 0
     PredictorLevel: 0
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
+    FlipperLevel: 0
     DefenderLevel: 0
     PredictorLevel: 0
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
+    FlipperLevel: 0
+    DefenderLevel: 0
     PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 0
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 0
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 0
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 1
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
     FlipperLevel: 0
     DefenderLevel: 0
     PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 1
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
-    DefenderLevel: 1
-    PredictorLevel: 0
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
     FlipperLevel: 0
@@ -311,145 +316,75 @@ MonoBehaviour:
     BombLevel: 0
     FlipperLevel: 0
     DefenderLevel: 0
-    PredictorLevel: 2
+    PredictorLevel: 1
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
     FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 2
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 2
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 2
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 2
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 2
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 2
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 2
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 2
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 2
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 2
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 1
     DefenderLevel: 0
     PredictorLevel: 1
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
-    FlipperLevel: 1
+    FlipperLevel: 0
     DefenderLevel: 0
     PredictorLevel: 1
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
-    FlipperLevel: 1
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 1
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
     DefenderLevel: 1
-    PredictorLevel: 1
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
   - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
     BombLevel: 0
     FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 1
+    DefenderLevel: 0
+    PredictorLevel: 0
+  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
+    BombLevel: 0
+    FlipperLevel: 0
     DefenderLevel: 1
-    PredictorLevel: 1
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 2
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 3
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 3
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
-    PredictorLevel: 0
-  - BasePrefab: {fileID: 8693585558862005274, guid: 5a3db521d5e0519488681defeee625f0, type: 3}
-    BombLevel: 0
-    FlipperLevel: 0
-    DefenderLevel: 0
     PredictorLevel: 0
   ShuffleOnStart: 1
