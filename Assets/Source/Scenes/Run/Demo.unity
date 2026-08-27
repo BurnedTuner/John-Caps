@@ -993,14 +993,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 75953323142867667, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
-      propertyPath: 'm_Materials.Array.data[0]'
-      value: 
-      objectReference: {fileID: 2100000, guid: 783245a5acc107d4e99f448d687d0314, type: 2}
-    - target: {fileID: 621875637601588449, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 902400751067106788, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: _turnController
       value: 
@@ -1009,10 +1001,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: BattleScene
       objectReference: {fileID: 0}
-    - target: {fileID: 3963814646844791785, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
-      propertyPath: DeckTemplate
-      value: 
-      objectReference: {fileID: 11400000, guid: 9b98146d0c2dddb4eb92b8706f2dd2ce, type: 2}
     - target: {fileID: 7055518032389358768, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: _turnController
       value: 
@@ -1021,10 +1009,6 @@ PrefabInstance:
       propertyPath: _turnController
       value: 
       objectReference: {fileID: 1315964525}
-    - target: {fileID: 8127129643198364794, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 8759751912416924065, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: m_LocalPosition.x
       value: -3.2676153
