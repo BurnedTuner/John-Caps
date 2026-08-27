@@ -1070,25 +1070,33 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 902400751067106788, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
+      propertyPath: _turnController
+      value: 
+      objectReference: {fileID: 1315964525}
     - target: {fileID: 1587824418041114607, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: m_Name
       value: BattleScene
       objectReference: {fileID: 0}
+    - target: {fileID: 2456499028607509773, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2822730077120239402, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5294976490153487539, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5647613338575451189, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5786730151781529706, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8759751912416924065, guid: 5a4ac50b28ee86846bfcafc68c09519a, type: 3}
       propertyPath: m_LocalPosition.x

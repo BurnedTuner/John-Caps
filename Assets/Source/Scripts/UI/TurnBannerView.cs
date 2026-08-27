@@ -1,14 +1,23 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// Tells the player whose turn it is and, more importantly, why the turn sometimes does not change
 /// hands: knocking an enemy cap off the field earns another throw.
 ///
-/// Two independent pieces, both optional — assign only the texts you actually want:
-/// a permanent line with the current side and its streak, and a short banner that pops up whenever
-/// either side earns an extra turn. The banner fires for the opponent too, otherwise the AI throwing
-/// three times in a row looks like a bug rather than the rule working.
+/// Three independent pieces, all optional — assign only the ones you want:
+///
+/// 1. TURN IMAGE (always visible): an Image whose sprite swaps based on whose
+///    turn it is — _playerTurnSprite for player, _opponentTurnSprite for enemy.
+///
+/// 2. STREAK TEXT (always visible, optional): shows "×N" where N is the
+///    consecutive turn count. Only shown when N > 1. Hidden otherwise.
+///
+/// 3. EXTRA TURN POP-UP (temporary): a CanvasGroup that fades in/out. Contains
+///    an Image whose sprite swaps based on who earned the extra turn —
+///    _playerExtraTurnSprite / _opponentExtraTurnSprite. No text on the pop-up
+///    (replaced with an image per user request).
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class TurnBannerView : MonoBehaviour
@@ -19,33 +28,35 @@ public sealed class TurnBannerView : MonoBehaviour
     [SerializeField] private TurnController _turnController;
     [SerializeField] private GameManager _gameManager;
 
-    [Tooltip("Always-on line telling whose turn it is. Optional.")]
-    [SerializeField] private TMP_Text _turnText;
+    [Header("Turn image (always visible)")]
+    [Tooltip("Image that shows whose turn it is. Sprite swaps between _playerTurnSprite and _opponentTurnSprite.")]
+    [SerializeField] private Image _turnImage;
 
+    [Tooltip("Sprite shown when it's the player's turn.")]
+    [SerializeField] private Sprite _playerTurnSprite;
+
+    [Tooltip("Sprite shown when it's the opponent's turn.")]
+    [SerializeField] private Sprite _opponentTurnSprite;
+
+    [Header("Streak text (optional, always visible)")]
+    [Tooltip("Text showing the streak count as '×N'. Only visible when N > 1. Optional.")]
+    [SerializeField] private TMP_Text _streakText;
+
+    [Tooltip("Format for the streak text. {0} is the streak count.")]
+    [SerializeField] private string _streakFormat = "×{0}";
+
+    [Header("Extra turn pop-up")]
     [Tooltip("Root of the pop-up shown when someone earns an extra turn. Optional.")]
     [SerializeField] private CanvasGroup _extraTurnGroup;
 
-    [Tooltip("Caption inside the extra-turn pop-up.")]
-    [SerializeField] private TMP_Text _extraTurnText;
+    [Tooltip("Image inside the extra-turn pop-up. Sprite swaps based on who earned the extra turn.")]
+    [SerializeField] private Image _extraTurnImage;
 
-    [Header("Turn line")]
-    [SerializeField] private string _playerTurnMessage = "ТВОЙ ХОД";
-    [SerializeField] private string _opponentTurnMessage = "ХОД ПРОТИВНИКА";
+    [Tooltip("Sprite shown in the pop-up when the PLAYER earns an extra turn.")]
+    [SerializeField] private Sprite _playerExtraTurnSprite;
 
-    [Tooltip("Appended while a side is on a streak. {0} is the streak length. Empty disables it.")]
-    [SerializeField] private string _streakSuffix = "   СЕРИЯ ×{0}";
-
-    [SerializeField] private Color _playerColor = new Color(0.3f, 0.95f, 0.9f);
-    [SerializeField] private Color _opponentColor = new Color(1f, 0.4f, 0.25f);
-
-    [Header("Extra turn pop-up")]
-    [Tooltip("{0} is the caps knocked off with the right word form, {1} is the streak length.")]
-    [SerializeField] private string _playerExtraTurnMessage = "СБИТО {0} — БРОСАЙ СНОВА!";
-
-    [SerializeField] private string _opponentExtraTurnMessage = "ПРОТИВНИК СБИЛ {0} — ХОДИТ СНОВА";
-
-    [Tooltip("Word forms for the cap count: for 1, for 2-4, for 5 and more.")]
-    [SerializeField] private string[] _capWordForms = { "ФИШКА", "ФИШКИ", "ФИШЕК" };
+    [Tooltip("Sprite shown in the pop-up when the OPPONENT earns an extra turn.")]
+    [SerializeField] private Sprite _opponentExtraTurnSprite;
 
     [Header("Pop-up timing")]
     [Min(0f)][SerializeField] private float _fadeInDuration = 0.15f;
@@ -88,7 +99,7 @@ public sealed class TurnBannerView : MonoBehaviour
 
         // The first turn starts before this component can subscribe, so catch up with it here.
         if (_turnController.CurrentTurn != CapOwner.Neutral)
-            UpdateTurnText(_turnController.CurrentTurn, _turnController.ConsecutiveTurns);
+            UpdateTurnDisplay(_turnController.CurrentTurn, _turnController.ConsecutiveTurns);
     }
 
     void OnDisable()
@@ -138,7 +149,6 @@ public sealed class TurnBannerView : MonoBehaviour
     {
         if (_phase == BannerPhase.Hidden || _extraTurnGroup == null) return;
 
-        // Unscaled, because ImpactFeedback drives Time.timeScale for its hit-stop.
         _phaseElapsed += Time.unscaledDeltaTime;
 
         switch (_phase)
@@ -172,22 +182,21 @@ public sealed class TurnBannerView : MonoBehaviour
 
     void HandleTurnStarted(CapOwner owner)
     {
-        UpdateTurnText(owner, _turnController != null ? _turnController.ConsecutiveTurns : 1);
+        UpdateTurnDisplay(owner, _turnController != null ? _turnController.ConsecutiveTurns : 1);
     }
 
     void HandleExtraTurnEarned(ExtraTurnInfo info)
     {
         if (_extraTurnGroup == null) return;
 
-        if (_extraTurnText != null)
+        // Swap the pop-up image sprite based on who earned the extra turn.
+        if (_extraTurnImage != null)
         {
-            string template = info.Owner == CapOwner.Player
-                ? _playerExtraTurnMessage
-                : _opponentExtraTurnMessage;
-
-            string caps = $"{info.CapsKnockedOff} {PluralForm(info.CapsKnockedOff, _capWordForms)}";
-            _extraTurnText.text = SafeFormat(template, caps, info.ConsecutiveTurns);
-            _extraTurnText.color = info.Owner == CapOwner.Player ? _playerColor : _opponentColor;
+            Sprite sprite = info.Owner == CapOwner.Player
+                ? _playerExtraTurnSprite
+                : _opponentExtraTurnSprite;
+            if (sprite != null)
+                _extraTurnImage.sprite = sprite;
         }
 
         ShowBanner();
@@ -195,9 +204,10 @@ public sealed class TurnBannerView : MonoBehaviour
 
     void HandleMatchFinished(CapOwner winner, MatchEndReason reason)
     {
-        // The match result caption takes over from here.
         HideBanner();
-        if (_turnText != null) _turnText.text = string.Empty;
+        // Hide the turn image + streak text on match end.
+        if (_turnImage != null) _turnImage.gameObject.SetActive(false);
+        if (_streakText != null) _streakText.gameObject.SetActive(false);
     }
 
     void HandleBoardReset(GameManager gameManager)
@@ -206,17 +216,30 @@ public sealed class TurnBannerView : MonoBehaviour
         HideBanner();
     }
 
-    void UpdateTurnText(CapOwner owner, int consecutiveTurns)
+    void UpdateTurnDisplay(CapOwner owner, int consecutiveTurns)
     {
-        if (_turnText == null) return;
+        // Swap the turn image sprite.
+        if (_turnImage != null)
+        {
+            _turnImage.gameObject.SetActive(true);
+            Sprite sprite = owner == CapOwner.Player ? _playerTurnSprite : _opponentTurnSprite;
+            if (sprite != null)
+                _turnImage.sprite = sprite;
+        }
 
-        string message = owner == CapOwner.Player ? _playerTurnMessage : _opponentTurnMessage;
-
-        if (consecutiveTurns > 1 && !string.IsNullOrEmpty(_streakSuffix))
-            message += SafeFormat(_streakSuffix, consecutiveTurns);
-
-        _turnText.text = message;
-        _turnText.color = owner == CapOwner.Player ? _playerColor : _opponentColor;
+        // Show streak text only when N > 1.
+        if (_streakText != null)
+        {
+            if (consecutiveTurns > 1)
+            {
+                _streakText.gameObject.SetActive(true);
+                _streakText.text = string.Format(_streakFormat, consecutiveTurns);
+            }
+            else
+            {
+                _streakText.gameObject.SetActive(false);
+            }
+        }
     }
 
     void ShowBanner()
@@ -246,42 +269,5 @@ public sealed class TurnBannerView : MonoBehaviour
     {
         if (_extraTurnRect != null)
             _extraTurnRect.localScale = Vector3.one * scale;
-    }
-
-    /// <summary>
-    /// Formats a designer-supplied template. These strings are typed in the inspector, so a stray
-    /// placeholder must not throw: the exception would travel back up through TurnController into the
-    /// resolver's event and take the turn loop down with it.
-    /// </summary>
-    static string SafeFormat(string template, params object[] arguments)
-    {
-        try
-        {
-            return string.Format(template, arguments);
-        }
-        catch (System.FormatException)
-        {
-            Debug.LogWarning($"[TurnBannerView] Bad placeholder in \"{template}\", showing it as is.");
-            return template;
-        }
-    }
-
-    /// <summary>
-    /// Picks the Russian word form for a count: 1 фишка, 2-4 фишки, 5+ фишек.
-    /// Returns the last form when fewer than three are configured.
-    /// </summary>
-    static string PluralForm(int count, string[] forms)
-    {
-        if (forms == null || forms.Length == 0) return string.Empty;
-        if (forms.Length < 3) return forms[forms.Length - 1];
-
-        int abs = Mathf.Abs(count);
-        int lastTwo = abs % 100;
-        if (lastTwo >= 11 && lastTwo <= 14) return forms[2];
-
-        int last = abs % 10;
-        if (last == 1) return forms[0];
-        if (last >= 2 && last <= 4) return forms[1];
-        return forms[2];
     }
 }
