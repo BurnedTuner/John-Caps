@@ -208,6 +208,30 @@ public class Cap : MonoBehaviour
     private Vector3 _heldBasePos;
     private float _heldCurrentHeight;
 
+    /// <summary>
+    /// Additional offset applied while the cap is held (Held state). Set by
+    /// CapThrower.BeginHeld or at runtime. Applied on top of the lift height:
+    ///   finalPos = _heldBasePos + Vector3.up * _heldCurrentHeight + _holdOffset
+    /// The offset is in WORLD space (not camera-relative) so it stays fixed
+    /// regardless of camera rotation.
+    /// </summary>
+    [Header("Hold offset")]
+    [Tooltip("Additional world-space offset applied while the cap is held (Held state). " +
+             "Applied on top of the lift height. Use this to shift the held cap " +
+             "laterally (e.g., to the right of the throw origin).")]
+    [SerializeField] private Vector3 _holdOffset = Vector3.zero;
+
+    /// <summary>
+    /// Gets or sets the hold offset (world space). Applied on top of the lift
+    /// height while the cap is in Held state. Set this from CapThrower or
+    /// CapHand to shift the held cap laterally.
+    /// </summary>
+    public Vector3 HoldOffset
+    {
+        get => _holdOffset;
+        set => _holdOffset = value;
+    }
+
     private Vector2 _flyStart;
     private Vector2 _flyDirection;
     private float _flyTotalDistance;
@@ -400,10 +424,15 @@ public class Cap : MonoBehaviour
         ApplyRimMaterial();
     }
 
-    public void BeginHeld(Vector3 basePos)
+    public void BeginHeld(Vector3 basePos, Vector3? holdOffset = null)
     {
         _heldBasePos = IsFinite(basePos) ? basePos : _tuning.SpawnPosition;
         _heldCurrentHeight = 0f;
+        // Override the inspector-assigned _holdOffset if a runtime offset is provided.
+        // This lets CapThrower pass a camera-relative offset (e.g., shift right of
+        // the throw origin) without needing to modify the prefab's inspector field.
+        if (holdOffset.HasValue)
+            _holdOffset = holdOffset.Value;
         _state = CapState.Held;
         ApplyVisuals();
     }
@@ -1110,7 +1139,7 @@ public class Cap : MonoBehaviour
             switch (_state)
             {
                 case CapState.Held:
-                    pos = _heldBasePos + Vector3.up * _heldCurrentHeight;
+                    pos = _heldBasePos + Vector3.up * _heldCurrentHeight + _holdOffset;
                     // Held caps: don't override rotation. CapHand.LayoutHand sets
                     // the rotation to face the camera, and we preserve it here.
                     // Only the side (IsFace) is encoded — LayoutHand already

@@ -77,6 +77,7 @@ MonoBehaviour:
     PushDuration: 0.05
     FaceMaterial: {fileID: 0}
     BackMaterial: {fileID: 0}
+  _holdOffset: {x: 0, y: 0, z: 0.5}
 --- !u!65 &5988120030011170171
 BoxCollider:
   m_ObjectHideFlags: 0
