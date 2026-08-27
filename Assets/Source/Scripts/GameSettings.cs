@@ -28,6 +28,15 @@ public class GameSettings : MonoBehaviour
     [Range(0f, 1f)] public float SfxVolume = 1f;
     [Range(0f, 1f)] public float BgmVolume = 0.5f;
 
+    [Header("BGM volume range")]
+    [Tooltip("Minimum BGM volume when the slider is at 0. Prevents music from being completely silent. " +
+             "E.g., 0.1 = even at slider 0, music plays at 10% volume.")]
+    [Range(0f, 0.5f)] public float BgmMinVolume = 0.1f;
+
+    [Tooltip("Maximum BGM volume when the slider is at 1. Caps the music volume so it doesn't " +
+             "overpower SFX. E.g., 0.5 = even at slider 1, music caps at 50% volume.")]
+    [Range(0.1f, 1f)] public float BgmMaxVolume = 0.5f;
+
     [Header("Precision Aim Mode")]
     [Tooltip("If true, releasing LMB while aiming enters precision mode: WASD nudges the " +
              "aim point (camera-style acceleration curve), Space confirms the throw, " +
@@ -78,32 +87,43 @@ public class GameSettings : MonoBehaviour
         if (BgmClip != null)
         {
             _bgmSource.clip = BgmClip;
-            // Use the persisted BgmVolume (loaded in Awake).
-            _bgmSource.volume = BgmVolume;
+            // Map persisted slider value to the actual volume range.
+            _bgmSource.volume = Mathf.Lerp(BgmMinVolume, BgmMaxVolume, BgmVolume);
             _bgmSource.Play();
         }
     }
 
     /// <summary>
-    /// Called by the SFX volume slider. Sets the global SFX volume and saves
-    /// it to PlayerPrefs so it persists across scenes and game restarts.
+    /// Called by the SFX volume slider. Sets the global SFX volume (applied to
+    /// AudioListener.volume — Unity's master multiplier for ALL audio) and saves
+    /// it to PlayerPrefs. Applied immediately via AudioManager.ApplySfxVolume().
     /// </summary>
     public void SetSfxVolume(float value)
     {
         SfxVolume = Mathf.Clamp01(value);
         PlayerPrefs.SetFloat(SfxVolumePrefKey, SfxVolume);
         PlayerPrefs.Save();
+        // Apply immediately so the player hears the change.
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.ApplySfxVolume();
+        else
+            AudioListener.volume = SfxVolume;
     }
 
     /// <summary>
-    /// Called by the BGM volume slider. Sets the BGM AudioSource volume and
-    /// saves it to PlayerPrefs so it persists across scenes and game restarts.
+    /// Called by the BGM volume slider. Sets the BGM AudioSource volume (mapped
+    /// from slider 0-1 to BgmMinVolume-BgmMaxVolume range) and saves the raw
+    /// slider value to PlayerPrefs.
     /// </summary>
     public void SetBgmVolume(float value)
     {
         BgmVolume = Mathf.Clamp01(value);
+        // Map slider [0,1] → [BgmMinVolume, BgmMaxVolume] so the designer
+        // controls the actual volume range. At slider 0, music is still audible
+        // (BgmMinVolume). At slider 1, music doesn't overpower (BgmMaxVolume).
+        float actualVolume = Mathf.Lerp(BgmMinVolume, BgmMaxVolume, BgmVolume);
         if (_bgmSource != null)
-            _bgmSource.volume = BgmVolume;
+            _bgmSource.volume = actualVolume;
         PlayerPrefs.SetFloat(BgmVolumePrefKey, BgmVolume);
         PlayerPrefs.Save();
     }

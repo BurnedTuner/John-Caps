@@ -3706,6 +3706,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 6576823205662733966}
     m_Modifications:
+    - target: {fileID: 2034032191453799987, guid: 462abe6aaef4baa4ca1f1ce18682ffd2, type: 3}
+      propertyPath: StackVolume
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 2034032191453799987, guid: 462abe6aaef4baa4ca1f1ce18682ffd2, type: 3}
+      propertyPath: CapImpactVolume
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 2034032191453799987, guid: 462abe6aaef4baa4ca1f1ce18682ffd2, type: 3}
+      propertyPath: TableImpactVolume
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 3218750116721829574, guid: 462abe6aaef4baa4ca1f1ce18682ffd2, type: 3}
       propertyPath: m_LocalPosition.x
       value: 3.2676153

@@ -6,6 +6,13 @@ using UnityEngine;
 ///
 /// Play3D — spatial sound for world-space events (cap impacts, VFX).
 /// Play2D — non-spatial sound for UI button clicks.
+///
+/// VOLUME: Play3D/Play2D use the `volume` parameter AS-IS (no GameSettings
+/// multiplier). The SFX volume slider in GameSettings controls
+/// AudioListener.volume (master SFX) — a global multiplier applied by Unity
+/// to ALL audio sources. This gives the designer full control over per-clip
+/// volume (via the `volume` param + AudioClip import settings), while the
+/// player's SFX slider scales everything uniformly.
 /// </summary>
 public class AudioManager : MonoBehaviour
 {
@@ -28,7 +35,12 @@ public class AudioManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
-    void Start() => SetupPool();
+    void Start()
+    {
+        SetupPool();
+        // Apply the persisted SFX volume to AudioListener on startup.
+        ApplySfxVolume();
+    }
 
     void SetupPool()
     {
@@ -55,14 +67,14 @@ public class AudioManager : MonoBehaviour
         src.transform.position = pos;
         src.spatialBlend = 1f;
         src.pitch = pitch;
-        float sfxVolume = GameSettings.GetSfxVolume();
-        src.PlayOneShot(clip, Mathf.Clamp01(volume * sfxVolume));
+        // Use volume AS-IS — the player's SFX slider is applied globally via
+        // AudioListener.volume (set in ApplySfxVolume). This gives the designer
+        // full control over per-clip volume.
+        src.PlayOneShot(clip, Mathf.Clamp01(volume));
     }
 
     /// <summary>
-    /// Plays a 2D (non-spatial) sound — used for UI button clicks. Uses the same
-    /// pool as Play3D but sets spatialBlend to 0 so the sound plays at full
-    /// volume regardless of position.
+    /// Plays a 2D (non-spatial) sound — used for UI button clicks.
     /// </summary>
     public void Play2D(AudioClip clip, float pitch = 1f, float volume = 1f)
     {
@@ -71,7 +83,18 @@ public class AudioManager : MonoBehaviour
         _poolIndex = (_poolIndex + 1) % PoolSize;
         src.spatialBlend = 0f;
         src.pitch = pitch;
+        src.PlayOneShot(clip, Mathf.Clamp01(volume));
+    }
+
+    /// <summary>
+    /// Applies the SFX volume from GameSettings to AudioListener.volume.
+    /// This is the global multiplier — affects ALL audio sources (SFX + BGM
+    /// if BGM uses AudioSource). Called on Start and when the player changes
+    /// the SFX slider.
+    /// </summary>
+    public void ApplySfxVolume()
+    {
         float sfxVolume = GameSettings.GetSfxVolume();
-        src.PlayOneShot(clip, Mathf.Clamp01(volume * sfxVolume));
+        AudioListener.volume = sfxVolume;
     }
 }

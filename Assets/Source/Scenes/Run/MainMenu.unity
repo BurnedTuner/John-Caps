@@ -1059,6 +1059,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   SfxVolume: 1
   BgmVolume: 0.3
+  BgmMinVolume: 0
+  BgmMaxVolume: 0.5
   PrecisionAimEnabled: 0
   BgmClip: {fileID: 8300000, guid: 09264026e7d5a75489bf9c699bb553dc, type: 3}
 --- !u!4 &1799807662

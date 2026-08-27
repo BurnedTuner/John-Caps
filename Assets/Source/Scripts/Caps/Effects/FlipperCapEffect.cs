@@ -91,7 +91,7 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
     public GameObject FlipVFX;
     public AudioClip FlipSound;
     [Range(0f, 2f)] public float FlipPitch = 1.2f;
-    [Range(0f, 1f)] public float FlipVolume = 0.8f;
+    public float FlipVolume = 0.8f;
     public float FlipShakeAmount = 0.15f;
     public float FlipShakeDuration = 0.3f;
 
