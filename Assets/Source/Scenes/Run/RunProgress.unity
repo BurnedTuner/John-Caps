@@ -988,6 +988,7 @@ GameObject:
   m_Component:
   - component: {fileID: 488895900}
   - component: {fileID: 488895899}
+  - component: {fileID: 488895901}
   m_Layer: 0
   m_Name: RunProgressUI
   m_TagString: Untagged
@@ -1046,6 +1047,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &488895901
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 488895898}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 533395b967e65fe4a91b67ccc78ad6cd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _sfxSlider: {fileID: 829287276}
+  _bgmSlider: {fileID: 829287275}
 --- !u!1 &521004284
 GameObject:
   m_ObjectHideFlags: 0
@@ -1380,6 +1395,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: MenuButton
       objectReference: {fileID: 0}
+    - target: {fileID: 5884695529657674662, guid: 17b19e0539488744e9bba2cac769e878, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6591817971407996960, guid: 17b19e0539488744e9bba2cac769e878, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
       value: 1
@@ -1670,6 +1689,28 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 5478055671033976843, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
   m_PrefabInstance: {fileID: 829287271}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &829287275 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4964965605480569435, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+  m_PrefabInstance: {fileID: 829287271}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67db9e8f0e2ae9c40bc1e2b64352a6b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &829287276 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4405473893508234219, guid: 6db02a03030e81d4cbeb622c7b30f69f, type: 3}
+  m_PrefabInstance: {fileID: 829287271}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67db9e8f0e2ae9c40bc1e2b64352a6b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1258591054
 GameObject:
   m_ObjectHideFlags: 0
