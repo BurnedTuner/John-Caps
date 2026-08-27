@@ -43,7 +43,7 @@ public sealed class BombCapFlipEffect : CapFlipEffect, ICapEffectRadius, ICapAbi
     public Sprite StickerSprite => _stickerSprite;
     public int Level => _level;
     public string Description =>
-        $"Когда приземляется лицом вверх отталкивает от себя все фишки в радиусе {Radius:F0} (сила {Force:F0})";
+        $"Когда падает лицом вверх,\nотталкивает всех в радиусе {Radius:F0}";
 
     public float Radius => _level switch { 2 => _radiusL2, 3 => _radiusL3, _ => _radiusL1 };
     public float Force => _level switch { 2 => _forceL2, 3 => _forceL3, _ => _forceL1 };

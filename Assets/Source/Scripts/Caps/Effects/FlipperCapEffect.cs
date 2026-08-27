@@ -41,7 +41,7 @@ public sealed class FlipperCapEffect : CapFlipEffect, ICapEffectRadius, ICapAbil
     public Sprite StickerSprite => _stickerSprite;
     public int Level => _level;
     public string Description =>
-        $"Когда приземляется лицом вверх, переворачивает все фишки в радиусе {Radius:F0}.";
+        $"Когда падает лицом вверх,\nпереворачивает всех в радиусе {Radius:F0}.";
 
     public float Radius => _level switch { 2 => _radiusL2, 3 => _radiusL3, _ => _radiusL1 };
 

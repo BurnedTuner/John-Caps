@@ -54,7 +54,7 @@ public sealed class DefenderCapEffect : MonoBehaviour, ICapEffectRadius, ICapAbi
     public Sprite StickerSprite => _stickerSprite;
     public int Level => _level;
     public string Description =>
-        $"Когда лежит лицом вверх, не дает противнику бросить фишку в зону радиусом {ZoneRadius:F0}.";
+        $"Пока лежит лицом вверх,\nсоздает защитную область.";
 
     public float ZoneRadius => _level switch { 2 => _zoneRadiusL2, 3 => _zoneRadiusL3, _ => _zoneRadiusL1 };
 
