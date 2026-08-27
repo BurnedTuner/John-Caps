@@ -429,13 +429,13 @@ public class RunProgressUI : MonoBehaviour
             {
                 // Run complete — return to menu.
                 if (_returnToMenuButton != null) _returnToMenuButton.gameObject.SetActive(true);
-                if (_statusText != null) _statusText.text = "Run Complete!";
+                if (_statusText != null) _statusText.text = "COMPLETE!";
             }
             else
             {
                 // Won — next level.
                 if (_nextLevelButton != null) _nextLevelButton.gameObject.SetActive(true);
-                if (_statusText != null) _statusText.text = "Victory!";
+                if (_statusText != null) _statusText.text = "WIN!";
             }
         }
         else
@@ -445,19 +445,19 @@ public class RunProgressUI : MonoBehaviour
                 // Run over — show both "Return to Menu" and "Restart Run".
                 if (_returnToMenuButton != null) _returnToMenuButton.gameObject.SetActive(true);
                 if (_restartRunButton != null) _restartRunButton.gameObject.SetActive(true);
-                if (_statusText != null) _statusText.text = "Run Over";
+                if (_statusText != null) _statusText.text = "GAME OVER";
             }
             else if (result.IsBoss)
             {
                 // Boss loss — retry.
                 if (_retryBossButton != null) _retryBossButton.gameObject.SetActive(true);
-                if (_statusText != null) _statusText.text = "Defeated — retry the boss?";
+                if (_statusText != null) _statusText.text = "DEFEAT";
             }
             else
             {
                 // Non-boss loss — skip to next.
                 if (_nextLevelButton != null) _nextLevelButton.gameObject.SetActive(true);
-                if (_statusText != null) _statusText.text = "Defeated — advance to the next level.";
+                if (_statusText != null) _statusText.text = "DEFEAT";
             }
         }
     }
