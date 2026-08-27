@@ -91,8 +91,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _stickerSprite: {fileID: 21300000, guid: 983c29745ae210144aa5ca2607cb0419, type: 3}
   _level: 1
-  _radiusL1: 7
-  _radiusL2: 8
+  _radiusL1: 4
+  _radiusL2: 6
   _radiusL3: 9
   TriggerSide: 0
   FlipVFX: {fileID: 1651180019113697609, guid: 988ed3d3f7ac6be43b99a58ca3111dfc, type: 3}
