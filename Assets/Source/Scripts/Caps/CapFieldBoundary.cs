@@ -201,6 +201,14 @@ public sealed class CapFieldBoundary : MonoBehaviour
             {
                 _trails.Remove(cap);
 
+                // --- Trigger the cap's effects BEFORE unregistering it ---
+                // A cap falling off the edge should still proc its bomb/flipper
+                // effects as if it had one final landing on the edge. After the
+                // effects proc, the cap is fully deactivated (unregistered,
+                // LeaveGame, collider disabled) so it no longer acts as a
+                // defender or is visible to chain-reaction code.
+                TriggerFallOffEffects(cap);
+
                 // Unregister now rather than waiting for the fall to play out. This prevents scoring
                 // and chain-reaction code from seeing a cap that is already out of the game.
                 // Scene-placed caps are NOT unregistered — they need to stay in CapRegistry so
@@ -214,6 +222,56 @@ public sealed class CapFieldBoundary : MonoBehaviour
 
             trail.PreviousPosition = currentPosition;
             _trails[cap] = trail;
+        }
+    }
+
+    /// <summary>
+    /// Triggers the falling-off cap's effects (bomb explosion, flipper flip)
+    /// as if it had one final landing at its current position on the edge.
+    ///
+    /// This runs BEFORE the cap is unregistered + LeaveGame'd, so the cap is
+    /// still in CapRegistry and still has active ability components. The
+    /// effects resolve against all other caps currently on the field.
+    ///
+    /// After this method returns, the cap is unregistered + LeaveGame'd
+    /// by the caller, so it becomes fully inactive — no defender zone, no
+    /// collision, no chain reactions.
+    /// </summary>
+    void TriggerFallOffEffects(Cap cap)
+    {
+        if (cap == null) return;
+
+        CapFlipEffect[] effects = cap.FlipEffects;
+        if (effects == null || effects.Length == 0) return;
+
+        // Find the CapTurnResolver to resolve the effects against other caps.
+        CapTurnResolver resolver = FindFirstObjectByType<CapTurnResolver>();
+        if (resolver == null) return;
+
+        // Create a CapFlipEvent at the cap's current position (on the edge).
+        Vector2 landingPos = cap.GroundPosition;
+        float landingForce = cap.Parameters != null ? cap.Parameters.ThrowPower : 5f;
+        var flipEvent = new CapFlipEvent(cap, landingPos, landingForce);
+
+        // Resolve immediately — this calls BuildCommands on all flip effects
+        // (bomb, flipper, etc.), which check ShouldTrigger(IsFace) and emit
+        // RadialPush/RadialFlip commands. The resolver merges + executes
+        // them against all other caps in CapRegistry.
+        // The cap itself is still in CapRegistry at this point, but the
+        // CapEffectResolver's IsLandedOnCap check excludes it (the source
+        // is always excluded from its own effect).
+        resolver.ResolveEffectImmediate(flipEvent);
+
+        // Play VFX/feedback for each effect that triggered.
+        for (int i = 0; i < effects.Length; i++)
+        {
+            CapFlipEffect effect = effects[i];
+            if (effect == null || !effect.enabled) continue;
+
+            if (effect is BombCapFlipEffect bomb && bomb.ShouldTrigger(cap.IsFace))
+                bomb.PlayFeedback(CapMath.FromXZ(landingPos, 0f), landingForce);
+            else if (effect is FlipperCapEffect flipper && flipper.ShouldTrigger(cap.IsFace))
+                flipper.PlayFeedback(CapMath.FromXZ(landingPos, 0f), landingForce);
         }
     }
 

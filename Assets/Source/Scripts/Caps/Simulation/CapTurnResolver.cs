@@ -14,6 +14,19 @@ public sealed class CapTurnResolver : MonoBehaviour, ICapEffectCommandExecutor
     public State CurrentState { get; private set; } = State.Idle;
     public bool IsBusy => CurrentState != State.Idle;
 
+    /// <summary>
+    /// Resolves a cap's flip effects immediately (bomb/flipper/etc.) against all
+    /// other caps in CapRegistry. Used by CapFieldBoundary.TriggerFallOffEffects
+    /// to proc a cap's effects when it falls off the edge — as if it had one
+    /// final landing. The cap is still in CapRegistry at this point (removed
+    /// after this returns), so the resolver sees it and excludes it from its
+    /// own effect (source is always excluded).
+    /// </summary>
+    public void ResolveEffectImmediate(in CapFlipEvent flipEvent)
+    {
+        _effectResolver.ResolveImmediate(flipEvent);
+    }
+
     public event Action<Vector3, float> OnTableImpact;
     public event Action<Vector3, float, int> OnCapImpact;
     public event Action<Vector3, float, int> OnCapStacked;
